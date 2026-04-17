@@ -1,0 +1,185 @@
+:root {
+  /* Paleta Institucional (Principal) */
+  --color-primary: #e40d2c; /* Vermelho baldan */
+  --color-text-title: #e40d2c;
+  --color-text-body: #6b7280; /* Cinza suave */
+  --color-text-dark: #374151; /* Cinza aço dark */
+  
+  --color-gray-steel: #4a4a4a;
+  
+  --color-surface-bg: #f9fafb; /* Off-white de fundo completo */
+  --color-surface: #ffffff;
+  --color-border: #e5e7eb;
+  --color-hover: #f3f4f6;
+
+ /* Badges & Cards Colors (Baseadas nas imagens) */
+  --color-box-pink-bg: #fff1f2;
+  --color-box-pink-text: #f43f5e;
+  
+  --color-box-teal-bg: #f0fdfa;
+  --color-box-teal-text: #14b8a6;
+  
+  --color-box-yellow-bg: #fefce8;
+  --color-box-yellow-text: #eab308;
+
+  --color-box-blue-bg: #eff6ff;
+  --color-box-blue-text: #3b82f6;
+
+  /* Gerais de Status e UI */
+  --color-danger: #e40d2c;
+  --color-danger-hover: #c40a25;
+  --color-success: #10b981;
+  
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  
+  --radius-sm: 6px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+  
+  --sidebar-width: 250px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  background-color: var(--color-surface-bg);
+  color: var(--color-text-body);
+  font-size: 14px; /* Mais contido estilo app industrial */
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* Foco Visível de Acessibilidade */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Estrutura Sidebar/Main */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  background-color: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; bottom: 0; left: 0;
+  z-index: 50;
+}
+
+.main-content {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  padding: var(--spacing-xl);
+  max-width: 1200px;
+  margin-right: auto;
+  position: relative;
+}
+
+/* Tipografia */
+h1, h2, h3, h4 { 
+  color: var(--color-text-dark); 
+  font-family: 'Effra', 'Inter', sans-serif; /* Effra nos títulos */
+}
+h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
+.subtitle { color: var(--color-text-body); font-size: 0.95rem; }
+
+/* SR-ONLY para Screen Readers */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Botões Modernos Pílula */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 16px; border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm); cursor: pointer;
+  font-weight: 500; font-size: 0.9rem; transition: all 0.2s ease;
+  background-color: var(--color-surface); color: var(--color-text-dark);
+  gap: var(--spacing-sm); outline: none;
+}
+.btn:hover { background-color: var(--color-hover); }
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white; border-color: var(--color-primary);
+}
+.btn-primary:hover { background-color: var(--color-danger-hover); }
+
+/* Caixa de Input */
+.input-field {
+  width: 100%; padding: 10px 14px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  font-size: 0.95rem; background-color: var(--color-surface);
+  transition: all 0.2s ease; color: var(--color-text-dark);
+}
+.input-field:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(228, 13, 44, 0.1);
+}
+.input-label {
+  display: block; font-size: 0.85rem; font-weight: 600;
+  margin-bottom: 4px; color: var(--color-text-dark);
+}
+.input-helper {
+  font-size: 0.75rem; color: #9ca3af; margin-top: 4px;
+}
+
+/* Cards (Grid Items, Painéis) */
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Badges Modernos para Listagens */
+.badge {
+  display: inline-flex; align-items: center; padding: 2px 8px;
+  border-radius: 12px; font-size: 0.75rem; font-weight: 600;
+  background-color: var(--color-hover); color: var(--color-text-dark);
+}
+.badge-pink { background-color: var(--color-box-pink-bg); color: var(--color-box-pink-text); }
+.badge-teal { background-color: var(--color-box-teal-bg); color: var(--color-box-teal-text); }
+.badge-yellow { background-color: var(--color-box-yellow-bg); color: var(--color-box-yellow-text); }
+.badge-blue { background-color: var(--color-box-blue-bg); color: var(--color-box-blue-text); }
+
+/* Animações UI */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.toast-notification {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
