@@ -2,7 +2,7 @@
 
 **ReTool** é uma aplicação web moderna voltada para o chão de fábrica, projetada para solucionar a dispersão, a desorganização e o isolamento crônico de dados sobre dispositivos, maquinários e peças em ambientes de manufatura.
 
-![ReTool Layout Desktop](https://placehold.co/1200x600.png?text=ReTool+Deshboard)
+![ReTool Layout Desktop](./docs/images/ReTool%20Dashboard.png)
 
 ## 📌 O Problema
 Em indústrias pesadas, o conhecimento sobre uma máquina ou ferramenta geralmente fica restrito à cabeça dos operadores mais antigos ou perdido em planilhas não padronizadas. Quando algo falha, o tempo de inatividade (Downtime) é estendido pela falta de um histórico claro de manutenções, peças de reposição rápidas ou documentação acessível.
