@@ -50,7 +50,7 @@ export function Layout() {
               <SidebarLink to="/" icon={<Home size={18} />} label="Home" shortcut="H" />
             </li>
             <li>
-              <SidebarLink to="/pecas" icon={<Component size={18} />} label="Dispositivos" shortcut="P" />
+              <SidebarLink to="/dispositivos" icon={<Component size={18} />} label="Dispositivos" shortcut="D" />
             </li>
             <li>
               <SidebarLink to="/utilizacoes" icon={<List size={18} />} label="Utilizações" shortcut="U" />

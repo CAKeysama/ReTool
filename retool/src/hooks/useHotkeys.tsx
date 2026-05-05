@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
   Atalhos Globais:
   / -> focus na busca
   H -> Home
-  P -> Dispositivos
+  D -> Dispositivos
   U -> Utilizações
   C -> Categorias
   N -> Novo registro
@@ -47,8 +47,8 @@ export function useHotkeys(config?: HotkeysConfig) {
         case 'h':
           navigate('/');
           break;
-        case 'p':
-          navigate('/pecas');
+        case 'd':
+          navigate('/dispositivos');
           break;
         case 'u':
           navigate('/utilizacoes');

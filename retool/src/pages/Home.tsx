@@ -153,7 +153,7 @@ export function Home() {
 
       {/* Cartões Coloridos */}
       <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
-        <HomeCard count={dispositivos.length} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="P" />
+        <HomeCard count={dispositivos.length} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
         <HomeCard count={utilizacoes.length} label="Utilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/utilizacoes')} shortcut="U" />
         <HomeCard count={categorias.length} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
       </div>
