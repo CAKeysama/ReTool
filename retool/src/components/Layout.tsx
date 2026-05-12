@@ -9,12 +9,10 @@ export function Layout() {
   useHotkeys();
   const location = useLocation();
   
-  // Condição para Home centralizada (a tela inicial de busca "Google-style" não possui a sidebar fixa)
-  // Edit: Olhando bem o design 1 (Home) na verdade me parece uma tela cheia isolada sem sidebar.
-  // Vou manter a sidebar no Layout, porém esconde-la na rota '/' para ter aquele visual limpo.
-  const isHome = location.pathname === '/';
+  // Condição para telas centralizadas sem a sidebar fixa
+  const isFullScreenMode = location.pathname === '/' || location.pathname === '/sobre';
 
-  if (isHome) {
+  if (isFullScreenMode) {
     return (
       <div className="app-container" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)' }}>
         <div aria-live="polite" className="sr-only">{announcement}</div>

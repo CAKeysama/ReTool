@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
-import { Search, Box, Wrench, Tag } from 'lucide-react';
+import { Search, Box, Wrench, Tag, Info } from 'lucide-react';
 import { useHotkeys } from '../hooks/useHotkeys';
 
 export function Home() {
@@ -59,6 +59,22 @@ export function Home() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}>
       
+      {/* Botão Institucional - Top Right */}
+      <div style={{ position: 'absolute', top: 'var(--spacing-xl)', right: 'var(--spacing-xl)' }}>
+        <button 
+          className="btn" 
+          onClick={() => navigate('/sobre')} 
+          style={{ 
+            borderRadius: '20px', padding: '8px 16px', fontSize: '0.85rem', fontWeight: 600, 
+            color: 'var(--color-text-body)', border: '1px solid transparent', backgroundColor: 'transparent' 
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-hover)'; e.currentTarget.style.borderColor = 'var(--color-border)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
+        >
+          <Info size={16} /> Sobre o Projeto
+        </button>
+      </div>
+
       {/* Título */}
       <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-xl)' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-1px', marginBottom: '4px' }}>

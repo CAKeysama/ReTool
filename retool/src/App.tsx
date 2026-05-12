@@ -8,6 +8,7 @@ import { DispositivoForm } from './pages/DispositivoForm';
 import { DispositivoDetails } from './pages/DispositivoDetails';
 import { Categorias } from './pages/Categorias';
 import { Utilizacoes } from './pages/Utilizacoes';
+import { Sobre } from './pages/Sobre';
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
+            <Route path="sobre" element={<Sobre />} />
             
             <Route path="dispositivos" element={<Dispositivos />}>
               <Route path="novo" element={<DispositivoForm />} />
