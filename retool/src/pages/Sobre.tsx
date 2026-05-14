@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Info } from 'lucide-react';
 
-import baldanLogo from '../assets/Baldan-implementos-agricolas.png';
+import baldanLogo from '../assets/logotipo - preferencial_horizontal (aplicação positiva).png';
 import fatecLogo from '../assets/fatec-matao-luiz-marchesan.svg';
 
 export function Sobre() {

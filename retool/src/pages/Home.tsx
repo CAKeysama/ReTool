@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
 import { Search, Box, Wrench, Tag, Info } from 'lucide-react';
 import { useHotkeys } from '../hooks/useHotkeys';
+import baldanWatermark from '../assets/logotipo - preferencial_horizontal (aplicação monocromática positiva).png';
 
 export function Home() {
   const { dispositivos, utilizacoes, categorias } = useReTool();
@@ -57,8 +58,25 @@ export function Home() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', position: 'relative', overflow: 'hidden', zIndex: 1 }}>
       
+      {/* Marca d'água Baldan */}
+      <img 
+        src={baldanWatermark} 
+        alt="" 
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '90%',
+          maxWidth: '1000px',
+          opacity: 0.05,
+          pointerEvents: 'none',
+          zIndex: -1
+        }} 
+      />
+
       {/* Botão Institucional - Top Right */}
       <div style={{ position: 'absolute', top: 'var(--spacing-xl)', right: 'var(--spacing-xl)' }}>
         <button 
