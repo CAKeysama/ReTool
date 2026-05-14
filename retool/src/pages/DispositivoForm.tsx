@@ -15,6 +15,7 @@ export function DispositivoForm() {
     nome: '',
     codigo: '',
     categoriaId: '',
+    tipo: '',
     peso: '',
     familiaProduto: '',
     descricao: '',
@@ -105,7 +106,12 @@ export function DispositivoForm() {
 
           <div>
             <label htmlFor="tipo" className="input-label">Tipo</label>
-            <select id="tipo" name="tipo" className="input-field">
+            <select 
+              id="tipo" name="tipo" 
+              className="input-field"
+              value={formData.tipo || ''} 
+              onChange={handleChange}
+            >
               <option value="">Selecione ou deixe vazio</option>
               <option value="eletrica">Elétrica</option>
               <option value="hidraulica">Hidráulica</option>

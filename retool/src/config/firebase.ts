@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
-const firebaseConfig = {
+const primaryConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -11,5 +11,18 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-const app = initializeApp(firebaseConfig);
+const fallbackConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_FALLBACK_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_FALLBACK_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_FALLBACK_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_FALLBACK_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_FALLBACK_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_FALLBACK_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_FALLBACK_MEASUREMENT_ID
+};
+
+const useFallback = import.meta.env.VITE_USE_FALLBACK_DB === 'true';
+const activeConfig = useFallback ? fallbackConfig : primaryConfig;
+
+const app = initializeApp(activeConfig);
 export const db = getFirestore(app);

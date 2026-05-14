@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "retool2-ef7be"
+    "default": "retool-c25a9",
+    "fallback": "retool2-ef7be"
   }
 }

@@ -13,6 +13,7 @@ export interface Dispositivo {
   nome?: string;
   codigo?: string;
   categoriaId?: string;
+  tipo?: string;
   peso?: string;
   familiaProduto?: string;
   descricao?: string;
