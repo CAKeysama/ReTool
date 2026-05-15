@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { useReTool, Dispositivo } from '../context/ReToolContext';
 import { AccessibleModal } from '../components/AccessibleModal';
 
 export function DispositivoForm() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const { dispositivos, categorias, addDispositivo, updateDispositivo, announce } = useReTool();
+  const { dispositivos, categorias, tipos, addDispositivo, updateDispositivo, announce, editingDispId, closeDispForm } = useReTool();
   
-  const isEditing = Boolean(id);
-  const dispEdicao = isEditing ? dispositivos.find(p => p.id === id) : null;
+  const isEditing = Boolean(editingDispId);
+  const dispEdicao = isEditing ? dispositivos.find(p => p.id === editingDispId) : null;
 
   const [formData, setFormData] = useState<Partial<Dispositivo>>({
     nome: '',
@@ -41,21 +38,17 @@ export function DispositivoForm() {
   };
 
   const handleClose = () => {
-    if (isEditing) {
-      navigate(`/dispositivos/${id}`);
-    } else {
-      navigate('/dispositivos');
-    }
+    closeDispForm();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEditing && id) {
-      updateDispositivo(id, formData);
-      navigate(`/dispositivos/${id}`);
+    if (isEditing && editingDispId) {
+      updateDispositivo(editingDispId, formData);
+      closeDispForm();
     } else {
       addDispositivo(formData as Omit<Dispositivo, 'id' | 'dataCriacao'>);
-      navigate('/dispositivos');
+      closeDispForm();
     }
   };
 
@@ -102,6 +95,7 @@ export function DispositivoForm() {
               <option value="">Selecione ou deixe vazio</option>
               {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
+            <div className="input-helper">Grupos macro (Ex: Ferramentas, EPIs, Gabaritos)</div>
           </div>
 
           <div>
@@ -113,9 +107,9 @@ export function DispositivoForm() {
               onChange={handleChange}
             >
               <option value="">Selecione ou deixe vazio</option>
-              <option value="eletrica">Elétrica</option>
-              <option value="hidraulica">Hidráulica</option>
+              {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
             </select>
+            <div className="input-helper">Classificação técnica (Ex: Elétrica, Manual)</div>
           </div>
         </div>
 

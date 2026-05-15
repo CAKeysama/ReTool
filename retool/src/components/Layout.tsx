@@ -1,11 +1,12 @@
 import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Settings, Tool, Home, List, Component } from 'lucide-react';
+import { Settings, Home, List, Component } from 'lucide-react';
 import { useReTool } from '../context/ReToolContext';
 import { useHotkeys } from '../hooks/useHotkeys';
+import { DispositivoForm } from '../pages/DispositivoForm';
 
 export function Layout() {
-  const { announcement } = useReTool();
+  const { announcement, isDispFormOpen } = useReTool();
   useHotkeys();
   const location = useLocation();
   
@@ -17,6 +18,7 @@ export function Layout() {
       <div className="app-container" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)' }}>
         <div aria-live="polite" className="sr-only">{announcement}</div>
         <Outlet />
+        {isDispFormOpen && <DispositivoForm />}
       </div>
     );
   }
@@ -78,6 +80,8 @@ export function Layout() {
       <main className="main-content" id="main-content">
         <Outlet />
       </main>
+      
+      {isDispFormOpen && <DispositivoForm />}
     </div>
   );
 }

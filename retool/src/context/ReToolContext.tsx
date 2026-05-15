@@ -8,6 +8,11 @@ export interface Categoria {
   nome?: string;
 }
 
+export interface Tipo {
+  id: string;
+  nome?: string;
+}
+
 export interface Dispositivo {
   id: string;
   nome?: string;
@@ -33,6 +38,7 @@ export interface Utilizacao {
 interface ReToolContextType {
   dispositivos: Dispositivo[];
   categorias: Categoria[];
+  tipos: Tipo[];
   utilizacoes: Utilizacao[];
   addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'>) => void;
   updateDispositivo: (id: string, data: Partial<Dispositivo>) => void;
@@ -40,11 +46,18 @@ interface ReToolContextType {
   addCategoria: (data: Omit<Categoria, 'id'>) => void;
   updateCategoria: (id: string, data: Partial<Categoria>) => void;
   deleteCategoria: (id: string) => void;
+  addTipo: (data: Omit<Tipo, 'id'>) => void;
+  updateTipo: (id: string, data: Partial<Tipo>) => void;
+  deleteTipo: (id: string) => void;
   addUtilizacao: (data: Omit<Utilizacao, 'id' | 'dataCriacao'>) => void;
   updateUtilizacao: (id: string, data: Partial<Utilizacao>) => void;
   deleteUtilizacao: (id: string) => void;
   announce: (message: string, showToast?: boolean) => void;
   announcement: string;
+  isDispFormOpen: boolean;
+  editingDispId: string | null;
+  openDispForm: (id?: string) => void;
+  closeDispForm: () => void;
 }
 
 const ReToolContext = createContext<ReToolContextType | undefined>(undefined);
@@ -52,10 +65,24 @@ const ReToolContext = createContext<ReToolContextType | undefined>(undefined);
 export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [tipos, setTipos] = useState<Tipo[]>([]);
   const [utilizacoes, setUtilizacoes] = useState<Utilizacao[]>([]);
 
   const [announcement, setAnnouncement] = useState('');
   const [toasts, setToasts] = useState<{id: string; text: string}[]>([]);
+
+  const [isDispFormOpen, setIsDispFormOpen] = useState(false);
+  const [editingDispId, setEditingDispId] = useState<string | null>(null);
+
+  const openDispForm = useCallback((id?: string) => {
+    setEditingDispId(id || null);
+    setIsDispFormOpen(true);
+  }, []);
+
+  const closeDispForm = useCallback(() => {
+    setIsDispFormOpen(false);
+    setEditingDispId(null);
+  }, []);
 
   const announce = useCallback((message: string, showToast = true) => {
     // Screen reader
@@ -83,6 +110,11 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       setDispositivos(data);
     });
 
+    const unsubTipos = onSnapshot(collection(db, 'tipos'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tipo));
+      setTipos(data);
+    });
+
     const unsubUtil = onSnapshot(collection(db, 'utilizacoes'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Utilizacao));
       setUtilizacoes(data);
@@ -91,6 +123,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       unsubCat();
       unsubDisp();
+      unsubTipos();
       unsubUtil();
     };
   }, []);
@@ -137,6 +170,22 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     announce('Categoria removida com sucesso');
   };
 
+  const addTipo = async (data: Omit<Tipo, 'id'>) => {
+    const id = uuidv4();
+    await setDoc(doc(db, 'tipos', id), { ...data, id });
+    announce('Tipo adicionado com sucesso');
+  };
+
+  const updateTipo = async (id: string, data: Partial<Tipo>) => {
+    await updateDoc(doc(db, 'tipos', id), data);
+    announce('Tipo atualizado com sucesso');
+  };
+
+  const deleteTipo = async (id: string) => {
+    await deleteDoc(doc(db, 'tipos', id));
+    announce('Tipo removido com sucesso');
+  };
+
   const addUtilizacao = async (data: Omit<Utilizacao, 'id' | 'dataCriacao'>) => {
     const id = uuidv4();
     await setDoc(doc(db, 'utilizacoes', id), { ...data, id, dataCriacao: new Date().toISOString() });
@@ -155,11 +204,13 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <ReToolContext.Provider value={{
-      dispositivos, categorias, utilizacoes,
+      dispositivos, categorias, tipos, utilizacoes,
       addDispositivo, updateDispositivo, deleteDispositivo,
       addCategoria, updateCategoria, deleteCategoria,
+      addTipo, updateTipo, deleteTipo,
       addUtilizacao, updateUtilizacao, deleteUtilizacao,
-      announce, announcement
+      announce, announcement,
+      isDispFormOpen, editingDispId, openDispForm, closeDispForm
     }}>
       {children}
       

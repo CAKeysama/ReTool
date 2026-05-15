@@ -7,11 +7,12 @@ import { AccessibleModal } from '../components/AccessibleModal';
 export function DispositivoDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { dispositivos, categorias, utilizacoes, addUtilizacao, deleteUtilizacao } = useReTool();
+  const { dispositivos, categorias, tipos, utilizacoes, addUtilizacao, deleteUtilizacao, openDispForm } = useReTool();
   
   const disp = dispositivos.find(p => p.id === id);
   const dispUtilizacoes = utilizacoes.filter(u => u.dispositivoId === id);
   const categoria = categorias.find(c => c.id === disp?.categoriaId);
+  const tipo = tipos.find(t => t.id === disp?.tipo);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [novaUtilizacao, setNovaUtilizacao] = useState({ descricao: '', setor: '', observacoes: '' });
@@ -61,7 +62,7 @@ export function DispositivoDetails() {
         </div>
         <button 
           className="btn" 
-          onClick={() => navigate(`/dispositivos/${disp.id}/editar`)}
+          onClick={() => openDispForm(disp.id)}
           style={{ padding: '6px 16px', borderRadius: '20px', fontSize: '0.85rem' }}
         >
           <Edit size={14} /> Editar
@@ -95,7 +96,7 @@ export function DispositivoDetails() {
             </div>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Tipo</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{'Não info.'}</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{tipo?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
           </div>
 

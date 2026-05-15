@@ -7,7 +7,7 @@ import { AccessibleModal } from '../components/AccessibleModal';
 import { useHotkeys } from '../hooks/useHotkeys';
 
 export function Dispositivos() {
-  const { dispositivos, categorias, deleteDispositivo } = useReTool();
+  const { dispositivos, categorias, deleteDispositivo, openDispForm } = useReTool();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -16,7 +16,7 @@ export function Dispositivos() {
 
   useHotkeys({
     onSearchFocus: () => searchInputRef.current?.focus(),
-    onNewRecord: () => navigate('/dispositivos/novo')
+    onNewRecord: () => openDispForm()
   });
 
   const [filterQuery, setFilterQuery] = useState(queryParam);
@@ -77,7 +77,7 @@ export function Dispositivos() {
           </div>
           <button 
             className="btn btn-primary" 
-            onClick={() => navigate('/dispositivos/novo')}
+            onClick={() => openDispForm()}
             aria-label="Cadastrar novo dispositivo (Atalho: N)"
             style={{ fontWeight: 600, padding: '8px 20px', borderRadius: '20px' }}
           >
@@ -216,8 +216,6 @@ export function Dispositivos() {
           </div>
         </AccessibleModal>
       </div>
-      
-      <Outlet />
     </>
   );
 }

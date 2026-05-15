@@ -6,7 +6,7 @@ import { useHotkeys } from '../hooks/useHotkeys';
 import baldanWatermark from '../assets/logotipo - preferencial_horizontal (aplicação monocromática positiva).png';
 
 export function Home() {
-  const { dispositivos, utilizacoes, categorias } = useReTool();
+  const { dispositivos, utilizacoes, categorias, openDispForm } = useReTool();
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState(dispositivos);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -180,7 +180,7 @@ export function Home() {
         <button className="btn" onClick={() => navigate(`/dispositivos?q=${encodeURIComponent(query)}`)} style={{ borderRadius: '20px', padding: '8px 20px' }}>
           Buscar dispositivos
         </button>
-        <button className="btn" onClick={() => navigate('/dispositivos/novo')} style={{ borderRadius: '20px', padding: '8px 20px', fontWeight: 600 }}>
+        <button className="btn btn-primary" onClick={() => openDispForm()} style={{ borderRadius: '20px', padding: '8px 20px', fontWeight: 600 }}>
           + Novo dispositivo
         </button>
       </div>
