@@ -1,34 +1,44 @@
 :root {
-  /* Paleta Institucional (Principal) */
-  --color-primary: #e40d2c; /* Vermelho baldan */
-  --color-text-title: #e40d2c;
-  --color-text-body: #6b7280; /* Cinza suave */
-  --color-text-dark: #374151; /* Cinza aço dark */
+  /* Paleta Oficial Baldan */
+  --color-baldan-vermelho: #e40d2c;
+  --color-baldan-cinza-aco: #4a4a4a;
+  --color-baldan-cinza-cristal: #d6d6d6;
+  --color-baldan-cinza-rocha: #cccccc;
+  --color-baldan-paixao: #8c1a17;
+  --color-baldan-graos: #f5ede3;
+  --color-baldan-terra-clara: #e5dbcc;
+  --color-baldan-terra-preta: #000000;
+
+  /* Mapeamento de UI */
+  --color-primary: var(--color-baldan-vermelho);
+  --color-text-title: var(--color-baldan-vermelho);
+  --color-text-body: var(--color-baldan-cinza-aco);
+  --color-text-dark: var(--color-baldan-terra-preta);
   
-  --color-gray-steel: #4a4a4a;
+  --color-gray-steel: var(--color-baldan-cinza-aco);
   
-  --color-surface-bg: #f9fafb; /* Off-white de fundo completo */
-  --color-surface: #ffffff;
-  --color-border: #e5e7eb;
-  --color-hover: #f3f4f6;
+  --color-surface-bg: #ffffff; /* Fundo Principal Branco */
+  --color-surface: #ffffff; /* Branco Puro */
+  --color-border: var(--color-baldan-cinza-cristal);
+  --color-hover: var(--color-baldan-terra-clara);
 
  /* Badges & Cards Colors (Baseadas nas imagens) */
-  --color-box-pink-bg: #fff1f2;
-  --color-box-pink-text: #f43f5e;
+  --color-box-pink-bg: var(--color-baldan-terra-clara);
+  --color-box-pink-text: var(--color-baldan-paixao);
   
-  --color-box-teal-bg: #f0fdfa;
-  --color-box-teal-text: #14b8a6;
+  --color-box-teal-bg: var(--color-baldan-cinza-cristal);
+  --color-box-teal-text: var(--color-baldan-cinza-aco);
   
-  --color-box-yellow-bg: #fefce8;
-  --color-box-yellow-text: #eab308;
+  --color-box-yellow-bg: var(--color-baldan-graos);
+  --color-box-yellow-text: var(--color-baldan-terra-preta);
 
-  --color-box-blue-bg: #eff6ff;
-  --color-box-blue-text: #3b82f6;
+  --color-box-blue-bg: var(--color-baldan-cinza-rocha);
+  --color-box-blue-text: var(--color-baldan-paixao);
 
   /* Gerais de Status e UI */
-  --color-danger: #e40d2c;
-  --color-danger-hover: #c40a25;
-  --color-success: #10b981;
+  --color-danger: var(--color-baldan-vermelho);
+  --color-danger-hover: var(--color-baldan-paixao);
+  --color-success: var(--color-baldan-cinza-aco);
   
   --spacing-xs: 4px;
   --spacing-sm: 8px;
