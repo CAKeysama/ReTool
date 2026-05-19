@@ -70,7 +70,7 @@ export function Dispositivos() {
   return (
     <>
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
+        <div className="flex-responsive-header">
           <div>
             <h2 style={{ fontSize: '1.8rem', fontWeight: '800' }}>Dispositivos</h2>
             <div className="subtitle">{filteredDispositivos.length} dispositivos encontrados</div>
@@ -85,7 +85,7 @@ export function Dispositivos() {
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-xl)' }}>
+        <div className="flex-responsive-row" style={{ marginBottom: 'var(--spacing-xl)' }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <Search size={18} color="#9ca3af" style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} />
             <input 

@@ -47,8 +47,8 @@ export function AccessibleModal({ isOpen, onClose, title, children }: Accessible
         className="modal-content"
         style={{
           backgroundColor: 'white', padding: 'var(--spacing-lg)', 
-          borderRadius: 'var(--radius)', minWidth: '400px',
-          maxWidth: '90vw', maxHeight: '90vh', overflowY: 'auto',
+          borderRadius: 'var(--radius)', width: '100%', maxWidth: '400px',
+          maxHeight: '90vh', overflowY: 'auto',
           boxShadow: 'var(--shadow)'
         }}
         onClick={(e) => e.stopPropagation()} // previne fechar ao clicar dentro

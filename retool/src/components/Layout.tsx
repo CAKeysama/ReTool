@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Settings, Home, List, Component } from 'lucide-react';
+import { Settings, Home, List, Component, Menu, X } from 'lucide-react';
 import { useReTool } from '../context/ReToolContext';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { DispositivoForm } from '../pages/DispositivoForm';
@@ -9,6 +9,7 @@ export function Layout() {
   const { announcement, isDispFormOpen } = useReTool();
   useHotkeys();
   const location = useLocation();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Condição para telas centralizadas sem a sidebar fixa
   const isFullScreenMode = location.pathname === '/' || location.pathname === '/sobre';
@@ -27,7 +28,23 @@ export function Layout() {
     <div className="app-container">
       <div aria-live="polite" className="sr-only">{announcement}</div>
 
-      <nav className="sidebar" aria-label="Navegação Principal">
+      {/* Hamburger Menu Button */}
+      <button 
+        className="hamburger-btn" 
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        aria-label="Alternar menu"
+      >
+        {isSidebarOpen ? <X size={28} /> : <Menu size={28} />}
+      </button>
+
+      {/* Overlay para fechar ao clicar fora no mobile */}
+      <div 
+        className={`sidebar-overlay ${isSidebarOpen ? 'active' : ''}`} 
+        onClick={() => setIsSidebarOpen(false)}
+        aria-hidden="true"
+      />
+
+      <nav className={`sidebar ${isSidebarOpen ? 'open' : ''}`} aria-label="Navegação Principal">
         
         {/* LOGO AREA */}
         <div style={{ marginBottom: 'var(--spacing-2xl)' }}>
@@ -47,16 +64,16 @@ export function Layout() {
           </div>
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <li>
-              <SidebarLink to="/" icon={<Home size={18} />} label="Home" shortcut="H" />
+              <SidebarLink to="/" icon={<Home size={18} />} label="Home" shortcut="H" onClick={() => setIsSidebarOpen(false)} />
             </li>
             <li>
-              <SidebarLink to="/dispositivos" icon={<Component size={18} />} label="Dispositivos" shortcut="D" />
+              <SidebarLink to="/dispositivos" icon={<Component size={18} />} label="Dispositivos" shortcut="D" onClick={() => setIsSidebarOpen(false)} />
             </li>
             <li>
-              <SidebarLink to="/utilizacoes" icon={<List size={18} />} label="Utilizações" shortcut="U" />
+              <SidebarLink to="/utilizacoes" icon={<List size={18} />} label="Utilizações" shortcut="U" onClick={() => setIsSidebarOpen(false)} />
             </li>
             <li>
-              <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" />
+              <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" onClick={() => setIsSidebarOpen(false)} />
             </li>
           </ul>
         </div>
@@ -87,10 +104,11 @@ export function Layout() {
 }
 
 // Subcomponente de estilo do Link da Sidebar
-function SidebarLink({ to, icon, label, shortcut }: { to: string, icon: React.ReactNode, label: string, shortcut: string }) {
+function SidebarLink({ to, icon, label, shortcut, onClick }: { to: string, icon: React.ReactNode, label: string, shortcut: string, onClick?: () => void }) {
   return (
     <NavLink 
       to={to} 
+      onClick={onClick}
       style={({ isActive }) => ({
         display: 'flex',
         alignItems: 'center',

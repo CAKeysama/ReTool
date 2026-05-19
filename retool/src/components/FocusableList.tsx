@@ -58,7 +58,9 @@ export function FocusableList<T>({ items, renderItem, onItemAction, ariaLabel }:
               transition: 'all 0.15s ease',
               display: 'flex',
               alignItems: 'center',
-              boxShadow: isFocused ? '0 4px 12px rgba(228, 13, 44, 0.05)' : 'none'
+              boxShadow: isFocused ? '0 4px 12px rgba(228, 13, 44, 0.05)' : 'none',
+              wordBreak: 'break-word',
+              minWidth: 0
             }}
           >
             {renderItem(item, index, isFocused)}

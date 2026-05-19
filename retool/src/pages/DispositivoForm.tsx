@@ -56,7 +56,7 @@ export function DispositivoForm() {
     <AccessibleModal isOpen={true} onClose={handleClose} title={isEditing ? 'Editar dispositivo' : 'Novo dispositivo'}>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--spacing-md)' }}>
+        <div className="form-row-grid">
           <div>
             <label htmlFor="nome" className="input-label">Nome</label>
             <input 
@@ -83,7 +83,7 @@ export function DispositivoForm() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--spacing-md)' }}>
+        <div className="form-row-grid">
            <div>
             <label htmlFor="categoriaId" className="input-label">Categoria</label>
             <select 
@@ -113,7 +113,7 @@ export function DispositivoForm() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 'var(--spacing-md)' }}>
+        <div className="form-row-grid">
           <div>
             <label htmlFor="familiaProduto" className="input-label">Família de Produto</label>
               <input 
