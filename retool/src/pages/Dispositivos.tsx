@@ -76,7 +76,7 @@ export function Dispositivos() {
             <div className="subtitle">{filteredDispositivos.length} dispositivos encontrados</div>
           </div>
           <button 
-            className="btn btn-primary" 
+            className="btn btn-primary hide-on-mobile" 
             onClick={() => openDispForm()}
             aria-label="Cadastrar novo dispositivo (Atalho: N)"
             style={{ fontWeight: 600, padding: '8px 20px', borderRadius: '20px' }}
@@ -216,6 +216,10 @@ export function Dispositivos() {
           </div>
         </AccessibleModal>
       </div>
+
+      <button className="fab-button" onClick={() => openDispForm()} aria-label="Cadastrar novo dispositivo">
+        <Plus size={24} />
+      </button>
     </>
   );
 }

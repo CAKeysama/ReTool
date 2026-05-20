@@ -80,7 +80,7 @@ export function Utilizacoes() {
                   navigate(`/dispositivos/${u.dispositivoId}`);
                 }}
               >
-                <Eye size={16} /> Ver Dispositivo
+                <Eye size={16} /> <span className="hide-on-mobile">Ver Dispositivo</span>
               </button>
             </div>
           )

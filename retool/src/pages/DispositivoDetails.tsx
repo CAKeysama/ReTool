@@ -69,7 +69,7 @@ export function DispositivoDetails() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)' }}>
+      <div className="details-grid">
         
         {/* CARTÃO: DADOS DO DISPOSITIVO */}
         <div className="card">
@@ -78,7 +78,7 @@ export function DispositivoDetails() {
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Dados do dispositivo</h3>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)' }}>
+          <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Nome</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
@@ -89,7 +89,7 @@ export function DispositivoDetails() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)' }}>
+          <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Categoria</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{categoria?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
@@ -100,7 +100,7 @@ export function DispositivoDetails() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
+          <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Família de Produto</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.familiaProduto || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>

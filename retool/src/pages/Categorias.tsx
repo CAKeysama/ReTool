@@ -58,7 +58,7 @@ export function Categorias() {
     <div>
       <h2 style={{ marginBottom: 'var(--spacing-xl)' }}>Gestão de Classificações</h2>
       
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-2xl)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 'var(--spacing-2xl)' }}>
         
         {/* Painel Categorias */}
         <div>
@@ -92,7 +92,7 @@ export function Categorias() {
             onItemAction={(c) => openCatForm(c.id, c.nome)}
             renderItem={(c, idx, isFocused) => (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <span style={{ fontWeight: 500 }}>{c.nome || 'Sem Nome'}</span>
+                <span style={{ fontWeight: 500, flex: 1, wordBreak: 'break-word', paddingRight: '8px' }}>{c.nome || 'Sem Nome'}</span>
                 <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                   <button 
                     className="btn" 
@@ -152,7 +152,7 @@ export function Categorias() {
             onItemAction={(t) => openTipoForm(t.id, t.nome)}
             renderItem={(t, idx, isFocused) => (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <span style={{ fontWeight: 500 }}>{t.nome || 'Sem Nome'}</span>
+                <span style={{ fontWeight: 500, flex: 1, wordBreak: 'break-word', paddingRight: '8px' }}>{t.nome || 'Sem Nome'}</span>
                 <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                   <button 
                     className="btn" 

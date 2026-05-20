@@ -186,10 +186,21 @@ export function Home() {
       </div>
 
       {/* Cartões Coloridos */}
-      <div className="flex-wrap-container">
-        <HomeCard count={dispositivos.length} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
-        <HomeCard count={utilizacoes.length} label="Utilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/utilizacoes')} shortcut="U" />
-        <HomeCard count={categorias.length} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
+      <div style={{ 
+        display: 'flex', 
+        gap: 'var(--spacing-md)', 
+        overflowX: 'auto', 
+        paddingBottom: '8px',
+        width: '100%',
+        maxWidth: '100vw',
+        padding: '0 var(--spacing-lg)', /* Para dar uma borda de respiro na rolagem */
+        WebkitOverflowScrolling: 'touch' /* Suavidade no iOS */
+      }}>
+        <div style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
+          <HomeCard count={dispositivos.length} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
+          <HomeCard count={utilizacoes.length} label="Utilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/utilizacoes')} shortcut="U" />
+          <HomeCard count={categorias.length} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
+        </div>
       </div>
 
       {/* Texto de Atalho Footer */}

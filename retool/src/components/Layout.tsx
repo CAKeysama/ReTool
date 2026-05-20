@@ -9,17 +9,46 @@ export function Layout() {
   const { announcement, isDispFormOpen } = useReTool();
   useHotkeys();
   const location = useLocation();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Condição para telas centralizadas sem a sidebar fixa
   const isFullScreenMode = location.pathname === '/' || location.pathname === '/sobre';
 
   if (isFullScreenMode) {
     return (
-      <div className="app-container" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)' }}>
+      <div className="app-container" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)', paddingBottom: '90px' }}>
         <div aria-live="polite" className="sr-only">{announcement}</div>
         <Outlet />
         {isDispFormOpen && <DispositivoForm />}
+        
+        {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
+        <nav className="bottom-nav" aria-label="Navegação Mobile">
+          <ul className="bottom-nav-list">
+            <li>
+              <NavLink to="/" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+                <Home size={24} />
+                <span>Home</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/dispositivos" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+                <Component size={24} />
+                <span>Dispositivos</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/utilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+                <List size={24} />
+                <span>Utilizações</span>
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/categorias" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+                <Settings size={24} />
+                <span>Categorias</span>
+              </NavLink>
+            </li>
+          </ul>
+        </nav>
       </div>
     );
   }
@@ -28,23 +57,7 @@ export function Layout() {
     <div className="app-container">
       <div aria-live="polite" className="sr-only">{announcement}</div>
 
-      {/* Hamburger Menu Button */}
-      <button 
-        className="hamburger-btn" 
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        aria-label="Alternar menu"
-      >
-        {isSidebarOpen ? <X size={28} /> : <Menu size={28} />}
-      </button>
-
-      {/* Overlay para fechar ao clicar fora no mobile */}
-      <div 
-        className={`sidebar-overlay ${isSidebarOpen ? 'active' : ''}`} 
-        onClick={() => setIsSidebarOpen(false)}
-        aria-hidden="true"
-      />
-
-      <nav className={`sidebar ${isSidebarOpen ? 'open' : ''}`} aria-label="Navegação Principal">
+      <nav className="sidebar" aria-label="Navegação Principal">
         
         {/* LOGO AREA */}
         <div style={{ marginBottom: 'var(--spacing-2xl)' }}>
@@ -64,16 +77,16 @@ export function Layout() {
           </div>
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <li>
-              <SidebarLink to="/" icon={<Home size={18} />} label="Home" shortcut="H" onClick={() => setIsSidebarOpen(false)} />
+              <SidebarLink to="/" icon={<Home size={18} />} label="Home" shortcut="H" />
             </li>
             <li>
-              <SidebarLink to="/dispositivos" icon={<Component size={18} />} label="Dispositivos" shortcut="D" onClick={() => setIsSidebarOpen(false)} />
+              <SidebarLink to="/dispositivos" icon={<Component size={18} />} label="Dispositivos" shortcut="D" />
             </li>
             <li>
-              <SidebarLink to="/utilizacoes" icon={<List size={18} />} label="Utilizações" shortcut="U" onClick={() => setIsSidebarOpen(false)} />
+              <SidebarLink to="/utilizacoes" icon={<List size={18} />} label="Utilizações" shortcut="U" />
             </li>
             <li>
-              <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" onClick={() => setIsSidebarOpen(false)} />
+              <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" />
             </li>
           </ul>
         </div>
@@ -94,6 +107,36 @@ export function Layout() {
         </div>
       </nav>
 
+      {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
+      <nav className="bottom-nav" aria-label="Navegação Mobile">
+        <ul className="bottom-nav-list">
+          <li>
+            <NavLink to="/" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+              <Home size={24} />
+              <span>Home</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/dispositivos" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+              <Component size={24} />
+              <span>Dispositivos</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/utilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+              <List size={24} />
+              <span>Utilizações</span>
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/categorias" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+              <Settings size={24} />
+              <span>Categorias</span>
+            </NavLink>
+          </li>
+        </ul>
+      </nav>
+
       <main className="main-content" id="main-content">
         <Outlet />
       </main>
@@ -104,11 +147,10 @@ export function Layout() {
 }
 
 // Subcomponente de estilo do Link da Sidebar
-function SidebarLink({ to, icon, label, shortcut, onClick }: { to: string, icon: React.ReactNode, label: string, shortcut: string, onClick?: () => void }) {
+function SidebarLink({ to, icon, label, shortcut }: { to: string, icon: React.ReactNode, label: string, shortcut: string }) {
   return (
     <NavLink 
       to={to} 
-      onClick={onClick}
       style={({ isActive }) => ({
         display: 'flex',
         alignItems: 'center',

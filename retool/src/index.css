@@ -201,6 +201,15 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Modais */
+.modal-overlay {
+  align-items: center; /* Centralizado no desktop */
+}
+
+.modal-content {
+  max-height: 90vh;
+}
+
 /* -----------------------------
    UTILITY CLASSES RESPONSIVAS
 ----------------------------- */
@@ -208,6 +217,13 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--spacing-md);
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
 .flex-responsive-header {
@@ -230,23 +246,81 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   justify-content: center;
 }
 
-/* Sidebar Toggle Overlay (Mobile) */
-.sidebar-overlay {
+/* -----------------------------
+   MOBILE APP NAVIGATION UI
+----------------------------- */
+
+/* Bottom Navigation (Mobile) */
+.bottom-nav {
   display: none;
   position: fixed;
-  inset: 0;
-  background-color: rgba(0,0,0,0.5);
-  z-index: 40;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 50;
+  box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
-.hamburger-btn {
+.bottom-nav-list {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 64px;
+}
+
+.bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-decoration: none;
+  color: #9ca3af;
+  font-size: 0.7rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  height: 100%;
+}
+
+.bottom-nav-item.active {
+  color: var(--color-primary);
+}
+
+.bottom-nav-item.active svg {
+  stroke: var(--color-primary);
+  stroke-width: 2.5;
+}
+
+/* Floating Action Button (FAB) */
+.fab-button {
   display: none;
-  background: none;
+  position: fixed;
+  bottom: 80px; /* Acima do bottom-nav */
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--color-primary);
+  color: white;
   border: none;
-  color: var(--color-text-dark);
-  padding: 8px;
+  box-shadow: 0 4px 12px rgba(228, 13, 44, 0.4);
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
   cursor: pointer;
-  z-index: 60;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.fab-button:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 8px rgba(228, 13, 44, 0.4);
 }
 
 /* -----------------------------
@@ -269,34 +343,25 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
     flex-direction: column;
   }
 
-  /* Hamburger Menu e Overlay visíveis no mobile */
-  .hamburger-btn {
+  /* Ocultar a Sidebar padrão no Mobile */
+  .sidebar {
+    display: none;
+  }
+
+  /* Mostrar Bottom Navigation e FAB */
+  .bottom-nav {
     display: block;
-    position: fixed;
-    top: 12px;
-    right: 12px;
   }
   
-  .sidebar-overlay.active {
-    display: block;
-  }
-
-  /* Sidebar vira um Drawer Off-canvas no Mobile */
-  .sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    width: 260px;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .sidebar.open {
-    transform: translateX(0);
+  .fab-button {
+    display: flex;
   }
 
   .main-content {
     margin-left: 0;
     padding: var(--spacing-md);
-    padding-top: 60px; /* Espaço para o hamburger button flutuante */
+    padding-bottom: 90px; /* Espaço para o Bottom Nav + FAB */
+    padding-top: var(--spacing-md);
   }
 
   /* Headers flexíveis viram colunas no mobile */
@@ -310,12 +375,29 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   }
 
   /* Grids de formulário viram 1 coluna */
-  .form-row-grid {
+  .form-row-grid, .details-grid {
     grid-template-columns: 1fr;
   }
 
   .input-field, .btn {
     font-size: 1rem; /* Melhor para touch */
     padding: 12px 16px;
+  }
+  
+  /* Modal Bottom Sheet Style no Mobile */
+  .modal-overlay {
+    align-items: flex-end; /* Alinhar o modal embaixo */
+  }
+  
+  .modal-content {
+    width: 100%;
+    max-height: 90vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    margin: 0;
+  }
+  
+  .hide-on-mobile {
+    display: none !important;
   }
 }
