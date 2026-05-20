@@ -1,44 +1,55 @@
 :root {
-  /* Paleta Oficial Baldan */
-  --color-baldan-vermelho: #e40d2c;
-  --color-baldan-cinza-aco: #4a4a4a;
-  --color-baldan-cinza-cristal: #d6d6d6;
-  --color-baldan-cinza-rocha: #cccccc;
-  --color-baldan-paixao: #8c1a17;
-  --color-baldan-graos: #f5ede3;
-  --color-baldan-terra-clara: #e5dbcc;
-  --color-baldan-terra-preta: #000000;
+  /* Nova Paleta Principal do Sistema */
+  --red00: #E40D2C;
+  --red01: #8C1A17;
+  --red02: #ff798d;
+  --red03: #fcc4cc;
+  --gray00: #4A4A4A;
+  --gray01: #808080;
+  --gray02: #D6D6D6;
+  --gray03: #e8e7e7;
+  --black00: #000000;
+  --black01: #2f2f2f;
+  --white00: #FFFFFE;
+  --success00: #00762E;
+  --success01: #018d37;
+  --various00: #9E3D45;
+  --various01: #EB593B;
+  --various02: #785994;
+  --various03: #334F5C;
+  --various04: #F5A32B;
+  --various05: #00762E;
 
-  /* Mapeamento de UI */
-  --color-primary: var(--color-baldan-vermelho);
-  --color-text-title: var(--color-baldan-vermelho);
-  --color-text-body: var(--color-baldan-cinza-aco);
-  --color-text-dark: var(--color-baldan-terra-preta);
+  /* Mapeamento de UI semântico */
+  --color-primary: var(--red00);
+  --color-text-title: var(--red00);
+  --color-text-body: var(--gray00);
+  --color-text-dark: var(--black01);
   
-  --color-gray-steel: var(--color-baldan-cinza-aco);
+  --color-gray-steel: var(--gray00);
   
-  --color-surface-bg: #ffffff; /* Fundo Principal Branco */
-  --color-surface: #ffffff; /* Branco Puro */
-  --color-border: var(--color-baldan-cinza-cristal);
-  --color-hover: var(--color-baldan-terra-clara);
+  --color-surface-bg: var(--white00);
+  --color-surface: var(--white00);
+  --color-border: var(--gray02);
+  --color-hover: var(--gray03);
 
- /* Badges & Cards Colors (Baseadas nas imagens) */
-  --color-box-pink-bg: var(--color-baldan-terra-clara);
-  --color-box-pink-text: var(--color-baldan-paixao);
+  /* Badges & Cards Colors atualizados */
+  --color-box-pink-bg: var(--red03);
+  --color-box-pink-text: var(--red01);
   
-  --color-box-teal-bg: var(--color-baldan-cinza-cristal);
-  --color-box-teal-text: var(--color-baldan-cinza-aco);
+  --color-box-teal-bg: var(--gray03);
+  --color-box-teal-text: var(--various03);
   
-  --color-box-yellow-bg: var(--color-baldan-graos);
-  --color-box-yellow-text: var(--color-baldan-terra-preta);
+  --color-box-yellow-bg: rgba(245, 163, 43, 0.15);
+  --color-box-yellow-text: var(--various04);
 
-  --color-box-blue-bg: var(--color-baldan-cinza-rocha);
-  --color-box-blue-text: var(--color-baldan-paixao);
+  --color-box-blue-bg: rgba(120, 89, 148, 0.15);
+  --color-box-blue-text: var(--various02);
 
   /* Gerais de Status e UI */
-  --color-danger: var(--color-baldan-vermelho);
-  --color-danger-hover: var(--color-baldan-paixao);
-  --color-success: var(--color-baldan-cinza-aco);
+  --color-danger: var(--red00);
+  --color-danger-hover: var(--red01);
+  --color-success: var(--success00);
   
   --spacing-xs: 4px;
   --spacing-sm: 8px;

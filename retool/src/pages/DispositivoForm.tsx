@@ -93,7 +93,13 @@ export function DispositivoForm() {
               onChange={handleChange}
             >
               <option value="">Selecione ou deixe vazio</option>
-              {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              {categorias
+                .filter(c => c.ativo !== false || c.id === formData.categoriaId)
+                .map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}{c.ativo === false ? ' (Inativo)' : ''}
+                  </option>
+                ))}
             </select>
             <div className="input-helper">Grupos macro (Ex: Ferramentas, EPIs, Gabaritos)</div>
           </div>
@@ -107,7 +113,13 @@ export function DispositivoForm() {
               onChange={handleChange}
             >
               <option value="">Selecione ou deixe vazio</option>
-              {tipos.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+              {tipos
+                .filter(t => t.ativo !== false || t.id === formData.tipo)
+                .map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.nome}{t.ativo === false ? ' (Inativo)' : ''}
+                  </option>
+                ))}
             </select>
             <div className="input-helper">Classificação técnica (Ex: Elétrica, Manual)</div>
           </div>

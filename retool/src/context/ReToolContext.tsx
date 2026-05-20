@@ -6,11 +6,13 @@ import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc, writeBatch }
 export interface Categoria {
   id: string;
   nome?: string;
+  ativo?: boolean;
 }
 
 export interface Tipo {
   id: string;
   nome?: string;
+  ativo?: boolean;
 }
 
 export interface Dispositivo {

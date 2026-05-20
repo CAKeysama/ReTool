@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { useReTool } from '../context/ReToolContext';
+import { useReTool, Categoria, Tipo } from '../context/ReToolContext';
 import { FocusableList } from '../components/FocusableList';
 import { AccessibleModal } from '../components/AccessibleModal';
-import { Plus, Trash, Edit, Info } from 'lucide-react';
+import { Plus, Trash, Edit, Info, Check } from 'lucide-react';
 
 export function Categorias() {
   const { 
@@ -21,6 +21,10 @@ export function Categorias() {
   const [editingTipoId, setEditingTipoId] = useState<string | null>(null);
   const [tipoName, setTipoName] = useState('');
   const [showTipoInfo, setShowTipoInfo] = useState(false);
+
+  // States for Category & Type Deactivation/Delete Confirmation
+  const [catConfirmAction, setCatConfirmAction] = useState<Categoria | null>(null);
+  const [tipoConfirmAction, setTipoConfirmAction] = useState<Tipo | null>(null);
 
   const openCatForm = (id?: string, currentName?: string) => {
     setEditingCatId(id || null);
@@ -95,8 +99,13 @@ export function Categorias() {
             ariaLabel="Lista de categorias. Use setas para navegar e Enter para editar."
             onItemAction={(c) => openCatForm(c.id, c.nome)}
             renderItem={(c, idx, isFocused) => (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <span style={{ fontWeight: 500, flex: 1, wordBreak: 'break-word', paddingRight: '8px' }}>{c.nome || 'Sem Nome'}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: c.ativo === false ? 0.6 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{c.nome || 'Sem Nome'}</span>
+                  {c.ativo === false && (
+                    <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                   <button 
                     className="btn" 
@@ -106,15 +115,26 @@ export function Categorias() {
                   >
                     <Edit size={16} />
                   </button>
+                  {c.ativo === false && (
+                    <button 
+                      className="btn" 
+                      style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                      tabIndex={isFocused ? 0 : -1} 
+                      onClick={(e) => { e.stopPropagation(); updateCategoria(c.id, { ativo: true }); }}
+                      aria-label={`Ativar categoria ${c.nome}`}
+                    >
+                      <Check size={16} />
+                    </button>
+                  )}
                   <button 
                     className="btn" 
                     style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
                     tabIndex={isFocused ? 0 : -1} 
                     onClick={(e) => {
                       e.stopPropagation();
-                      if(confirm('Tem certeza?')) deleteCategoria(c.id);
+                      setCatConfirmAction(c);
                     }}
-                    aria-label={`Excluir categoria ${c.nome}`}
+                    aria-label={c.ativo === false ? `Excluir categoria ${c.nome}` : `Excluir ou desativar categoria ${c.nome}`}
                   >
                     <Trash size={16} />
                   </button>
@@ -159,8 +179,13 @@ export function Categorias() {
             ariaLabel="Lista de tipos. Use setas para navegar e Enter para editar."
             onItemAction={(t) => openTipoForm(t.id, t.nome)}
             renderItem={(t, idx, isFocused) => (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <span style={{ fontWeight: 500, flex: 1, wordBreak: 'break-word', paddingRight: '8px' }}>{t.nome || 'Sem Nome'}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: t.ativo === false ? 0.6 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{t.nome || 'Sem Nome'}</span>
+                  {t.ativo === false && (
+                    <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                   <button 
                     className="btn" 
@@ -170,15 +195,26 @@ export function Categorias() {
                   >
                     <Edit size={16} />
                   </button>
+                  {t.ativo === false && (
+                    <button 
+                      className="btn" 
+                      style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                      tabIndex={isFocused ? 0 : -1} 
+                      onClick={(e) => { e.stopPropagation(); updateTipo(t.id, { ativo: true }); }}
+                      aria-label={`Ativar tipo ${t.nome}`}
+                    >
+                      <Check size={16} />
+                    </button>
+                  )}
                   <button 
                     className="btn" 
                     style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
                     tabIndex={isFocused ? 0 : -1} 
                     onClick={(e) => {
                       e.stopPropagation();
-                      if(confirm('Tem certeza?')) deleteTipo(t.id);
+                      setTipoConfirmAction(t);
                     }}
-                    aria-label={`Excluir tipo ${t.nome}`}
+                    aria-label={t.ativo === false ? `Excluir tipo ${t.nome}` : `Excluir ou desativar tipo ${t.nome}`}
                   >
                     <Trash size={16} />
                   </button>
@@ -228,6 +264,182 @@ export function Categorias() {
             <button type="submit" className="btn btn-primary">Salvar (Enter)</button>
           </div>
         </form>
+      </AccessibleModal>
+
+      {/* Modal de Confirmação de Exclusão/Desativação de Categoria */}
+      <AccessibleModal 
+        isOpen={!!catConfirmAction} 
+        onClose={() => setCatConfirmAction(null)} 
+        title={catConfirmAction?.ativo === false ? "Excluir Categoria" : "Gerenciar Categoria"}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          {catConfirmAction?.ativo === false ? (
+            <>
+              <p style={{ fontSize: '0.95rem', color: 'var(--color-text-dark)', lineHeight: 1.5 }}>
+                Deseja excluir permanentemente a categoria <strong>{catConfirmAction?.nome}</strong>? Esta ação não poderá ser desfeita.
+              </p>
+              
+              <div style={{ 
+                padding: '12px', 
+                backgroundColor: 'var(--gray03)', 
+                border: '1px solid var(--color-border)', 
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.8rem',
+                color: 'var(--color-text-body)',
+                lineHeight: 1.4
+              }}>
+                <strong>Atenção:</strong> Como a categoria já está desativada, a exclusão permanente removerá o registro definitivamente do banco de dados.
+              </div>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: '0.95rem', color: 'var(--color-text-dark)', lineHeight: 1.5 }}>
+                Deseja excluir permanentemente a categoria <strong>{catConfirmAction?.nome}</strong> ou prefere apenas desativá-la temporariamente?
+              </p>
+              
+              <div style={{ 
+                padding: '12px', 
+                backgroundColor: 'var(--gray03)', 
+                border: '1px solid var(--color-border)', 
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.8rem',
+                color: 'var(--color-text-body)',
+                lineHeight: 1.4
+              }}>
+                <strong>Atenção:</strong> Excluir a categoria removerá o registro de forma permanente. Desativar ocultará a categoria de novos cadastros de dispositivos, mas preservará a associação nos dispositivos existentes.
+              </div>
+            </>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap', marginTop: 'var(--spacing-sm)' }}>
+            <button 
+              type="button" 
+              className="btn" 
+              onClick={() => setCatConfirmAction(null)}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="button" 
+              className="btn"
+              style={
+                catConfirmAction?.ativo === false 
+                  ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' }
+                  : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }
+              }
+              onClick={() => {
+                if (catConfirmAction) {
+                  const novoStatus = catConfirmAction.ativo !== false ? false : true;
+                  updateCategoria(catConfirmAction.id, { ativo: novoStatus });
+                  setCatConfirmAction(null);
+                }
+              }}
+            >
+              {catConfirmAction?.ativo !== false ? 'Desativar Categoria' : 'Ativar Categoria'}
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-primary"
+              style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+              onClick={() => {
+                if (catConfirmAction) {
+                  deleteCategoria(catConfirmAction.id);
+                  setCatConfirmAction(null);
+                }
+              }}
+            >
+              Excluir Permanente
+            </button>
+          </div>
+        </div>
+      </AccessibleModal>
+
+      {/* Modal de Confirmação de Exclusão/Desativação de Tipo */}
+      <AccessibleModal 
+        isOpen={!!tipoConfirmAction} 
+        onClose={() => setTipoConfirmAction(null)} 
+        title={tipoConfirmAction?.ativo === false ? "Excluir Tipo" : "Gerenciar Tipo"}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          {tipoConfirmAction?.ativo === false ? (
+            <>
+              <p style={{ fontSize: '0.95rem', color: 'var(--color-text-dark)', lineHeight: 1.5 }}>
+                Deseja excluir permanentemente o tipo <strong>{tipoConfirmAction?.nome}</strong>? Esta ação não poderá ser desfeita.
+              </p>
+              
+              <div style={{ 
+                padding: '12px', 
+                backgroundColor: 'var(--gray03)', 
+                border: '1px solid var(--color-border)', 
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.8rem',
+                color: 'var(--color-text-body)',
+                lineHeight: 1.4
+              }}>
+                <strong>Atenção:</strong> Como o tipo já está desativado, a exclusão permanente removerá o registro definitivamente do banco de dados.
+              </div>
+            </>
+          ) : (
+            <>
+              <p style={{ fontSize: '0.95rem', color: 'var(--color-text-dark)', lineHeight: 1.5 }}>
+                Deseja excluir permanentemente o tipo <strong>{tipoConfirmAction?.nome}</strong> ou prefere apenas desativá-lo temporariamente?
+              </p>
+              
+              <div style={{ 
+                padding: '12px', 
+                backgroundColor: 'var(--gray03)', 
+                border: '1px solid var(--color-border)', 
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.8rem',
+                color: 'var(--color-text-body)',
+                lineHeight: 1.4
+              }}>
+                <strong>Atenção:</strong> Excluir o tipo removerá o registro de forma permanente. Desativar ocultará o tipo de novos cadastros de dispositivos, mas preservará a associação nos dispositivos existentes.
+              </div>
+            </>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap', marginTop: 'var(--spacing-sm)' }}>
+            <button 
+              type="button" 
+              className="btn" 
+              onClick={() => setTipoConfirmAction(null)}
+            >
+              Cancelar
+            </button>
+            <button 
+              type="button" 
+              className="btn"
+              style={
+                tipoConfirmAction?.ativo === false 
+                  ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' }
+                  : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }
+              }
+              onClick={() => {
+                if (tipoConfirmAction) {
+                  const novoStatus = tipoConfirmAction.ativo !== false ? false : true;
+                  updateTipo(tipoConfirmAction.id, { ativo: novoStatus });
+                  setTipoConfirmAction(null);
+                }
+              }}
+            >
+              {tipoConfirmAction?.ativo !== false ? 'Desativar Tipo' : 'Ativar Tipo'}
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-primary"
+              style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+              onClick={() => {
+                if (tipoConfirmAction) {
+                  deleteTipo(tipoConfirmAction.id);
+                  setTipoConfirmAction(null);
+                }
+              }}
+            >
+              Excluir Permanente
+            </button>
+          </div>
+        </div>
       </AccessibleModal>
 
     </div>

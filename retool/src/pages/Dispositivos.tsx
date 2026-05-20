@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { useReTool, Dispositivo } from '../context/ReToolContext';
 import { FocusableList } from '../components/FocusableList';
-import { Plus, Search, Box, Filter, ChevronDown } from 'lucide-react';
+import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { useHotkeys } from '../hooks/useHotkeys';
 
@@ -120,7 +120,13 @@ export function Dispositivos() {
                 <label className="input-label">Categoria</label>
                 <select className="input-field" value={filterCategoria} onChange={(e) => setFilterCategoria(e.target.value)}>
                   <option value="">Todas</option>
-                  {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  {categorias
+                    .filter(c => c.ativo !== false || c.id === filterCategoria)
+                    .map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome}{c.ativo === false ? ' (Inativo)' : ''}
+                      </option>
+                    ))}
                 </select>
               </div>
             )}
@@ -186,22 +192,24 @@ export function Dispositivos() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button 
                   className="btn" 
-                  style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+                  style={{ padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%' }}
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(p => p - 1)}
+                  aria-label="Página anterior"
                 >
-                  Anterior
+                  <ChevronLeft size={16} />
                 </button>
-                <span style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: 600 }}>
+                <span style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: 600, minWidth: '45px', textAlign: 'center' }}>
                   {currentPage} de {totalPages}
                 </span>
                 <button 
                   className="btn" 
-                  style={{ padding: '4px 12px', fontSize: '0.85rem' }}
+                  style={{ padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%' }}
                   disabled={currentPage >= totalPages}
                   onClick={() => setCurrentPage(p => p + 1)}
+                  aria-label="Próxima página"
                 >
-                  Próxima
+                  <ChevronRight size={16} />
                 </button>
               </div>
             )}

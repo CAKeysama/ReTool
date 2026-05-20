@@ -216,7 +216,7 @@ function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count:
   const isTeal = colorType === 'teal';
 
   const bgColor = 'rgba(228, 13, 44, 0.1)';
-  const textColor = 'var(--color-baldan-vermelho)';
+  const textColor = 'var(--color-primary)';
 
   return (
     <div 
