@@ -53,7 +53,7 @@ export function DispositivoForm() {
   };
 
   return (
-    <AccessibleModal isOpen={true} onClose={handleClose} title={isEditing ? 'Editar dispositivo' : 'Novo dispositivo'}>
+    <AccessibleModal isOpen={true} onClose={handleClose} title={isEditing ? 'Editar dispositivo' : 'Novo dispositivo'} maxWidth="650px">
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
         
         <div className="form-row-grid">

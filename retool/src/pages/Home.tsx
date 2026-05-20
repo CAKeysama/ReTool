@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
-import { Search, Box, Wrench, Tag, Info } from 'lucide-react';
+import { Search, Box, Wrench, Tag, Info, Plus } from 'lucide-react';
 import { useHotkeys } from '../hooks/useHotkeys';
 import baldanWatermark from '../assets/logotipo - preferencial_horizontal (aplicação monocromática positiva).png';
 
@@ -69,8 +69,8 @@ export function Home() {
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: '90%',
-          maxWidth: '1000px',
+          width: '120vw',
+          maxWidth: '1500px',
           opacity: 0.05,
           pointerEvents: 'none',
           zIndex: -1
@@ -180,8 +180,8 @@ export function Home() {
         <button className="btn" onClick={() => navigate(`/dispositivos?q=${encodeURIComponent(query)}`)} style={{ borderRadius: '20px', padding: '8px 20px' }}>
           Buscar dispositivos
         </button>
-        <button className="btn btn-primary" onClick={() => openDispForm()} style={{ borderRadius: '20px', padding: '8px 20px', fontWeight: 600 }}>
-          + Novo dispositivo
+        <button className="btn btn-primary" aria-label="Cadastrar novo dispositivo" onClick={() => openDispForm()} style={{ width: '40px', height: '40px', padding: 0 }}>
+          <Plus size={20} />
         </button>
       </div>
 
@@ -215,8 +215,8 @@ function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count:
   const isPink = colorType === 'pink';
   const isTeal = colorType === 'teal';
 
-  const bgColor = isPink ? 'var(--color-box-pink-bg)' : isTeal ? 'var(--color-box-teal-bg)' : 'var(--color-box-yellow-bg)';
-  const textColor = isPink ? 'var(--color-box-pink-text)' : isTeal ? 'var(--color-box-teal-text)' : 'var(--color-box-yellow-text)';
+  const bgColor = 'rgba(228, 13, 44, 0.1)';
+  const textColor = 'var(--color-baldan-vermelho)';
 
   return (
     <div 

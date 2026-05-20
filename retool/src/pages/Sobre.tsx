@@ -86,6 +86,41 @@ export function Sobre() {
             <li>Apoiar a padronização dos dados com evolução contínua, orientada pelas áreas técnicas (TI e Ferramentaria).</li>
           </ul>
         </section>
+
+        <section>
+          <h2 style={{ fontSize: '1.2rem', color: 'var(--color-gray-steel)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px', marginBottom: '12px' }}>
+            4. Equipe (Fatec)
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)' }}>
+            <div>
+              <h3 style={{ fontSize: '0.95rem', color: 'var(--color-primary)', marginBottom: '8px' }}>Desenvolvedores</h3>
+              <ul style={{ listStyleType: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.95rem', color: 'var(--color-text-dark)' }}>
+                <li>• Gustavo Domingues</li>
+                <li>• Miguel Moura</li>
+                <li>• Guilherme Pedroso</li>
+                <li>• Luiz Ramos</li>
+                <li>• Pedro Henrique</li>
+              </ul>
+            </div>
+            <div>
+              <h3 style={{ fontSize: '0.95rem', color: 'var(--color-primary)', marginBottom: '8px' }}>Orientador</h3>
+              <ul style={{ listStyleType: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.95rem', color: 'var(--color-text-dark)' }}>
+                <li>• Douglas Ribeiro</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2 style={{ fontSize: '1.2rem', color: 'var(--color-gray-steel)', borderBottom: '1px solid var(--color-border)', paddingBottom: '8px', marginBottom: '12px' }}>
+            5. Envolvidos (Baldan)
+          </h2>
+          <ul style={{ listStyleType: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.95rem', color: 'var(--color-text-dark)' }}>
+            <li>• Rodrigo Vidrich</li>
+            <li>• Gabriela Carvalho</li>
+            <li>• Viniccius</li>
+          </ul>
+        </section>
       </div>
 
       {/* Logos no Rodapé */}

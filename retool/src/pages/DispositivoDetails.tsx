@@ -159,9 +159,10 @@ export function DispositivoDetails() {
           <button 
             className="btn" 
             onClick={() => setIsModalOpen(true)}
-            style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '16px' }}
+            aria-label="Adicionar Utilização"
+            style={{ width: '32px', height: '32px', padding: 0 }}
           >
-            <Plus size={14} /> Adicionar
+            <Plus size={16} />
           </button>
         </div>
         

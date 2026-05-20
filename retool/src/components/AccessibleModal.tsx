@@ -5,9 +5,10 @@ interface AccessibleModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  maxWidth?: string;
 }
 
-export function AccessibleModal({ isOpen, onClose, title, children }: AccessibleModalProps) {
+export function AccessibleModal({ isOpen, onClose, title, children, maxWidth = '400px' }: AccessibleModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export function AccessibleModal({ isOpen, onClose, title, children }: Accessible
         className="modal-content"
         style={{
           backgroundColor: 'white', padding: 'var(--spacing-lg)', 
-          borderRadius: 'var(--radius)', width: '100%', maxWidth: '400px',
+          borderRadius: 'var(--radius)', width: '100%', maxWidth: maxWidth,
           overflowY: 'auto',
           boxShadow: 'var(--shadow)'
         }}

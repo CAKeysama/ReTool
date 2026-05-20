@@ -79,9 +79,9 @@ export function Dispositivos() {
             className="btn btn-primary hide-on-mobile" 
             onClick={() => openDispForm()}
             aria-label="Cadastrar novo dispositivo (Atalho: N)"
-            style={{ fontWeight: 600, padding: '8px 20px', borderRadius: '20px' }}
+            style={{ width: '40px', height: '40px', padding: 0 }}
           >
-            <Plus size={16} /> Novo dispositivo
+            <Plus size={20} />
           </button>
         </div>
 

@@ -65,26 +65,30 @@ export function Categorias() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Categorias</h3>
-              <button 
-                type="button"
-                onClick={() => setShowCatInfo(!showCatInfo)}
-                style={{ background: 'transparent', border: 'none', color: showCatInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
-                aria-label="O que são categorias?"
+              <div 
+                style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+                onMouseEnter={() => setShowCatInfo(true)}
+                onMouseLeave={() => setShowCatInfo(false)}
               >
-                <Info size={16} />
-              </button>
+                <button 
+                  type="button"
+                  style={{ background: 'transparent', border: 'none', color: showCatInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
+                  aria-label="O que são categorias?"
+                >
+                  <Info size={16} />
+                </button>
+                {showCatInfo && (
+                  <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
+                    <strong>Grupos macro</strong> para classificar os dispositivos de forma geral.<br/>
+                    <em>Exemplos:</em> Ferramentas de Corte, EPIs, Gabaritos, Equipamentos de Medição.
+                  </div>
+                )}
+              </div>
             </div>
-            <button className="btn btn-primary" onClick={() => openCatForm()} aria-label="Criar nova categoria">
-              <Plus size={16} /> Nova
+            <button className="btn btn-primary" onClick={() => openCatForm()} aria-label="Criar nova categoria" style={{ width: '40px', height: '40px', padding: 0 }}>
+              <Plus size={20} />
             </button>
           </div>
-          
-          {showCatInfo && (
-            <div style={{ padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', marginBottom: 'var(--spacing-md)', lineHeight: 1.5 }}>
-              <strong>Grupos macro</strong> para classificar os dispositivos de forma geral.<br/>
-              <em>Exemplos:</em> Ferramentas de Corte, EPIs, Gabaritos, Equipamentos de Medição.
-            </div>
-          )}
 
           <FocusableList 
             items={categorias}
@@ -125,26 +129,30 @@ export function Categorias() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Tipos</h3>
-              <button 
-                type="button"
-                onClick={() => setShowTipoInfo(!showTipoInfo)}
-                style={{ background: 'transparent', border: 'none', color: showTipoInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
-                aria-label="O que são tipos?"
+              <div 
+                style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+                onMouseEnter={() => setShowTipoInfo(true)}
+                onMouseLeave={() => setShowTipoInfo(false)}
               >
-                <Info size={16} />
-              </button>
+                <button 
+                  type="button"
+                  style={{ background: 'transparent', border: 'none', color: showTipoInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
+                  aria-label="O que são tipos?"
+                >
+                  <Info size={16} />
+                </button>
+                {showTipoInfo && (
+                  <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
+                    <strong>Classificação técnica</strong> ou funcional do dispositivo.<br/>
+                    <em>Exemplos:</em> Elétrica, Hidráulica, Pneumática, Manual.
+                  </div>
+                )}
+              </div>
             </div>
-            <button className="btn btn-primary" onClick={() => openTipoForm()} aria-label="Criar novo tipo">
-              <Plus size={16} /> Novo
+            <button className="btn btn-primary" onClick={() => openTipoForm()} aria-label="Criar novo tipo" style={{ width: '40px', height: '40px', padding: 0 }}>
+              <Plus size={20} />
             </button>
           </div>
-
-          {showTipoInfo && (
-            <div style={{ padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', marginBottom: 'var(--spacing-md)', lineHeight: 1.5 }}>
-              <strong>Classificação técnica</strong> ou funcional do dispositivo.<br/>
-              <em>Exemplos:</em> Elétrica, Hidráulica, Pneumática, Manual.
-            </div>
-          )}
 
           <FocusableList 
             items={tipos}
