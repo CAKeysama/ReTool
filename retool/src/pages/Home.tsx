@@ -1,9 +1,24 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
-import { Search, Box, Wrench, Tag, Info, Plus } from 'lucide-react';
+import { Search, Box, Wrench, Tag, Info, Plus, Bug, X } from 'lucide-react';
 import { useHotkeys } from '../hooks/useHotkeys';
 import baldanWatermark from '../assets/logotipo - preferencial_horizontal (aplicação monocromática positiva).png';
+
+const BUG_EXPLOSION_PARTICLES = [
+  { id: 1, x: -50, y: -25, size: 12, color: '#1f2937' },
+  { id: 2, x: 40, y: -40, size: 10, color: 'var(--color-primary)' },
+  { id: 3, x: -60, y: 15, size: 14, color: '#1f2937' },
+  { id: 4, x: 55, y: 25, size: 16, color: 'var(--color-primary)' },
+  { id: 5, x: 10, y: -60, size: 18, color: '#1f2937' },
+  { id: 6, x: -30, y: 50, size: 10, color: 'var(--color-primary)' },
+  { id: 7, x: 35, y: 55, size: 12, color: '#1f2937' },
+  { id: 8, x: -15, y: 35, size: 14, color: 'var(--color-primary)' },
+  { id: 9, x: 70, y: -15, size: 8, color: '#1f2937' },
+  { id: 10, x: -70, y: -35, size: 12, color: 'var(--color-primary)' },
+  { id: 11, x: -20, y: -45, size: 14, color: '#1f2937' },
+  { id: 12, x: 25, y: -25, size: 16, color: 'var(--color-primary)' },
+];
 
 export function Home() {
   const { dispositivos, utilizacoes, categorias, openDispForm } = useReTool();
@@ -11,9 +26,39 @@ export function Home() {
   const [suggestions, setSuggestions] = useState(dispositivos);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  
+  const [isHovered, setIsHovered] = useState(false);
+  const [buttonState, setButtonState] = useState<'visible' | 'exploding' | 'hidden' | 'reassembling'>('visible');
+
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  const handleBugClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // 1. Dispara a explosão imediatamente
+    setButtonState('exploding');
+    setIsHovered(false); // oculta pílula instantaneamente
+    
+    // 2. Abre a URL com um pequeno atraso de 500ms (0.5s) para permitir visualizar a explosão
+    setTimeout(() => {
+      window.open("https://docs.google.com/forms/d/e/1FAIpQLSdjL1QGliGpivKDGh0F9frKXchfo5gdtF5kTEpKOBVS7VpuIw/viewform", "_blank");
+    }, 500);
+    
+    // 3. Após 600ms (duração do estouro), fica oculto
+    setTimeout(() => {
+      setButtonState('hidden');
+      
+      // 4. Após 4400ms (totalizando 5000ms após o clique), inicia a explosão reversa (reassembling)
+      setTimeout(() => {
+        setButtonState('reassembling');
+        
+        // 5. Após 600ms (duração da atração/implosão), o botão reaparece
+        setTimeout(() => {
+          setButtonState('visible');
+        }, 600);
+      }, 4400);
+    }, 600);
+  };
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -29,8 +74,8 @@ export function Home() {
       return;
     }
     const q = query.toLowerCase();
-    const filtered = dispositivos.filter(p => 
-      (p.nome && p.nome.toLowerCase().includes(q)) || 
+    const filtered = dispositivos.filter(p =>
+      (p.nome && p.nome.toLowerCase().includes(q)) ||
       (p.codigo && p.codigo.toLowerCase().includes(q))
     );
     setSuggestions(filtered);
@@ -59,11 +104,11 @@ export function Home() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', position: 'relative', overflow: 'hidden', zIndex: 1 }}>
-      
+
       {/* Marca d'água Baldan */}
-      <img 
-        src={baldanWatermark} 
-        alt="" 
+      <img
+        src={baldanWatermark}
+        alt=""
         style={{
           position: 'absolute',
           top: '50%',
@@ -74,17 +119,17 @@ export function Home() {
           opacity: 0.05,
           pointerEvents: 'none',
           zIndex: -1
-        }} 
+        }}
       />
 
       {/* Botão Institucional - Top Right */}
       <div style={{ position: 'absolute', top: 'var(--spacing-xl)', right: 'var(--spacing-xl)' }}>
-        <button 
-          className="btn" 
-          onClick={() => navigate('/sobre')} 
-          style={{ 
-            borderRadius: '20px', padding: '8px 16px', fontSize: '0.85rem', fontWeight: 600, 
-            color: 'var(--color-text-body)', border: '1px solid transparent', backgroundColor: 'transparent' 
+        <button
+          className="btn"
+          onClick={() => navigate('/sobre')}
+          style={{
+            borderRadius: '20px', padding: '8px 16px', fontSize: '0.85rem', fontWeight: 600,
+            color: 'var(--color-text-body)', border: '1px solid transparent', backgroundColor: 'transparent'
           }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-hover)'; e.currentTarget.style.borderColor = 'var(--color-border)' }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
@@ -111,9 +156,9 @@ export function Home() {
           <input
             ref={inputRef}
             type="text"
-            style={{ 
+            style={{
               width: '100%',
-              padding: '16px 20px 16px 48px', 
+              padding: '16px 20px 16px 48px',
               fontSize: '1rem',
               borderRadius: '30px',
               border: '1px solid var(--color-border)',
@@ -141,9 +186,9 @@ export function Home() {
 
         {/* Sugestões do Autocomplete */}
         {showSuggestions && suggestions.length > 0 && (
-          <ul 
+          <ul
             role="listbox"
-            style={{ 
+            style={{
               position: 'absolute', top: '65px', left: 0, right: 0,
               backgroundColor: 'white', border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-lg)',
@@ -152,7 +197,7 @@ export function Home() {
             }}
           >
             {suggestions.map((peca, idx) => (
-              <li 
+              <li
                 key={peca.id}
                 role="option"
                 aria-selected={activeIndex === idx}
@@ -186,10 +231,10 @@ export function Home() {
       </div>
 
       {/* Cartões Coloridos */}
-      <div style={{ 
-        display: 'flex', 
-        gap: 'var(--spacing-md)', 
-        overflowX: 'auto', 
+      <div style={{
+        display: 'flex',
+        gap: 'var(--spacing-md)',
+        overflowX: 'auto',
         paddingBottom: '8px',
         width: '100%',
         maxWidth: '100vw',
@@ -207,6 +252,129 @@ export function Home() {
       <div style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#d1d5db', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
         Pressione <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#9ca3af', fontWeight: 600 }}>/</span> para focar a busca de qualquer tela
       </div>
+
+      {/* Botão de Bug Flutuante no Chão de Fábrica com Hover Tooltip & Efeitos de Explosão */}
+      <div 
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{
+          position: 'absolute',
+          bottom: 'var(--spacing-xl)',
+          right: 'var(--spacing-xl)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '48px',
+          height: '48px',
+          zIndex: 100
+        }}
+      >
+        {/* Renderiza o Tooltip de Pílula apenas no Hover e se o botão estiver visível */}
+        {isHovered && buttonState === 'visible' && (
+          <div 
+            className="cloud-tooltip"
+            style={{
+              position: 'absolute',
+              right: '60px', /* Posicionada exatamente à esquerda do botão de forma absoluta (sem mover o botão) */
+              top: 'calc(50% - 18px)', /* Centralizado verticalmente com a altura de 36px da pílula */
+              backgroundColor: '#1f2937',
+              color: 'white',
+              padding: '0 16px',
+              height: '36px',
+              borderRadius: '18px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              boxShadow: 'var(--shadow-md)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {/* Pequena pontinha de indicação da pílula */}
+            <div 
+              style={{ 
+                position: 'absolute', 
+                right: '-4px', 
+                width: '8px', 
+                height: '8px', 
+                backgroundColor: '#1f2937', 
+                transform: 'rotate(45deg)', 
+                top: 'calc(50% - 4px)' 
+              }} 
+            />
+
+            <span style={{ position: 'relative', zIndex: 2 }}>Encontrou algum bug?</span>
+          </div>
+        )}
+
+          {/* Container Flutuante do Botão (Efeito Parallax em relação à nuvem) */}
+          <div className="bug-button-floating" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', position: 'relative' }}>
+            
+            {/* Se estiver explodindo ou reestruturando, renderiza as partículas exatamente centralizadas no botão */}
+            {(buttonState === 'exploding' || buttonState === 'reassembling') && (
+              <div style={{ position: 'absolute', width: '100%', height: '100%', left: 0, top: 0, pointerEvents: 'none' }}>
+                {BUG_EXPLOSION_PARTICLES.map(p => (
+                  <div 
+                    key={p.id}
+                    className={buttonState === 'exploding' ? "explosion-bubble" : "reassemble-bubble"}
+                    style={{
+                      width: `${p.size}px`,
+                      height: `${p.size}px`,
+                      backgroundColor: p.color,
+                      position: 'absolute',
+                      borderRadius: '50%',
+                      left: '50%',
+                      top: '50%',
+                      marginLeft: `-${p.size / 2}px`,
+                      marginTop: `-${p.size / 2}px`,
+                      boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                      ...({
+                        '--tx': `${p.x}px`,
+                        '--ty': `${p.y}px`
+                      } as any)
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* O próprio botão (Renderiza apenas se visível, com animação elástica de pop-in) */}
+            {buttonState === 'visible' && (
+              <button 
+                className="btn btn-primary button-pop-in"
+                onClick={handleBugClick}
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(228, 13, 44, 0.3)',
+                  transition: 'transform 0.2s, background-color 0.2s',
+                  backgroundColor: 'var(--color-primary)',
+                  color: 'white',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.1)';
+                  e.currentTarget.style.backgroundColor = 'var(--color-danger-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.backgroundColor = 'var(--color-primary)';
+                }}
+                aria-label="Reportar um bug"
+              >
+                <Bug size={22} />
+              </button>
+            )}
+          </div>
+      </div>
     </div>
   );
 }
@@ -219,7 +387,7 @@ function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count:
   const textColor = 'var(--color-primary)';
 
   return (
-    <div 
+    <div
       onClick={onClick}
       role="button"
       tabIndex={0}
@@ -247,7 +415,7 @@ function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count:
       }}>
         {icon}
       </div>
-      
+
       <div>
         <div style={{ fontSize: '1.5rem', fontWeight: 800, color: textColor, lineHeight: 1 }}>{count}</div>
         <div style={{ fontSize: '0.8rem', color: textColor, fontWeight: 500, marginTop: '2px' }}>{label}</div>

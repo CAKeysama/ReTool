@@ -412,3 +412,115 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
     display: none !important;
   }
 }
+
+/* -----------------------------
+   ANIMAÇÃO E ESTILOS BUG REPORT
+   ----------------------------- */
+@keyframes bugFloat {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.bug-speech-bubble {
+  animation: bugFloat 5s ease-in-out infinite;
+  position: relative;
+}
+
+/* Partículas de Explosão da Nuvem de Bug */
+@keyframes particleBlow {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) scale(0);
+    opacity: 0;
+  }
+}
+
+.explosion-bubble {
+  animation: particleBlow 0.6s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+/* Animação de Flutuação do Botão de Bug (Parallax) */
+@keyframes buttonFloat {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.bug-button-floating {
+  animation: buttonFloat 3.5s ease-in-out infinite;
+}
+
+/* Partículas de Reestruturação (Explosão Reversa) */
+@keyframes particleSuck {
+  0% {
+    transform: translate(var(--tx), var(--ty)) scale(0);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+.reassemble-bubble {
+  animation: particleSuck 0.6s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+  pointer-events: none;
+}
+
+/* Pop-In do Botão ao Reaparecer */
+@keyframes buttonPopIn {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.button-pop-in {
+  animation: buttonPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Fade-In e Efeito Puff da Nuvem */
+@keyframes cloudFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.cloud-tooltip {
+  animation: cloudFadeIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards, bugFloat 5s ease-in-out infinite;
+  transform-origin: right center;
+}
+
+
+
+
