@@ -25,6 +25,10 @@ export interface Dispositivo {
   familiaProduto?: string;
   descricao?: string;
   observacoes?: string;
+  produto?: string;
+  palavrasChave?: string[];
+  imagemPeca?: string;
+  imagemDispositivo?: string;
   dataCriacao?: string;
 }
 
@@ -45,7 +49,7 @@ interface ReToolContextType {
   addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'>) => void;
   updateDispositivo: (id: string, data: Partial<Dispositivo>) => void;
   deleteDispositivo: (id: string) => void;
-  addCategoria: (data: Omit<Categoria, 'id'>) => void;
+  addCategoria: (data: Omit<Categoria, 'id'>) => Promise<string>;
   updateCategoria: (id: string, data: Partial<Categoria>) => void;
   deleteCategoria: (id: string) => void;
   addTipo: (data: Omit<Tipo, 'id'>) => void;
@@ -160,6 +164,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     const id = uuidv4();
     await setDoc(doc(db, 'categorias', id), { ...data, id });
     announce('Categoria adicionada com sucesso');
+    return id;
   };
 
   const updateCategoria = async (id: string, data: Partial<Categoria>) => {

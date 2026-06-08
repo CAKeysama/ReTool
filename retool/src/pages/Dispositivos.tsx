@@ -21,6 +21,7 @@ export function Dispositivos() {
 
   const [filterQuery, setFilterQuery] = useState(queryParam);
   const [filterCategoria, setFilterCategoria] = useState('');
+  const [filterProcesso, setFilterProcesso] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
   // Paginação
@@ -34,17 +35,25 @@ export function Dispositivos() {
       const matchText = filterQuery === '' || 
         (p.nome?.toLowerCase().includes(filterQuery.toLowerCase())) ||
         (p.codigo?.toLowerCase().includes(filterQuery.toLowerCase())) ||
-        (p.descricao?.toLowerCase().includes(filterQuery.toLowerCase()));
+        (p.descricao?.toLowerCase().includes(filterQuery.toLowerCase())) ||
+        (p.palavrasChave?.some(tag => tag.toLowerCase().includes(filterQuery.toLowerCase()))) ||
+        (p.produto?.toLowerCase().includes(filterQuery.toLowerCase()));
 
       const matchCat = filterCategoria === '' || p.categoriaId === filterCategoria;
-      return matchText && matchCat;
+      
+      const matchProcesso = filterProcesso === '' || 
+        (p.descricao?.toLowerCase().includes(filterProcesso.toLowerCase())) ||
+        (p.nome?.toLowerCase().includes(filterProcesso.toLowerCase())) ||
+        (p.palavrasChave?.some(tag => tag.toLowerCase().includes(filterProcesso.toLowerCase())));
+
+      return matchText && matchCat && matchProcesso;
     });
-  }, [dispositivos, filterQuery, filterCategoria]);
+  }, [dispositivos, filterQuery, filterCategoria, filterProcesso]);
 
   // Resetar página ao filtrar
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterQuery, filterCategoria, itemsPerPage]);
+  }, [filterQuery, filterCategoria, filterProcesso, itemsPerPage]);
 
   const paginatedDispositivos = useMemo(() => {
     if (itemsPerPage === 'all') return filteredDispositivos;
@@ -115,19 +124,32 @@ export function Dispositivos() {
               <div style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 20,
                 backgroundColor: 'white', padding: 'var(--spacing-md)', borderRadius: 'var(--radius)',
-                boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-border)', width: '250px'
+                boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-border)', width: '250px',
+                display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)'
               }}>
-                <label className="input-label">Categoria</label>
-                <select className="input-field" value={filterCategoria} onChange={(e) => setFilterCategoria(e.target.value)}>
-                  <option value="">Todas</option>
-                  {categorias
-                    .filter(c => c.ativo !== false || c.id === filterCategoria)
-                    .map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.nome}{c.ativo === false ? ' (Inativo)' : ''}
-                      </option>
-                    ))}
-                </select>
+                <div>
+                  <label className="input-label">Categoria</label>
+                  <select className="input-field" value={filterCategoria} onChange={(e) => setFilterCategoria(e.target.value)}>
+                    <option value="">Todas</option>
+                    {categorias
+                      .filter(c => c.ativo !== false || c.id === filterCategoria)
+                      .map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}{c.ativo === false ? ' (Inativo)' : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Processo Industrial</label>
+                  <select className="input-field" value={filterProcesso} onChange={(e) => setFilterProcesso(e.target.value)}>
+                    <option value="">Todos os Processos</option>
+                    <option value="Shotblaster">Shotblaster</option>
+                    <option value="Coping">Coping</option>
+                    <option value="Sawing">Sawing</option>
+                    <option value="Drilling">Drilling</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>
@@ -162,7 +184,11 @@ export function Dispositivos() {
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {cat?.nome && <span className={getBadgeColor(cat.nome)}>{cat.nome}</span>}
                     {disp.familiaProduto && <span className={getBadgeColor(disp.familiaProduto)}>{disp.familiaProduto}</span>}
-                    {disp.peso && <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: 500 }}>{disp.peso}</span>}
+                    {disp.produto && <span className="badge badge-blue">{disp.produto}</span>}
+                    {disp.peso && <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: 500 }}>{disp.peso}g</span>}
+                    {(disp.palavrasChave || []).map(tag => (
+                      <span key={tag} className="badge badge-pink" style={{ fontSize: '0.75rem' }}>{tag}</span>
+                    ))}
                   </div>
                 </div>
               </div>
