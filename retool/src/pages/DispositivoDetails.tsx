@@ -75,51 +75,92 @@ export function DispositivoDetails() {
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--spacing-lg)' }}>
             <Box size={16} color="var(--color-primary)" />
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Dados do dispositivo</h3>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Dados da Peça e Dispositivo</h3>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Nome</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Nº dispositivo</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Código</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>CÓDIGO PEÇA</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.codigo || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Categoria</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{categoria?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>PESO dispositivo</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.peso ? `${disp.peso}` : <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Tipo</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{tipo?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>PALAVRAS CHAVE</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {(disp.palavrasChave || []).map(tag => (
+                  <span key={tag} className="badge badge-pink">{tag}</span>
+                ))}
+                {(disp.palavrasChave || []).length === 0 && <span style={{color: '#d1d5db'}}>Não info.</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Família do Produto</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.familiaProduto || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Produto</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.produto || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Família de Produto</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.familiaProduto || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>CATEGORIA</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{categoria?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
-            <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Peso</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.peso ? `${disp.peso} kg` : <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
-            </div>
+            {tipo?.nome && (
+              <div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Tipo (Legado)</div>
+                <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{tipo.nome}</div>
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: 'var(--spacing-md)' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Descrição</div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>DESCRIÇÃO PEÇA</div>
             <div style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', lineHeight: 1.6 }}>{disp.descricao || <span style={{color: '#d1d5db'}}>Não informada.</span>}</div>
           </div>
 
-          <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Observações</div>
-            <div style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', lineHeight: 1.6 }}>{disp.observacoes || <span style={{color: '#d1d5db'}}>Não informado.</span>}</div>
-          </div>
+          {disp.observacoes && (
+            <div style={{ marginBottom: 'var(--spacing-md)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Observações (Legado)</div>
+              <div style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', lineHeight: 1.6 }}>{disp.observacoes}</div>
+            </div>
+          )}
+
+          {/* Seção de Mídia Relacionada */}
+          {(disp.imagemPeca || disp.imagemDispositivo) && (
+            <div style={{ marginTop: 'var(--spacing-lg)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-md)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: 'var(--spacing-sm)' }}>Mídia Relacionada</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                {disp.imagemPeca && (
+                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', backgroundColor: '#f9fafb' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>IMAGEM PEÇA</span>
+                    <img src={disp.imagemPeca} alt="Imagem da peça" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }} />
+                  </div>
+                )}
+                {disp.imagemDispositivo && (
+                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', backgroundColor: '#f9fafb' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>Imagem dispositivo</span>
+                    <img src={disp.imagemDispositivo} alt="Imagem do dispositivo" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* CARTÃO: RESUMO */}
