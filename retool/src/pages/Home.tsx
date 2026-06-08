@@ -73,14 +73,43 @@ export function Home() {
       setSuggestions([]);
       return;
     }
-    const q = query.toLowerCase();
-    const filtered = dispositivos.filter(p =>
-      (p.nome && p.nome.toLowerCase().includes(q)) ||
-      (p.codigo && p.codigo.toLowerCase().includes(q))
-    );
+
+    const normalizeStr = (str: string | undefined | null) => {
+      if (!str) return '';
+      let res = str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      res = res.replace(/,/g, ".");
+      if (res.includes("avula")) {
+        res = res.replace(/avula/g, "avola");
+      }
+      return res;
+    };
+
+    const q = normalizeStr(query).trim();
+    const filtered = dispositivos.filter(p => {
+      const nome = normalizeStr(p.nome);
+      const codigo = normalizeStr(p.codigo);
+      const descricao = normalizeStr(p.descricao);
+      const familia = normalizeStr(p.familiaProduto);
+      const produto = normalizeStr(p.produto);
+      const peso = normalizeStr(p.peso);
+      
+      const cat = categorias.find(c => c.id === p.categoriaId);
+      const categoriaNome = normalizeStr(cat?.nome);
+
+      const matchTags = (p.palavrasChave || []).some(tag => normalizeStr(tag).includes(q));
+
+      return nome.includes(q) ||
+             codigo.includes(q) ||
+             descricao.includes(q) ||
+             familia.includes(q) ||
+             produto.includes(q) ||
+             peso.includes(q) ||
+             categoriaNome.includes(q) ||
+             matchTags;
+    });
     setSuggestions(filtered);
     setActiveIndex(-1);
-  }, [query, dispositivos]);
+  }, [query, dispositivos, categorias]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {

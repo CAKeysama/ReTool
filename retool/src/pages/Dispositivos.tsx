@@ -31,24 +31,50 @@ export function Dispositivos() {
   const [dispToDelete, setDispToDelete] = useState<string | null>(null);
 
   const filteredDispositivos = useMemo(() => {
+    const normalizeStr = (str: string | undefined | null) => {
+      if (!str) return '';
+      let res = str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      res = res.replace(/,/g, ".");
+      if (res.includes("avula")) {
+        res = res.replace(/avula/g, "avola");
+      }
+      return res;
+    };
+
+    const q = normalizeStr(filterQuery).trim();
+    const proc = normalizeStr(filterProcesso).trim();
+
     return dispositivos.filter(p => {
+      const nome = normalizeStr(p.nome);
+      const codigo = normalizeStr(p.codigo);
+      const descricao = normalizeStr(p.descricao);
+      const familia = normalizeStr(p.familiaProduto);
+      const produto = normalizeStr(p.produto);
+      const peso = normalizeStr(p.peso);
+
+      const cat = categorias.find(c => c.id === p.categoriaId);
+      const categoriaNome = normalizeStr(cat?.nome);
+
       const matchText = filterQuery === '' || 
-        (p.nome?.toLowerCase().includes(filterQuery.toLowerCase())) ||
-        (p.codigo?.toLowerCase().includes(filterQuery.toLowerCase())) ||
-        (p.descricao?.toLowerCase().includes(filterQuery.toLowerCase())) ||
-        (p.palavrasChave?.some(tag => tag.toLowerCase().includes(filterQuery.toLowerCase()))) ||
-        (p.produto?.toLowerCase().includes(filterQuery.toLowerCase()));
+        nome.includes(q) ||
+        codigo.includes(q) ||
+        descricao.includes(q) ||
+        familia.includes(q) ||
+        produto.includes(q) ||
+        peso.includes(q) ||
+        categoriaNome.includes(q) ||
+        (p.palavrasChave || []).some(tag => normalizeStr(tag).includes(q));
 
       const matchCat = filterCategoria === '' || p.categoriaId === filterCategoria;
       
       const matchProcesso = filterProcesso === '' || 
-        (p.descricao?.toLowerCase().includes(filterProcesso.toLowerCase())) ||
-        (p.nome?.toLowerCase().includes(filterProcesso.toLowerCase())) ||
-        (p.palavrasChave?.some(tag => tag.toLowerCase().includes(filterProcesso.toLowerCase())));
+        descricao.includes(proc) ||
+        nome.includes(proc) ||
+        (p.palavrasChave || []).some(tag => normalizeStr(tag).includes(proc));
 
       return matchText && matchCat && matchProcesso;
     });
-  }, [dispositivos, filterQuery, filterCategoria, filterProcesso]);
+  }, [dispositivos, categorias, filterQuery, filterCategoria, filterProcesso]);
 
   // Resetar página ao filtrar
   useEffect(() => {
