@@ -11,7 +11,19 @@ export interface Categoria {
 
 export interface Tipo {
   id: string;
-  nome?: string;
+  nome: string;
+  ativo?: boolean;
+}
+
+export interface Familia {
+  id: string;
+  nome: string;
+  ativo?: boolean;
+}
+
+export interface Produto {
+  id: string;
+  nome: string;
   ativo?: boolean;
 }
 
@@ -20,12 +32,11 @@ export interface Dispositivo {
   nome?: string;
   codigo?: string;
   categoriaId?: string;
-  tipo?: string;
   peso?: string;
-  familiaProduto?: string;
+  familiaId?: string;
   descricao?: string;
   observacoes?: string;
-  produto?: string;
+  produtoId?: string;
   palavrasChave?: string[];
   imagemPeca?: string;
   imagemDispositivo?: string;
@@ -45,6 +56,8 @@ interface ReToolContextType {
   dispositivos: Dispositivo[];
   categorias: Categoria[];
   tipos: Tipo[];
+  familias: Familia[];
+  produtos: Produto[];
   utilizacoes: Utilizacao[];
   addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'>) => void;
   updateDispositivo: (id: string, data: Partial<Dispositivo>) => void;
@@ -55,9 +68,17 @@ interface ReToolContextType {
   addTipo: (data: Omit<Tipo, 'id'>) => void;
   updateTipo: (id: string, data: Partial<Tipo>) => void;
   deleteTipo: (id: string) => void;
+  addFamilia: (data: Omit<Familia, 'id'>) => Promise<string>;
+  updateFamilia: (id: string, data: Partial<Familia>) => void;
+  deleteFamilia: (id: string) => void;
+  addProduto: (data: Omit<Produto, 'id'>) => Promise<string>;
+  updateProduto: (id: string, data: Partial<Produto>) => void;
+  deleteProduto: (id: string) => void;
   addUtilizacao: (data: Omit<Utilizacao, 'id' | 'dataCriacao'>) => void;
   updateUtilizacao: (id: string, data: Partial<Utilizacao>) => void;
   deleteUtilizacao: (id: string) => void;
+  importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<{ sucesso: number, erros: number }>;
+  deleteAllData: () => Promise<void>;
   announce: (message: string, showToast?: boolean) => void;
   announcement: string;
   isDispFormOpen: boolean;
@@ -72,6 +93,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [tipos, setTipos] = useState<Tipo[]>([]);
+  const [familias, setFamilias] = useState<Familia[]>([]);
+  const [produtos, setProdutos] = useState<Produto[]>([]);
   const [utilizacoes, setUtilizacoes] = useState<Utilizacao[]>([]);
 
   const [announcement, setAnnouncement] = useState('');
@@ -91,11 +114,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const announce = useCallback((message: string, showToast = true) => {
-    // Screen reader
     setAnnouncement('');
     setTimeout(() => setAnnouncement(message), 50); 
     
-    // Visual Toast
     if (showToast) {
       const id = uuidv4();
       setToasts(prev => [...prev, { id, text: message }]);
@@ -107,23 +128,27 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubCat = onSnapshot(collection(db, 'categorias'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Categoria));
-      setCategorias(data);
+      setCategorias(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Categoria)));
     });
     
     const unsubDisp = onSnapshot(collection(db, 'dispositivos'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Dispositivo));
-      setDispositivos(data);
+      setDispositivos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Dispositivo)));
     });
 
     const unsubTipos = onSnapshot(collection(db, 'tipos'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tipo));
-      setTipos(data);
+      setTipos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tipo)));
     });
 
     const unsubUtil = onSnapshot(collection(db, 'utilizacoes'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Utilizacao));
-      setUtilizacoes(data);
+      setUtilizacoes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Utilizacao)));
+    });
+
+    const unsubFam = onSnapshot(collection(db, 'familias'), (snapshot) => {
+      setFamilias(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Familia)).sort((a, b) => a.nome.localeCompare(b.nome)));
+    });
+
+    const unsubProd = onSnapshot(collection(db, 'produtos'), (snapshot) => {
+      setProdutos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Produto)).sort((a, b) => a.nome.localeCompare(b.nome)));
     });
 
     return () => {
@@ -131,6 +156,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       unsubDisp();
       unsubTipos();
       unsubUtil();
+      unsubFam();
+      unsubProd();
     };
   }, []);
 
@@ -193,6 +220,40 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     announce('Tipo removido com sucesso');
   };
 
+  const addFamilia = async (data: Omit<Familia, 'id'>) => {
+    const id = uuidv4();
+    await setDoc(doc(db, 'familias', id), { ...data, id });
+    announce('Família adicionada com sucesso');
+    return id;
+  };
+
+  const updateFamilia = async (id: string, data: Partial<Familia>) => {
+    await updateDoc(doc(db, 'familias', id), data);
+    announce('Família atualizada com sucesso');
+  };
+
+  const deleteFamilia = async (id: string) => {
+    await deleteDoc(doc(db, 'familias', id));
+    announce('Família removida com sucesso');
+  };
+
+  const addProduto = async (data: Omit<Produto, 'id'>) => {
+    const id = uuidv4();
+    await setDoc(doc(db, 'produtos', id), { ...data, id });
+    announce('Produto adicionado com sucesso');
+    return id;
+  };
+
+  const updateProduto = async (id: string, data: Partial<Produto>) => {
+    await updateDoc(doc(db, 'produtos', id), data);
+    announce('Produto atualizado com sucesso');
+  };
+
+  const deleteProduto = async (id: string) => {
+    await deleteDoc(doc(db, 'produtos', id));
+    announce('Produto removido com sucesso');
+  };
+
   const addUtilizacao = async (data: Omit<Utilizacao, 'id' | 'dataCriacao'>) => {
     const id = uuidv4();
     await setDoc(doc(db, 'utilizacoes', id), { ...data, id, dataCriacao: new Date().toISOString() });
@@ -209,13 +270,170 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     announce('Utilização removida com sucesso');
   };
 
+  const importarDispositivosEmLote = async (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => {
+    try {
+      // 1. Criar novas entidades dinamicamente
+      const categoriasCriadas = new Map<string, string>(); // nome -> id
+      const familiasCriadas = new Map<string, string>();
+      const produtosCriados = new Map<string, string>();
+
+      if (newCategoriasNomes.length > 0) {
+        let catBatch = writeBatch(db);
+        let catCount = 0;
+        
+        for (const nomeCat of newCategoriasNomes) {
+          const catId = uuidv4();
+          catBatch.set(doc(db, 'categorias', catId), {
+            id: catId,
+            nome: nomeCat,
+            ativo: true
+          });
+          categoriasCriadas.set(nomeCat, catId);
+          catCount++;
+          
+          if (catCount === 500) {
+            await catBatch.commit();
+            catBatch = writeBatch(db);
+            catCount = 0;
+          }
+        }
+        if (catCount > 0) await catBatch.commit();
+      }
+
+      if (newFamiliasNomes.length > 0) {
+        let famBatch = writeBatch(db);
+        let famCount = 0;
+        for (const nomeFam of newFamiliasNomes) {
+          const famId = uuidv4();
+          famBatch.set(doc(db, 'familias', famId), { id: famId, nome: nomeFam, ativo: true });
+          familiasCriadas.set(nomeFam, famId);
+          famCount++;
+          if (famCount === 500) { await famBatch.commit(); famBatch = writeBatch(db); famCount = 0; }
+        }
+        if (famCount > 0) await famBatch.commit();
+      }
+
+      if (newProdutosNomes.length > 0) {
+        let prodBatch = writeBatch(db);
+        let prodCount = 0;
+        for (const nomeProd of newProdutosNomes) {
+          const prodId = uuidv4();
+          prodBatch.set(doc(db, 'produtos', prodId), { id: prodId, nome: nomeProd, ativo: true });
+          produtosCriados.set(nomeProd, prodId);
+          prodCount++;
+          if (prodCount === 500) { await prodBatch.commit(); prodBatch = writeBatch(db); prodCount = 0; }
+        }
+        if (prodCount > 0) await prodBatch.commit();
+      }
+
+      // 2. Processar dispositivos em lotes de 500
+      let batch = writeBatch(db);
+      let opCount = 0;
+      let sucesso = 0;
+      
+      for (const disp of novosDispositivos) {
+        // Mapear Nomes Dinâmicos para IDs criados
+        if (disp.categoriaId && categoriasCriadas.has(disp.categoriaId)) {
+          disp.categoriaId = categoriasCriadas.get(disp.categoriaId);
+        }
+        if (disp.familiaId && familiasCriadas.has(disp.familiaId)) {
+          disp.familiaId = familiasCriadas.get(disp.familiaId);
+        }
+        if (disp.produtoId && produtosCriados.has(disp.produtoId)) {
+          disp.produtoId = produtosCriados.get(disp.produtoId);
+        }
+
+        // Tenta encontrar existente pelo código ou pelo nome
+        let existingDisp = null;
+        if (disp.codigo) {
+          existingDisp = dispositivos.find(d => d.codigo === disp.codigo);
+        }
+        if (!existingDisp && disp.nome) {
+          existingDisp = dispositivos.find(d => d.nome === disp.nome);
+        }
+
+        const docRef = existingDisp 
+          ? doc(db, 'dispositivos', existingDisp.id)
+          : doc(db, 'dispositivos', uuidv4());
+          
+        const dataToSave = existingDisp 
+          ? { ...disp } 
+          : { ...disp, dataCriacao: new Date().toISOString() };
+
+        if (!existingDisp) {
+            (dataToSave as any).id = docRef.id;
+        }
+
+        batch.set(docRef, dataToSave, { merge: true });
+        opCount++;
+        sucesso++;
+
+        if (opCount === 500) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+      }
+
+      if (opCount > 0) {
+        await batch.commit();
+      }
+
+      announce(`Importação concluída! ${sucesso} registros inseridos ou atualizados.`);
+      return { sucesso, erros: 0 };
+    } catch (error) {
+      console.error('Erro na importação em lote:', error);
+      announce('Erro ao processar importação em lote.');
+      return { sucesso: 0, erros: novosDispositivos.length };
+    }
+  };
+
+  const deleteAllData = async () => {
+    try {
+      const allDocs = [
+        ...dispositivos.map(d => ({ col: 'dispositivos', id: d.id })),
+        ...categorias.map(c => ({ col: 'categorias', id: c.id })),
+        ...tipos.map(t => ({ col: 'tipos', id: t.id })),
+        ...familias.map(f => ({ col: 'familias', id: f.id })),
+        ...produtos.map(p => ({ col: 'produtos', id: p.id })),
+        ...utilizacoes.map(u => ({ col: 'utilizacoes', id: u.id }))
+      ];
+
+      let batch = writeBatch(db);
+      let opCount = 0;
+      
+      for (const docInfo of allDocs) {
+        batch.delete(doc(db, docInfo.col, docInfo.id));
+        opCount++;
+        
+        if (opCount === 500) {
+          await batch.commit();
+          batch = writeBatch(db);
+          opCount = 0;
+        }
+      }
+      
+      if (opCount > 0) {
+        await batch.commit();
+      }
+      
+      announce('Banco de dados completamente limpo com sucesso.');
+    } catch (error) {
+      console.error('Erro ao limpar banco de dados:', error);
+      announce('Erro ao tentar limpar o banco de dados.');
+    }
+  };
+
   return (
     <ReToolContext.Provider value={{
-      dispositivos, categorias, tipos, utilizacoes,
+      dispositivos, categorias, tipos, familias, produtos, utilizacoes,
       addDispositivo, updateDispositivo, deleteDispositivo,
       addCategoria, updateCategoria, deleteCategoria,
       addTipo, updateTipo, deleteTipo,
+      addFamilia, updateFamilia, deleteFamilia,
+      addProduto, updateProduto, deleteProduto,
       addUtilizacao, updateUtilizacao, deleteUtilizacao,
+      importarDispositivosEmLote, deleteAllData,
       announce, announcement,
       isDispFormOpen, editingDispId, openDispForm, closeDispForm
     }}>

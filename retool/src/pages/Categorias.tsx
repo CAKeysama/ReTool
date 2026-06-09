@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useReTool, Categoria, Tipo } from '../context/ReToolContext';
+import { useReTool, Categoria, Familia, Produto } from '../context/ReToolContext';
 import { FocusableList } from '../components/FocusableList';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { Plus, Trash, Edit, Info, Check } from 'lucide-react';
@@ -7,35 +7,38 @@ import { Plus, Trash, Edit, Info, Check } from 'lucide-react';
 export function Categorias() {
   const { 
     categorias, addCategoria, updateCategoria, deleteCategoria,
-    tipos, addTipo, updateTipo, deleteTipo
+    familias, addFamilia, updateFamilia, deleteFamilia,
+    produtos, addProduto, updateProduto, deleteProduto
   } = useReTool();
   
-  // States for Categoria
+  // --- States para Categoria ---
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [catName, setCatName] = useState('');
-  const [showCatInfo, setShowCatInfo] = useState(false);
-
-  // States for Tipo
-  const [isTipoModalOpen, setIsTipoModalOpen] = useState(false);
-  const [editingTipoId, setEditingTipoId] = useState<string | null>(null);
-  const [tipoName, setTipoName] = useState('');
-  const [showTipoInfo, setShowTipoInfo] = useState(false);
-
-  // States for Category & Type Deactivation/Delete Confirmation
   const [catConfirmAction, setCatConfirmAction] = useState<Categoria | null>(null);
-  const [tipoConfirmAction, setTipoConfirmAction] = useState<Tipo | null>(null);
 
+  // --- States para Familia ---
+  const [isFamModalOpen, setIsFamModalOpen] = useState(false);
+  const [editingFamId, setEditingFamId] = useState<string | null>(null);
+  const [famName, setFamName] = useState('');
+  const [famConfirmAction, setFamConfirmAction] = useState<Familia | null>(null);
+
+  // --- States para Produto ---
+  const [isProdModalOpen, setIsProdModalOpen] = useState(false);
+  const [editingProdId, setEditingProdId] = useState<string | null>(null);
+  const [prodName, setProdName] = useState('');
+  const [prodConfirmAction, setProdConfirmAction] = useState<Produto | null>(null);
+
+  // States for tooltips
+  const [showCatInfo, setShowCatInfo] = useState(false);
+  const [showFamInfo, setShowFamInfo] = useState(false);
+  const [showProdInfo, setShowProdInfo] = useState(false);
+
+  // --- Actions Categoria ---
   const openCatForm = (id?: string, currentName?: string) => {
     setEditingCatId(id || null);
     setCatName(currentName || '');
     setIsCatModalOpen(true);
-  };
-
-  const openTipoForm = (id?: string, currentName?: string) => {
-    setEditingTipoId(id || null);
-    setTipoName(currentName || '');
-    setIsTipoModalOpen(true);
   };
 
   const handleCatSave = (e: React.FormEvent) => {
@@ -48,21 +51,48 @@ export function Categorias() {
     setIsCatModalOpen(false);
   };
 
-  const handleTipoSave = (e: React.FormEvent) => {
+  // --- Actions Família ---
+  const openFamForm = (id?: string, currentName?: string) => {
+    setEditingFamId(id || null);
+    setFamName(currentName || '');
+    setIsFamModalOpen(true);
+  };
+
+  const handleFamSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingTipoId) {
-      updateTipo(editingTipoId, { nome: tipoName });
+    if (editingFamId) {
+      updateFamilia(editingFamId, { nome: famName });
     } else {
-      addTipo({ nome: tipoName });
+      addFamilia({ nome: famName, ativo: true });
     }
-    setIsTipoModalOpen(false);
+    setIsFamModalOpen(false);
+  };
+
+  // --- Actions Produto ---
+  const openProdForm = (id?: string, currentName?: string) => {
+    setEditingProdId(id || null);
+    setProdName(currentName || '');
+    setIsProdModalOpen(true);
+  };
+
+  const handleProdSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingProdId) {
+      updateProduto(editingProdId, { nome: prodName });
+    } else {
+      addProduto({ nome: prodName, ativo: true });
+    }
+    setIsProdModalOpen(false);
   };
 
   return (
     <div>
-      <h2 style={{ marginBottom: 'var(--spacing-xl)' }}>Gestão de Classificações</h2>
+      <div style={{ marginBottom: 'var(--spacing-xl)' }}>
+        <h2 style={{ marginBottom: 'var(--spacing-xs)' }}>Gestão de Classificações</h2>
+        <p style={{ color: 'var(--color-text-body)' }}>Gerencie e visualize todas as estruturas de classificação usadas no sistema.</p>
+      </div>
       
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 'var(--spacing-2xl)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-2xl)' }}>
         
         {/* Painel Categorias */}
         <div>
@@ -84,268 +114,266 @@ export function Categorias() {
                 {showCatInfo && (
                   <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
                     <strong>Grupos macro</strong> para classificar os dispositivos de forma geral.<br/>
-                    <em>Exemplos:</em> Ferramentas de Corte, EPIs, Gabaritos, Equipamentos de Medição.
+                    <em>Exemplos: Ferramentas de Corte, EPIs, Gabaritos.</em>
                   </div>
                 )}
               </div>
             </div>
-            <button className="btn btn-primary" onClick={() => openCatForm()} aria-label="Criar nova categoria" style={{ width: '40px', height: '40px', padding: 0 }}>
-              <Plus size={20} />
+            <button className="btn btn-primary" onClick={() => openCatForm()} aria-label="Criar nova categoria" style={{ width: '36px', height: '36px', padding: 0, flexShrink: 0 }}>
+              <Plus size={18} />
             </button>
           </div>
 
-          <FocusableList 
-            items={categorias}
-            ariaLabel="Lista de categorias. Use setas para navegar e Enter para editar."
-            onItemAction={(c) => openCatForm(c.id, c.nome)}
-            renderItem={(c, idx, isFocused) => (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: c.ativo === false ? 0.6 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                  <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{c.nome || 'Sem Nome'}</span>
-                  {c.ativo === false && (
-                    <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                  <button 
-                    className="btn" 
-                    tabIndex={isFocused ? 0 : -1} 
-                    onClick={(e) => { e.stopPropagation(); openCatForm(c.id, c.nome); }}
-                    aria-label={`Editar categoria ${c.nome}`}
-                  >
-                    <Edit size={16} />
-                  </button>
-                  {c.ativo === false && (
+          <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
+            <FocusableList 
+              items={categorias}
+              ariaLabel="Lista de categorias. Use setas para navegar e Enter para editar."
+              onItemAction={(c) => openCatForm(c.id, c.nome)}
+              renderItem={(c, idx, isFocused) => (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: c.ativo === false ? 0.6 : 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                    <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{c.nome || 'Sem Nome'}</span>
+                    {c.ativo === false && (
+                      <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                     <button 
                       className="btn" 
-                      style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
                       tabIndex={isFocused ? 0 : -1} 
-                      onClick={(e) => { e.stopPropagation(); updateCategoria(c.id, { ativo: true }); }}
-                      aria-label={`Ativar categoria ${c.nome}`}
+                      onClick={(e) => { e.stopPropagation(); openCatForm(c.id, c.nome); }}
+                      aria-label={`Editar categoria ${c.nome}`}
                     >
-                      <Check size={16} />
+                      <Edit size={16} />
                     </button>
-                  )}
-                  <button 
-                    className="btn" 
-                    style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                    tabIndex={isFocused ? 0 : -1} 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCatConfirmAction(c);
-                    }}
-                    aria-label={c.ativo === false ? `Excluir categoria ${c.nome}` : `Excluir ou desativar categoria ${c.nome}`}
-                  >
-                    <Trash size={16} />
-                  </button>
+                    {c.ativo === false && (
+                      <button 
+                        className="btn" 
+                        style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                        tabIndex={isFocused ? 0 : -1} 
+                        onClick={(e) => { e.stopPropagation(); updateCategoria(c.id, { ativo: true }); }}
+                        aria-label={`Ativar categoria ${c.nome}`}
+                      >
+                        <Check size={16} />
+                      </button>
+                    )}
+                    <button 
+                      className="btn" 
+                      style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                      tabIndex={isFocused ? 0 : -1} 
+                      onClick={(e) => { e.stopPropagation(); setCatConfirmAction(c); }}
+                      aria-label={c.ativo === false ? `Excluir categoria ${c.nome}` : `Excluir ou desativar categoria ${c.nome}`}
+                    >
+                      <Trash size={16} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-          />
+              )}
+            />
+          </div>
         </div>
 
-        {/* Painel Tipos */}
+        {/* Painel Famílias */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Tipos</h3>
+              <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Famílias de Produto</h3>
               <div 
                 style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-                onMouseEnter={() => setShowTipoInfo(true)}
-                onMouseLeave={() => setShowTipoInfo(false)}
+                onMouseEnter={() => setShowFamInfo(true)}
+                onMouseLeave={() => setShowFamInfo(false)}
               >
                 <button 
                   type="button"
-                  style={{ background: 'transparent', border: 'none', color: showTipoInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
-                  aria-label="O que são tipos?"
+                  style={{ background: 'transparent', border: 'none', color: showFamInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
+                  aria-label="O que são famílias de produto?"
                 >
                   <Info size={16} />
                 </button>
-                {showTipoInfo && (
+                {showFamInfo && (
                   <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
-                    <strong>Classificação técnica</strong> ou funcional do dispositivo.<br/>
-                    <em>Exemplos:</em> Elétrica, Hidráulica, Pneumática, Manual.
+                    <strong>Grupo de manufatura</strong> da peça.<br/>
+                    <em>Exemplos: Preparo de Solo, Colheita, Transporte.</em>
                   </div>
                 )}
               </div>
             </div>
-            <button className="btn btn-primary" onClick={() => openTipoForm()} aria-label="Criar novo tipo" style={{ width: '40px', height: '40px', padding: 0 }}>
-              <Plus size={20} />
+            <button className="btn btn-primary" onClick={() => openFamForm()} aria-label="Criar nova família" style={{ width: '36px', height: '36px', padding: 0, flexShrink: 0 }}>
+              <Plus size={18} />
             </button>
           </div>
 
-          <FocusableList 
-            items={tipos}
-            ariaLabel="Lista de tipos. Use setas para navegar e Enter para editar."
-            onItemAction={(t) => openTipoForm(t.id, t.nome)}
-            renderItem={(t, idx, isFocused) => (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: t.ativo === false ? 0.6 : 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                  <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{t.nome || 'Sem Nome'}</span>
-                  {t.ativo === false && (
-                    <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                  <button 
-                    className="btn" 
-                    tabIndex={isFocused ? 0 : -1} 
-                    onClick={(e) => { e.stopPropagation(); openTipoForm(t.id, t.nome); }}
-                    aria-label={`Editar tipo ${t.nome}`}
-                  >
-                    <Edit size={16} />
-                  </button>
-                  {t.ativo === false && (
+          <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
+            <FocusableList 
+              items={familias}
+              ariaLabel="Lista de famílias. Use setas para navegar e Enter para editar."
+              onItemAction={(f) => openFamForm(f.id, f.nome)}
+              renderItem={(f, idx, isFocused) => (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: f.ativo === false ? 0.6 : 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                    <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{f.nome || 'Sem Nome'}</span>
+                    {f.ativo === false && (
+                      <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
                     <button 
                       className="btn" 
-                      style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
                       tabIndex={isFocused ? 0 : -1} 
-                      onClick={(e) => { e.stopPropagation(); updateTipo(t.id, { ativo: true }); }}
-                      aria-label={`Ativar tipo ${t.nome}`}
+                      onClick={(e) => { e.stopPropagation(); openFamForm(f.id, f.nome); }}
+                      aria-label={`Editar família ${f.nome}`}
                     >
-                      <Check size={16} />
+                      <Edit size={16} />
                     </button>
-                  )}
-                  <button 
-                    className="btn" 
-                    style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                    tabIndex={isFocused ? 0 : -1} 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTipoConfirmAction(t);
-                    }}
-                    aria-label={t.ativo === false ? `Excluir tipo ${t.nome}` : `Excluir ou desativar tipo ${t.nome}`}
-                  >
-                    <Trash size={16} />
-                  </button>
+                    {f.ativo === false && (
+                      <button 
+                        className="btn" 
+                        style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                        tabIndex={isFocused ? 0 : -1} 
+                        onClick={(e) => { e.stopPropagation(); updateFamilia(f.id, { ativo: true }); }}
+                        aria-label={`Ativar família ${f.nome}`}
+                      >
+                        <Check size={16} />
+                      </button>
+                    )}
+                    <button 
+                      className="btn" 
+                      style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                      tabIndex={isFocused ? 0 : -1} 
+                      onClick={(e) => { e.stopPropagation(); setFamConfirmAction(f); }}
+                      aria-label={f.ativo === false ? `Excluir família ${f.nome}` : `Excluir ou desativar família ${f.nome}`}
+                    >
+                      <Trash size={16} />
+                    </button>
+                  </div>
                 </div>
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Painel Produtos */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Produtos</h3>
+              <div 
+                style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+                onMouseEnter={() => setShowProdInfo(true)}
+                onMouseLeave={() => setShowProdInfo(false)}
+              >
+                <button 
+                  type="button"
+                  style={{ background: 'transparent', border: 'none', color: showProdInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
+                  aria-label="O que são produtos?"
+                >
+                  <Info size={16} />
+                </button>
+                {showProdInfo && (
+                  <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
+                    <strong>Nome comercial ou modelo</strong> do produto associado.<br/>
+                    <em>Exemplos: AVOLA 2500, Semeadeira XP.</em>
+                  </div>
+                )}
               </div>
-            )}
-          />
+            </div>
+            <button className="btn btn-primary" onClick={() => openProdForm()} aria-label="Criar novo produto" style={{ width: '36px', height: '36px', padding: 0, flexShrink: 0 }}>
+              <Plus size={18} />
+            </button>
+          </div>
+
+          <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
+            <FocusableList 
+              items={produtos}
+              ariaLabel="Lista de produtos. Use setas para navegar e Enter para editar."
+              onItemAction={(p) => openProdForm(p.id, p.nome)}
+              renderItem={(p, idx, isFocused) => (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: p.ativo === false ? 0.6 : 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                    <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{p.nome || 'Sem Nome'}</span>
+                    {p.ativo === false && (
+                      <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                    <button 
+                      className="btn" 
+                      tabIndex={isFocused ? 0 : -1} 
+                      onClick={(e) => { e.stopPropagation(); openProdForm(p.id, p.nome); }}
+                      aria-label={`Editar produto ${p.nome}`}
+                    >
+                      <Edit size={16} />
+                    </button>
+                    {p.ativo === false && (
+                      <button 
+                        className="btn" 
+                        style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                        tabIndex={isFocused ? 0 : -1} 
+                        onClick={(e) => { e.stopPropagation(); updateProduto(p.id, { ativo: true }); }}
+                        aria-label={`Ativar produto ${p.nome}`}
+                      >
+                        <Check size={16} />
+                      </button>
+                    )}
+                    <button 
+                      className="btn" 
+                      style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                      tabIndex={isFocused ? 0 : -1} 
+                      onClick={(e) => { e.stopPropagation(); setProdConfirmAction(p); }}
+                      aria-label={p.ativo === false ? `Excluir produto ${p.nome}` : `Excluir ou desativar produto ${p.nome}`}
+                    >
+                      <Trash size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            />
+          </div>
         </div>
 
       </div>
 
-      {/* Modal Categoria */}
+      {/* MODAIS CATEGORIA */}
       <AccessibleModal isOpen={isCatModalOpen} onClose={() => setIsCatModalOpen(false)} title={editingCatId ? 'Editar Categoria' : 'Nova Categoria'}>
         <form onSubmit={handleCatSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           <div>
             <label htmlFor="catName" style={{ display: 'block', marginBottom: '4px' }}>Nome da Categoria</label>
             <input 
-              id="catName"
-              className="input-field" 
-              value={catName} 
-              autoFocus
+              id="catName" className="input-field" value={catName} autoFocus
               onChange={(e) => setCatName(e.target.value)} 
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
             <button type="button" className="btn" onClick={() => setIsCatModalOpen(false)}>Cancelar</button>
-            <button type="submit" className="btn btn-primary">Salvar (Enter)</button>
+            <button type="submit" className="btn btn-primary">Salvar</button>
           </div>
         </form>
       </AccessibleModal>
 
-      {/* Modal Tipo */}
-      <AccessibleModal isOpen={isTipoModalOpen} onClose={() => setIsTipoModalOpen(false)} title={editingTipoId ? 'Editar Tipo' : 'Novo Tipo'}>
-        <form onSubmit={handleTipoSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-          <div>
-            <label htmlFor="tipoName" style={{ display: 'block', marginBottom: '4px' }}>Nome do Tipo</label>
-            <input 
-              id="tipoName"
-              className="input-field" 
-              value={tipoName} 
-              autoFocus
-              onChange={(e) => setTipoName(e.target.value)} 
-            />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
-            <button type="button" className="btn" onClick={() => setIsTipoModalOpen(false)}>Cancelar</button>
-            <button type="submit" className="btn btn-primary">Salvar (Enter)</button>
-          </div>
-        </form>
-      </AccessibleModal>
-
-      {/* Modal de Confirmação de Exclusão/Desativação de Categoria */}
-      <AccessibleModal 
-        isOpen={!!catConfirmAction} 
-        onClose={() => setCatConfirmAction(null)} 
-        title={catConfirmAction?.ativo === false ? "Excluir Categoria" : "Gerenciar Categoria"}
-      >
+      <AccessibleModal isOpen={!!catConfirmAction} onClose={() => setCatConfirmAction(null)} title={catConfirmAction?.ativo === false ? "Excluir Categoria" : "Gerenciar Categoria"}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           {catConfirmAction?.ativo === false ? (
-            <>
-              <p style={{ fontSize: '0.95rem', color: 'var(--color-text-dark)', lineHeight: 1.5 }}>
-                Deseja excluir permanentemente a categoria <strong>{catConfirmAction?.nome}</strong>? Esta ação não poderá ser desfeita.
-              </p>
-              
-              <div style={{ 
-                padding: '12px', 
-                backgroundColor: 'var(--gray03)', 
-                border: '1px solid var(--color-border)', 
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.8rem',
-                color: 'var(--color-text-body)',
-                lineHeight: 1.4
-              }}>
-                <strong>Atenção:</strong> Como a categoria já está desativada, a exclusão permanente removerá o registro definitivamente do banco de dados.
-              </div>
-            </>
+            <p>Deseja excluir permanentemente a categoria <strong>{catConfirmAction?.nome}</strong>?</p>
           ) : (
-            <>
-              <p style={{ fontSize: '0.95rem', color: 'var(--color-text-dark)', lineHeight: 1.5 }}>
-                Deseja excluir permanentemente a categoria <strong>{catConfirmAction?.nome}</strong> ou prefere apenas desativá-la temporariamente?
-              </p>
-              
-              <div style={{ 
-                padding: '12px', 
-                backgroundColor: 'var(--gray03)', 
-                border: '1px solid var(--color-border)', 
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.8rem',
-                color: 'var(--color-text-body)',
-                lineHeight: 1.4
-              }}>
-                <strong>Atenção:</strong> Excluir a categoria removerá o registro de forma permanente. Desativar ocultará a categoria de novos cadastros de dispositivos, mas preservará a associação nos dispositivos existentes.
-              </div>
-            </>
+            <p>Deseja excluir permanentemente a categoria <strong>{catConfirmAction?.nome}</strong> ou prefere apenas desativá-la?</p>
           )}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap', marginTop: 'var(--spacing-sm)' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
+            <button type="button" className="btn" onClick={() => setCatConfirmAction(null)}>Cancelar</button>
             <button 
-              type="button" 
-              className="btn" 
-              onClick={() => setCatConfirmAction(null)}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="button" 
-              className="btn"
-              style={
-                catConfirmAction?.ativo === false 
-                  ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' }
-                  : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }
-              }
+              type="button" className="btn" style={catConfirmAction?.ativo === false ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' } : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
               onClick={() => {
                 if (catConfirmAction) {
-                  const novoStatus = catConfirmAction.ativo !== false ? false : true;
-                  updateCategoria(catConfirmAction.id, { ativo: novoStatus });
+                  updateCategoria(catConfirmAction.id, { ativo: catConfirmAction.ativo !== false ? false : true });
                   setCatConfirmAction(null);
                 }
               }}
             >
-              {catConfirmAction?.ativo !== false ? 'Desativar Categoria' : 'Ativar Categoria'}
+              {catConfirmAction?.ativo !== false ? 'Desativar' : 'Ativar'}
             </button>
             <button 
-              type="button" 
-              className="btn btn-primary"
-              style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+              type="button" className="btn btn-primary" style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
               onClick={() => {
-                if (catConfirmAction) {
-                  deleteCategoria(catConfirmAction.id);
-                  setCatConfirmAction(null);
-                }
+                if (catConfirmAction) { deleteCategoria(catConfirmAction.id); setCatConfirmAction(null); }
               }}
             >
               Excluir Permanente
@@ -354,86 +382,96 @@ export function Categorias() {
         </div>
       </AccessibleModal>
 
-      {/* Modal de Confirmação de Exclusão/Desativação de Tipo */}
-      <AccessibleModal 
-        isOpen={!!tipoConfirmAction} 
-        onClose={() => setTipoConfirmAction(null)} 
-        title={tipoConfirmAction?.ativo === false ? "Excluir Tipo" : "Gerenciar Tipo"}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-          {tipoConfirmAction?.ativo === false ? (
-            <>
-              <p style={{ fontSize: '0.95rem', color: 'var(--color-text-dark)', lineHeight: 1.5 }}>
-                Deseja excluir permanentemente o tipo <strong>{tipoConfirmAction?.nome}</strong>? Esta ação não poderá ser desfeita.
-              </p>
-              
-              <div style={{ 
-                padding: '12px', 
-                backgroundColor: 'var(--gray03)', 
-                border: '1px solid var(--color-border)', 
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.8rem',
-                color: 'var(--color-text-body)',
-                lineHeight: 1.4
-              }}>
-                <strong>Atenção:</strong> Como o tipo já está desativado, a exclusão permanente removerá o registro definitivamente do banco de dados.
-              </div>
-            </>
-          ) : (
-            <>
-              <p style={{ fontSize: '0.95rem', color: 'var(--color-text-dark)', lineHeight: 1.5 }}>
-                Deseja excluir permanentemente o tipo <strong>{tipoConfirmAction?.nome}</strong> ou prefere apenas desativá-lo temporariamente?
-              </p>
-              
-              <div style={{ 
-                padding: '12px', 
-                backgroundColor: 'var(--gray03)', 
-                border: '1px solid var(--color-border)', 
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.8rem',
-                color: 'var(--color-text-body)',
-                lineHeight: 1.4
-              }}>
-                <strong>Atenção:</strong> Excluir o tipo removerá o registro de forma permanente. Desativar ocultará o tipo de novos cadastros de dispositivos, mas preservará a associação nos dispositivos existentes.
-              </div>
-            </>
-          )}
+      {/* MODAIS FAMILIA */}
+      <AccessibleModal isOpen={isFamModalOpen} onClose={() => setIsFamModalOpen(false)} title={editingFamId ? 'Editar Família' : 'Nova Família'}>
+        <form onSubmit={handleFamSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <div>
+            <label htmlFor="famName" style={{ display: 'block', marginBottom: '4px' }}>Nome da Família</label>
+            <input 
+              id="famName" className="input-field" value={famName} autoFocus
+              onChange={(e) => setFamName(e.target.value)} 
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
+            <button type="button" className="btn" onClick={() => setIsFamModalOpen(false)}>Cancelar</button>
+            <button type="submit" className="btn btn-primary">Salvar</button>
+          </div>
+        </form>
+      </AccessibleModal>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap', marginTop: 'var(--spacing-sm)' }}>
+      <AccessibleModal isOpen={!!famConfirmAction} onClose={() => setFamConfirmAction(null)} title={famConfirmAction?.ativo === false ? "Excluir Família" : "Gerenciar Família"}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          {famConfirmAction?.ativo === false ? (
+            <p>Deseja excluir permanentemente a família <strong>{famConfirmAction?.nome}</strong>?</p>
+          ) : (
+            <p>Deseja excluir permanentemente a família <strong>{famConfirmAction?.nome}</strong> ou prefere apenas desativá-la?</p>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
+            <button type="button" className="btn" onClick={() => setFamConfirmAction(null)}>Cancelar</button>
             <button 
-              type="button" 
-              className="btn" 
-              onClick={() => setTipoConfirmAction(null)}
-            >
-              Cancelar
-            </button>
-            <button 
-              type="button" 
-              className="btn"
-              style={
-                tipoConfirmAction?.ativo === false 
-                  ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' }
-                  : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }
-              }
+              type="button" className="btn" style={famConfirmAction?.ativo === false ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' } : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
               onClick={() => {
-                if (tipoConfirmAction) {
-                  const novoStatus = tipoConfirmAction.ativo !== false ? false : true;
-                  updateTipo(tipoConfirmAction.id, { ativo: novoStatus });
-                  setTipoConfirmAction(null);
+                if (famConfirmAction) {
+                  updateFamilia(famConfirmAction.id, { ativo: famConfirmAction.ativo !== false ? false : true });
+                  setFamConfirmAction(null);
                 }
               }}
             >
-              {tipoConfirmAction?.ativo !== false ? 'Desativar Tipo' : 'Ativar Tipo'}
+              {famConfirmAction?.ativo !== false ? 'Desativar' : 'Ativar'}
             </button>
             <button 
-              type="button" 
-              className="btn btn-primary"
-              style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+              type="button" className="btn btn-primary" style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
               onClick={() => {
-                if (tipoConfirmAction) {
-                  deleteTipo(tipoConfirmAction.id);
-                  setTipoConfirmAction(null);
+                if (famConfirmAction) { deleteFamilia(famConfirmAction.id); setFamConfirmAction(null); }
+              }}
+            >
+              Excluir Permanente
+            </button>
+          </div>
+        </div>
+      </AccessibleModal>
+
+      {/* MODAIS PRODUTO */}
+      <AccessibleModal isOpen={isProdModalOpen} onClose={() => setIsProdModalOpen(false)} title={editingProdId ? 'Editar Produto' : 'Novo Produto'}>
+        <form onSubmit={handleProdSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <div>
+            <label htmlFor="prodName" style={{ display: 'block', marginBottom: '4px' }}>Nome do Produto</label>
+            <input 
+              id="prodName" className="input-field" value={prodName} autoFocus
+              onChange={(e) => setProdName(e.target.value)} 
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
+            <button type="button" className="btn" onClick={() => setIsProdModalOpen(false)}>Cancelar</button>
+            <button type="submit" className="btn btn-primary">Salvar</button>
+          </div>
+        </form>
+      </AccessibleModal>
+
+      <AccessibleModal isOpen={!!prodConfirmAction} onClose={() => setProdConfirmAction(null)} title={prodConfirmAction?.ativo === false ? "Excluir Produto" : "Gerenciar Produto"}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          {prodConfirmAction?.ativo === false ? (
+            <p>Deseja excluir permanentemente o produto <strong>{prodConfirmAction?.nome}</strong>?</p>
+          ) : (
+            <p>Deseja excluir permanentemente o produto <strong>{prodConfirmAction?.nome}</strong> ou prefere apenas desativá-lo?</p>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
+            <button type="button" className="btn" onClick={() => setProdConfirmAction(null)}>Cancelar</button>
+            <button 
+              type="button" className="btn" style={prodConfirmAction?.ativo === false ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' } : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+              onClick={() => {
+                if (prodConfirmAction) {
+                  updateProduto(prodConfirmAction.id, { ativo: prodConfirmAction.ativo !== false ? false : true });
+                  setProdConfirmAction(null);
                 }
+              }}
+            >
+              {prodConfirmAction?.ativo !== false ? 'Desativar' : 'Ativar'}
+            </button>
+            <button 
+              type="button" className="btn btn-primary" style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+              onClick={() => {
+                if (prodConfirmAction) { deleteProduto(prodConfirmAction.id); setProdConfirmAction(null); }
               }}
             >
               Excluir Permanente

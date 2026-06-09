@@ -2,12 +2,13 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams, Outlet } from 'react-router-dom';
 import { useReTool, Dispositivo } from '../context/ReToolContext';
 import { FocusableList } from '../components/FocusableList';
-import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, Trash2, AlertTriangle } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
+import { ImportModal } from '../components/ImportModal';
 import { useHotkeys } from '../hooks/useHotkeys';
 
 export function Dispositivos() {
-  const { dispositivos, categorias, deleteDispositivo, openDispForm } = useReTool();
+  const { dispositivos, categorias, familias, produtos, deleteDispositivo, openDispForm, deleteAllData } = useReTool();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -29,6 +30,8 @@ export function Dispositivos() {
   const [currentPage, setCurrentPage] = useState(1);
 
   const [dispToDelete, setDispToDelete] = useState<string | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isNukeModalOpen, setIsNukeModalOpen] = useState(false);
 
   const filteredDispositivos = useMemo(() => {
     const normalizeStr = (str: string | undefined | null) => {
@@ -48,9 +51,11 @@ export function Dispositivos() {
       const nome = normalizeStr(p.nome);
       const codigo = normalizeStr(p.codigo);
       const descricao = normalizeStr(p.descricao);
-      const familia = normalizeStr(p.familiaProduto);
-      const produto = normalizeStr(p.produto);
-      const peso = normalizeStr(p.peso);
+      const fam = familias.find(f => f.id === p.familiaId);
+      const familia = normalizeStr(fam?.nome);
+
+      const prod = produtos.find(pr => pr.id === p.produtoId);
+      const produto = normalizeStr(prod?.nome);
 
       const cat = categorias.find(c => c.id === p.categoriaId);
       const categoriaNome = normalizeStr(cat?.nome);
@@ -61,7 +66,6 @@ export function Dispositivos() {
         descricao.includes(q) ||
         familia.includes(q) ||
         produto.includes(q) ||
-        peso.includes(q) ||
         categoriaNome.includes(q) ||
         (p.palavrasChave || []).some(tag => normalizeStr(tag).includes(q));
 
@@ -74,7 +78,7 @@ export function Dispositivos() {
 
       return matchText && matchCat && matchProcesso;
     });
-  }, [dispositivos, categorias, filterQuery, filterCategoria, filterProcesso]);
+  }, [dispositivos, categorias, familias, produtos, filterQuery, filterCategoria, filterProcesso]);
 
   // Resetar página ao filtrar
   useEffect(() => {
@@ -110,14 +114,34 @@ export function Dispositivos() {
             <h2 style={{ fontSize: '1.8rem', fontWeight: '800' }}>Dispositivos</h2>
             <div className="subtitle">{filteredDispositivos.length} dispositivos encontrados</div>
           </div>
-          <button 
-            className="btn btn-primary hide-on-mobile" 
-            onClick={() => openDispForm()}
-            aria-label="Cadastrar novo dispositivo (Atalho: N)"
-            style={{ width: '40px', height: '40px', padding: 0 }}
-          >
-            <Plus size={20} />
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              className="btn hide-on-mobile" 
+              onClick={() => setIsNukeModalOpen(true)}
+              aria-label="Limpar todo o banco de dados (Dev)"
+              style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+            >
+              <Trash2 size={18} />
+              <span className="hide-on-mobile">Limpar DB</span>
+            </button>
+            <button 
+              className="btn hide-on-mobile" 
+              onClick={() => setIsImportOpen(true)}
+              aria-label="Importar planilha de dispositivos"
+              style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <Upload size={18} />
+              <span className="hide-on-mobile">Importar</span>
+            </button>
+            <button 
+              className="btn btn-primary hide-on-mobile" 
+              onClick={() => openDispForm()}
+              aria-label="Cadastrar novo dispositivo (Atalho: N)"
+              style={{ width: '40px', height: '40px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Plus size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="flex-responsive-row" style={{ marginBottom: 'var(--spacing-xl)' }}>
@@ -187,6 +211,8 @@ export function Dispositivos() {
           onItemAction={(disp) => navigate(`/dispositivos/${disp.id}`)}
           renderItem={(disp, idx, isFocused) => {
             const cat = categorias.find(c => c.id === disp.categoriaId);
+            const fam = familias.find(f => f.id === disp.familiaId);
+            const prod = produtos.find(p => p.id === disp.produtoId);
             return (
               <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 'var(--spacing-lg)' }}>
                 <div style={{ 
@@ -209,8 +235,8 @@ export function Dispositivos() {
                   
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                     {cat?.nome && <span className={getBadgeColor(cat.nome)}>{cat.nome}</span>}
-                    {disp.familiaProduto && <span className={getBadgeColor(disp.familiaProduto)}>{disp.familiaProduto}</span>}
-                    {disp.produto && <span className="badge badge-blue">{disp.produto}</span>}
+                    {fam?.nome && <span className={getBadgeColor(fam.nome)}>{fam.nome}</span>}
+                    {prod?.nome && <span className="badge badge-blue">{prod.nome}</span>}
                     {disp.peso && <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: 500 }}>{disp.peso}g</span>}
                     {(disp.palavrasChave || []).map(tag => (
                       <span key={tag} className="badge badge-pink" style={{ fontSize: '0.75rem' }}>{tag}</span>
@@ -275,7 +301,35 @@ export function Dispositivos() {
             <button className="btn btn-primary" onClick={handleDelete}>Confirmar</button>
           </div>
         </AccessibleModal>
+
+        <AccessibleModal isOpen={isNukeModalOpen} onClose={() => setIsNukeModalOpen(false)} title="⚠️ Limpar Banco de Dados">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--color-danger)' }}>
+              <AlertTriangle size={32} />
+              <p style={{ margin: 0, fontWeight: 600 }}>Atenção! Ação irreversível.</p>
+            </div>
+            <p style={{ fontSize: '0.95rem', lineHeight: 1.5 }}>
+              Você está prestes a apagar <strong>TODO O BANCO DE DADOS</strong> (Dispositivos, Categorias, Tipos e Utilizações).
+              Esta ação serve apenas para propósitos de desenvolvimento.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
+              <button className="btn" onClick={() => setIsNukeModalOpen(false)}>Cancelar</button>
+              <button 
+                className="btn btn-primary" 
+                style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                onClick={() => {
+                  deleteAllData();
+                  setIsNukeModalOpen(false);
+                }}
+              >
+                Sim, apagar tudo
+              </button>
+            </div>
+          </div>
+        </AccessibleModal>
       </div>
+
+      <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />
 
       <button className="fab-button" onClick={() => openDispForm()} aria-label="Cadastrar novo dispositivo">
         <Plus size={24} />

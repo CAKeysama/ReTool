@@ -7,12 +7,13 @@ import { AccessibleModal } from '../components/AccessibleModal';
 export function DispositivoDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { dispositivos, categorias, tipos, utilizacoes, addUtilizacao, deleteUtilizacao, openDispForm } = useReTool();
+  const { dispositivos, categorias, utilizacoes, familias, produtos, addUtilizacao, deleteUtilizacao, openDispForm } = useReTool();
   
   const disp = dispositivos.find(p => p.id === id);
   const dispUtilizacoes = utilizacoes.filter(u => u.dispositivoId === id);
   const categoria = categorias.find(c => c.id === disp?.categoriaId);
-  const tipo = tipos.find(t => t.id === disp?.tipo);
+  const familia = familias.find(f => f.id === disp?.familiaId);
+  const produto = produtos.find(p => p.id === disp?.produtoId);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [novaUtilizacao, setNovaUtilizacao] = useState({ descricao: '', setor: '', observacoes: '' });
@@ -108,11 +109,11 @@ export function DispositivoDetails() {
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Família do Produto</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.familiaProduto || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{familia?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Produto</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.produto || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{produto?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
           </div>
 
@@ -121,12 +122,6 @@ export function DispositivoDetails() {
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>CATEGORIA</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{categoria?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
-            {tipo?.nome && (
-              <div>
-                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Tipo (Legado)</div>
-                <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{tipo.nome}</div>
-              </div>
-            )}
           </div>
 
           <div style={{ marginBottom: 'var(--spacing-md)' }}>
@@ -179,7 +174,7 @@ export function DispositivoDetails() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Família</span>
-            {disp.familiaProduto ? <span className={getBadgeColor(disp.familiaProduto)}>{disp.familiaProduto}</span> : <span style={{color: '#d1d5db', fontSize: '0.85rem'}}>N/A</span>}
+            {familia?.nome ? <span className={getBadgeColor(familia.nome)}>{familia.nome}</span> : <span style={{color: '#d1d5db', fontSize: '0.85rem'}}>N/A</span>}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
