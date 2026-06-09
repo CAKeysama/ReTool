@@ -21,7 +21,7 @@ const BUG_EXPLOSION_PARTICLES = [
 ];
 
 export function Home() {
-  const { dispositivos, utilizacoes, categorias, openDispForm } = useReTool();
+  const { dispositivos, utilizacoes, categorias, familias, produtos, openDispForm } = useReTool();
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState(dispositivos);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -89,8 +89,10 @@ export function Home() {
       const nome = normalizeStr(p.nome);
       const codigo = normalizeStr(p.codigo);
       const descricao = normalizeStr(p.descricao);
-      const familia = normalizeStr(p.familiaProduto);
-      const produto = normalizeStr(p.produto);
+      const fam = familias.find(f => f.id === p.familiaId);
+      const familia = normalizeStr(fam?.nome);
+      const prod = produtos.find(pr => pr.id === p.produtoId);
+      const produto = normalizeStr(prod?.nome);
       const peso = normalizeStr(p.peso);
       
       const cat = categorias.find(c => c.id === p.categoriaId);
@@ -109,7 +111,7 @@ export function Home() {
     });
     setSuggestions(filtered);
     setActiveIndex(-1);
-  }, [query, dispositivos, categorias]);
+  }, [query, dispositivos, categorias, familias, produtos]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {

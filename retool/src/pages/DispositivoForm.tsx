@@ -7,7 +7,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 
 export function DispositivoForm() {
-  const { dispositivos, categorias, addDispositivo, updateDispositivo, addCategoria, announce, editingDispId, closeDispForm } = useReTool();
+  const { dispositivos, categorias, familias, produtos, addDispositivo, updateDispositivo, addCategoria, addFamilia, addProduto, announce, editingDispId, closeDispForm } = useReTool();
   
   const isEditing = Boolean(editingDispId);
   const dispEdicao = isEditing ? dispositivos.find(p => p.id === editingDispId) : null;
@@ -16,10 +16,9 @@ export function DispositivoForm() {
     nome: '',
     codigo: '',
     categoriaId: '',
-    tipo: '',
     peso: '',
-    familiaProduto: '',
-    produto: '',
+    familiaId: '',
+    produtoId: '',
     descricao: '',
     observacoes: '',
     palavrasChave: [],
@@ -37,7 +36,12 @@ export function DispositivoForm() {
   // Famílias inline states
   const [showNewFamForm, setShowNewFamForm] = useState(false);
   const [newFamName, setNewFamName] = useState('');
-  const [customFamilias, setCustomFamilias] = useState<string[]>([]);
+  const [isAddingFam, setIsAddingFam] = useState(false);
+
+  // Produtos inline states
+  const [showNewProdForm, setShowNewProdForm] = useState(false);
+  const [newProdName, setNewProdName] = useState('');
+  const [isAddingProd, setIsAddingProd] = useState(false);
 
   // Uploading states (legacy/kept for safety, though disabled)
   const [uploadingPeca, setUploadingPeca] = useState(false);
@@ -81,13 +85,7 @@ export function DispositivoForm() {
     }
   };
 
-  // Carregar opções dinâmicas para a Família do Produto (incluindo as adicionadas inline)
-  const familias = useMemo(() => {
-    const set = new Set(dispositivos.map(d => d.familiaProduto).filter(Boolean));
-    ['AVOLA', 'Plantadeira', 'Válvulas', 'Sensores', 'Motores', 'CLPs'].forEach(f => set.add(f));
-    customFamilias.forEach(f => set.add(f));
-    return Array.from(set).sort();
-  }, [dispositivos, customFamilias]);
+
 
   // Tags logic
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -131,15 +129,41 @@ export function DispositivoForm() {
   };
 
   // Família inline logic
-  const handleAddFamInline = (e: React.MouseEvent) => {
+  const handleAddFamInline = async (e: React.MouseEvent) => {
     e.preventDefault();
     const name = newFamName.trim();
     if (!name) return;
-    setCustomFamilias(prev => [...prev, name]);
-    setFormData(prev => ({ ...prev, familiaProduto: name }));
-    setNewFamName('');
-    setShowNewFamForm(false);
-    announce(`Família '${name}' criada e selecionada.`);
+    setIsAddingFam(true);
+    try {
+      const newId = await addFamilia({ nome: name, ativo: true });
+      setFormData(prev => ({ ...prev, familiaId: newId }));
+      setNewFamName('');
+      setShowNewFamForm(false);
+    } catch (err) {
+      console.error(err);
+      announce('Erro ao cadastrar nova família.', true);
+    } finally {
+      setIsAddingFam(false);
+    }
+  };
+
+  // Produto inline logic
+  const handleAddProdInline = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    const name = newProdName.trim();
+    if (!name) return;
+    setIsAddingProd(true);
+    try {
+      const newId = await addProduto({ nome: name, ativo: true });
+      setFormData(prev => ({ ...prev, produtoId: newId }));
+      setNewProdName('');
+      setShowNewProdForm(false);
+    } catch (err) {
+      console.error(err);
+      announce('Erro ao cadastrar novo produto.', true);
+    } finally {
+      setIsAddingProd(false);
+    }
   };
 
   // Upload físico real desativado temporariamente conforme solicitação do usuário
@@ -220,7 +244,7 @@ export function DispositivoForm() {
                   <button 
                     type="button" 
                     className="btn btn-primary"
-                    disabled={!newFamName.trim()}
+                    disabled={isAddingFam || !newFamName.trim()}
                     onClick={handleAddFamInline}
                     style={{ height: '34px', minHeight: 'auto', fontSize: '0.8rem', padding: '0 12px' }}
                   >
@@ -238,28 +262,85 @@ export function DispositivoForm() {
               ) : null}
 
               <select 
-                id="selectFamilia" name="familiaProduto"
+                id="selectFamilia" name="familiaId"
                 className="input-field"
-                value={formData.familiaProduto || ''}
+                value={formData.familiaId || ''}
                 onChange={handleChange}
               >
                 <option value="">Selecione a Família</option>
-                {familias.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
+                {familias
+                  .filter(f => f.ativo !== false || f.id === formData.familiaId)
+                  .map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.nome}{f.ativo === false ? ' (Inativo)' : ''}
+                    </option>
+                  ))}
               </select>
               <div className="input-helper">Grupo de manufatura da peça (Substitui "Grupo")</div>
             </div>
 
             <div>
-              <label htmlFor="inputProduto" className="input-label">Produto</label>
-              <input 
-                id="inputProduto" name="produto"
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <label htmlFor="selectProduto" className="input-label" style={{ margin: 0 }}>Produto</label>
+                <button 
+                  type="button" 
+                  onClick={() => setShowNewProdForm(!showNewProdForm)}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--color-primary)', 
+                    fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', 
+                    gap: '2px', cursor: 'pointer', padding: 0
+                  }}
+                >
+                  <Plus size={12} /> Novo Produto
+                </button>
+              </div>
+
+              {showNewProdForm ? (
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', animation: 'cloudFadeIn 0.2s ease' }}>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Nome do produto..." 
+                    value={newProdName}
+                    autoFocus
+                    onChange={(e) => setNewProdName(e.target.value)}
+                    style={{ flex: 1, minHeight: '34px', height: '34px', padding: '6px 10px', fontSize: '0.85rem' }}
+                  />
+                  <button 
+                    type="button" 
+                    className="btn btn-primary"
+                    disabled={isAddingProd || !newProdName.trim()}
+                    onClick={handleAddProdInline}
+                    style={{ height: '34px', minHeight: 'auto', fontSize: '0.8rem', padding: '0 12px' }}
+                  >
+                    Salvar
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn"
+                    onClick={() => { setShowNewProdForm(false); setNewProdName(''); }}
+                    style={{ height: '34px', minHeight: 'auto', fontSize: '0.8rem', padding: '0 12px' }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : null}
+
+              <select 
+                id="selectProduto" name="produtoId"
                 className="input-field" 
-                placeholder="Ex: AVOLA 2500"
-                value={formData.produto || ''} 
+                value={formData.produtoId || ''} 
                 onChange={handleChange}
-              />
+              >
+                <option value="">Selecione o Produto</option>
+                {produtos
+                  .filter(p => p.ativo !== false || p.id === formData.produtoId)
+                  .map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.nome}{p.ativo === false ? ' (Inativo)' : ''}
+                    </option>
+                  ))}
+              </select>
               <div className="input-helper">Nome comercial/modelo do produto associado</div>
             </div>
           </div>
