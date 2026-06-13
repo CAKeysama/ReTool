@@ -130,34 +130,55 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
 
                 let catId = defaultCategoriaId; 
                 if (categoriaNome) {
-                  const catExists = categorias.find(c => c.nome?.toLowerCase() === categoriaNome.toLowerCase());
+                  const catExists = categorias.find(c => c.nome?.toLowerCase().trim() === categoriaNome.toLowerCase().trim());
                   if (catExists) {
                     catId = catExists.id;
                   } else {
-                    missingCategories.add(categoriaNome);
-                    catId = categoriaNome;
+                    const existingInMissing = Array.from(missingCategories).find(
+                      name => name.toLowerCase().trim() === categoriaNome.toLowerCase().trim()
+                    );
+                    if (existingInMissing) {
+                      catId = existingInMissing;
+                    } else {
+                      missingCategories.add(categoriaNome);
+                      catId = categoriaNome;
+                    }
                   }
                 }
 
                 let famId = '';
                 if (familia) {
-                  const famExists = familias.find(f => f.nome?.toLowerCase() === familia.toLowerCase());
+                  const famExists = familias.find(f => f.nome?.toLowerCase().trim() === familia.toLowerCase().trim());
                   if (famExists) {
                     famId = famExists.id;
                   } else {
-                    missingFamilias.add(familia);
-                    famId = familia;
+                    const existingInMissing = Array.from(missingFamilias).find(
+                      name => name.toLowerCase().trim() === familia.toLowerCase().trim()
+                    );
+                    if (existingInMissing) {
+                      famId = existingInMissing;
+                    } else {
+                      missingFamilias.add(familia);
+                      famId = familia;
+                    }
                   }
                 }
 
                 let prodId = '';
                 if (produto) {
-                  const prodExists = produtos.find(p => p.nome?.toLowerCase() === produto.toLowerCase());
+                  const prodExists = produtos.find(p => p.nome?.toLowerCase().trim() === produto.toLowerCase().trim());
                   if (prodExists) {
                     prodId = prodExists.id;
                   } else {
-                    missingProdutos.add(produto);
-                    prodId = produto;
+                    const existingInMissing = Array.from(missingProdutos).find(
+                      name => name.toLowerCase().trim() === produto.toLowerCase().trim()
+                    );
+                    if (existingInMissing) {
+                      prodId = existingInMissing;
+                    } else {
+                      missingProdutos.add(produto);
+                      prodId = produto;
+                    }
                   }
                 }
 

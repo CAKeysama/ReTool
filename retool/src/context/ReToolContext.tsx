@@ -282,6 +282,26 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         let catCount = 0;
         
         for (const nomeCat of newCategoriasNomes) {
+          // A. Verificar se já existe no banco de dados (estado local atualizado)
+          const existingCat = categorias.find(c => c.nome?.toLowerCase().trim() === nomeCat.toLowerCase().trim());
+          if (existingCat) {
+            categoriasCriadas.set(nomeCat, existingCat.id);
+            continue;
+          }
+
+          // B. Verificar se já criamos no lote atual (evitar duplicados case-insensitive no lote)
+          let alreadyCreatedId = null;
+          for (const [createdNome, createdId] of categoriasCriadas.entries()) {
+            if (createdNome.toLowerCase().trim() === nomeCat.toLowerCase().trim()) {
+              alreadyCreatedId = createdId;
+              break;
+            }
+          }
+          if (alreadyCreatedId) {
+            categoriasCriadas.set(nomeCat, alreadyCreatedId);
+            continue;
+          }
+
           const catId = uuidv4();
           catBatch.set(doc(db, 'categorias', catId), {
             id: catId,
@@ -304,6 +324,26 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         let famBatch = writeBatch(db);
         let famCount = 0;
         for (const nomeFam of newFamiliasNomes) {
+          // A. Verificar se já existe no banco de dados
+          const existingFam = familias.find(f => f.nome?.toLowerCase().trim() === nomeFam.toLowerCase().trim());
+          if (existingFam) {
+            familiasCriadas.set(nomeFam, existingFam.id);
+            continue;
+          }
+
+          // B. Verificar se já criamos no lote atual
+          let alreadyCreatedId = null;
+          for (const [createdNome, createdId] of familiasCriadas.entries()) {
+            if (createdNome.toLowerCase().trim() === nomeFam.toLowerCase().trim()) {
+              alreadyCreatedId = createdId;
+              break;
+            }
+          }
+          if (alreadyCreatedId) {
+            familiasCriadas.set(nomeFam, alreadyCreatedId);
+            continue;
+          }
+
           const famId = uuidv4();
           famBatch.set(doc(db, 'familias', famId), { id: famId, nome: nomeFam, ativo: true });
           familiasCriadas.set(nomeFam, famId);
@@ -317,6 +357,26 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         let prodBatch = writeBatch(db);
         let prodCount = 0;
         for (const nomeProd of newProdutosNomes) {
+          // A. Verificar se já existe no banco de dados
+          const existingProd = produtos.find(p => p.nome?.toLowerCase().trim() === nomeProd.toLowerCase().trim());
+          if (existingProd) {
+            produtosCriados.set(nomeProd, existingProd.id);
+            continue;
+          }
+
+          // B. Verificar se já criamos no lote atual
+          let alreadyCreatedId = null;
+          for (const [createdNome, createdId] of produtosCriados.entries()) {
+            if (createdNome.toLowerCase().trim() === nomeProd.toLowerCase().trim()) {
+              alreadyCreatedId = createdId;
+              break;
+            }
+          }
+          if (alreadyCreatedId) {
+            produtosCriados.set(nomeProd, alreadyCreatedId);
+            continue;
+          }
+
           const prodId = uuidv4();
           prodBatch.set(doc(db, 'produtos', prodId), { id: prodId, nome: nomeProd, ativo: true });
           produtosCriados.set(nomeProd, prodId);
@@ -332,15 +392,50 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       let sucesso = 0;
       
       for (const disp of novosDispositivos) {
-        // Mapear Nomes Dinâmicos para IDs criados
-        if (disp.categoriaId && categoriasCriadas.has(disp.categoriaId)) {
-          disp.categoriaId = categoriasCriadas.get(disp.categoriaId);
+        // Mapear Nomes Dinâmicos para IDs criados (com fallback case-insensitive)
+        if (disp.categoriaId) {
+          if (categoriasCriadas.has(disp.categoriaId)) {
+            disp.categoriaId = categoriasCriadas.get(disp.categoriaId);
+          } else {
+            let foundId = null;
+            for (const [nomeCat, catId] of categoriasCriadas.entries()) {
+              if (nomeCat.toLowerCase().trim() === disp.categoriaId.toLowerCase().trim()) {
+                foundId = catId;
+                break;
+              }
+            }
+            if (foundId) disp.categoriaId = foundId;
+          }
         }
-        if (disp.familiaId && familiasCriadas.has(disp.familiaId)) {
-          disp.familiaId = familiasCriadas.get(disp.familiaId);
+        
+        if (disp.familiaId) {
+          if (familiasCriadas.has(disp.familiaId)) {
+            disp.familiaId = familiasCriadas.get(disp.familiaId);
+          } else {
+            let foundId = null;
+            for (const [nomeFam, famId] of familiasCriadas.entries()) {
+              if (nomeFam.toLowerCase().trim() === disp.familiaId.toLowerCase().trim()) {
+                foundId = famId;
+                break;
+              }
+            }
+            if (foundId) disp.familiaId = foundId;
+          }
         }
-        if (disp.produtoId && produtosCriados.has(disp.produtoId)) {
-          disp.produtoId = produtosCriados.get(disp.produtoId);
+
+        if (disp.produtoId) {
+          if (produtosCriados.has(disp.produtoId)) {
+            disp.produtoId = produtosCriados.get(disp.produtoId);
+          } else {
+            let foundId = null;
+            for (const [nomeProd, prodId] of produtosCriados.entries()) {
+              if (nomeProd.toLowerCase().trim() === disp.produtoId.toLowerCase().trim()) {
+                foundId = prodId;
+                break;
+              }
+            }
+            if (foundId) disp.produtoId = foundId;
+          }
         }
 
         // Tenta encontrar existente pelo código ou pelo nome
