@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { AccessibleModal } from './AccessibleModal';
-import { useReTool, Dispositivo } from '../context/ReToolContext';
+import { useReTool } from '../context/ReToolContext';
+import { Dispositivo } from '../domain/entities/dispositivo';
 import { Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface ImportModalProps {
