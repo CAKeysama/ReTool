@@ -1,89 +1,62 @@
-import React, { useState } from 'react';
-import { useReTool, Categoria, Familia, Produto } from '../context/ReToolContext';
+import React from 'react';
+import { useCategoriasController } from '../presentation/hooks/useCategoriasController';
 import { FocusableList } from '../components/FocusableList';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { Plus, Trash, Edit, Info, Check } from 'lucide-react';
 
 export function Categorias() {
-  const { 
-    categorias, addCategoria, updateCategoria, deleteCategoria,
-    familias, addFamilia, updateFamilia, deleteFamilia,
-    produtos, addProduto, updateProduto, deleteProduto
-  } = useReTool();
-  
-  // --- States para Categoria ---
-  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
-  const [editingCatId, setEditingCatId] = useState<string | null>(null);
-  const [catName, setCatName] = useState('');
-  const [catConfirmAction, setCatConfirmAction] = useState<Categoria | null>(null);
+  const {
+    categorias,
+    familias,
+    produtos,
+    
+    // Categoria
+    isCatModalOpen,
+    setIsCatModalOpen,
+    editingCatId,
+    catName,
+    setCatName,
+    catConfirmAction,
+    setCatConfirmAction,
+    openCatForm,
+    handleCatSave,
+    updateCategoria,
+    deleteCategoria,
 
-  // --- States para Familia ---
-  const [isFamModalOpen, setIsFamModalOpen] = useState(false);
-  const [editingFamId, setEditingFamId] = useState<string | null>(null);
-  const [famName, setFamName] = useState('');
-  const [famConfirmAction, setFamConfirmAction] = useState<Familia | null>(null);
+    // Família
+    isFamModalOpen,
+    setIsFamModalOpen,
+    editingFamId,
+    famName,
+    setFamName,
+    famConfirmAction,
+    setFamConfirmAction,
+    openFamForm,
+    handleFamSave,
+    updateFamilia,
+    deleteFamilia,
 
-  // --- States para Produto ---
-  const [isProdModalOpen, setIsProdModalOpen] = useState(false);
-  const [editingProdId, setEditingProdId] = useState<string | null>(null);
-  const [prodName, setProdName] = useState('');
-  const [prodConfirmAction, setProdConfirmAction] = useState<Produto | null>(null);
+    // Produto
+    isProdModalOpen,
+    setIsProdModalOpen,
+    editingProdId,
+    prodName,
+    setProdName,
+    prodConfirmAction,
+    setProdConfirmAction,
+    openProdForm,
+    handleProdSave,
+    updateProduto,
+    deleteProduto,
 
-  // States for tooltips
-  const [showCatInfo, setShowCatInfo] = useState(false);
-  const [showFamInfo, setShowFamInfo] = useState(false);
-  const [showProdInfo, setShowProdInfo] = useState(false);
-
-  // --- Actions Categoria ---
-  const openCatForm = (id?: string, currentName?: string) => {
-    setEditingCatId(id || null);
-    setCatName(currentName || '');
-    setIsCatModalOpen(true);
-  };
-
-  const handleCatSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingCatId) {
-      updateCategoria(editingCatId, { nome: catName });
-    } else {
-      addCategoria({ nome: catName });
-    }
-    setIsCatModalOpen(false);
-  };
-
-  // --- Actions Família ---
-  const openFamForm = (id?: string, currentName?: string) => {
-    setEditingFamId(id || null);
-    setFamName(currentName || '');
-    setIsFamModalOpen(true);
-  };
-
-  const handleFamSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingFamId) {
-      updateFamilia(editingFamId, { nome: famName });
-    } else {
-      addFamilia({ nome: famName, ativo: true });
-    }
-    setIsFamModalOpen(false);
-  };
-
-  // --- Actions Produto ---
-  const openProdForm = (id?: string, currentName?: string) => {
-    setEditingProdId(id || null);
-    setProdName(currentName || '');
-    setIsProdModalOpen(true);
-  };
-
-  const handleProdSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingProdId) {
-      updateProduto(editingProdId, { nome: prodName });
-    } else {
-      addProduto({ nome: prodName, ativo: true });
-    }
-    setIsProdModalOpen(false);
-  };
+    // Tooltips
+    showCatInfo,
+    setShowCatInfo,
+    showFamInfo,
+    setShowFamInfo,
+    showProdInfo,
+    setShowProdInfo
+  } = useCategoriasController();
 
   return (
     <div>
@@ -453,7 +426,7 @@ export function Categorias() {
           {prodConfirmAction?.ativo === false ? (
             <p>Deseja excluir permanentemente o produto <strong>{prodConfirmAction?.nome}</strong>?</p>
           ) : (
-            <p>Deseja excluir permanentemente o produto <strong>{prodConfirmAction?.nome}</strong> ou prefere apenas desativá-lo?</p>
+            <p>Deseja excluir permanentemente o produto <strong>{prodConfirmAction?.nome}</strong> ou prefere apenas desativá-la?</p>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
             <button type="button" className="btn" onClick={() => setProdConfirmAction(null)}>Cancelar</button>
