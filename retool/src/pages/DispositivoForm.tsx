@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useReTool, Dispositivo } from '../context/ReToolContext';
+import { useReTool } from '../context/ReToolContext';
+import { Dispositivo } from '../domain/entities/dispositivo';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { Upload, ImageIcon, Plus, X, Loader2 } from 'lucide-react';
 import { storage } from '../config/firebase';
