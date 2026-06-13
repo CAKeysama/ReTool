@@ -10,7 +10,6 @@ export function Dispositivos() {
     categorias,
     familias,
     produtos,
-    deleteAllData,
     navigate,
     searchInputRef,
 
@@ -38,8 +37,6 @@ export function Dispositivos() {
     setDispToDelete,
     isImportOpen,
     setIsImportOpen,
-    isNukeModalOpen,
-    setIsNukeModalOpen,
 
     // Ações
     handleDelete,
@@ -56,15 +53,7 @@ export function Dispositivos() {
             <div className="subtitle">{filteredDispositivos.length} dispositivos encontrados</div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button 
-              className="btn hide-on-mobile" 
-              onClick={() => setIsNukeModalOpen(true)}
-              aria-label="Limpar todo o banco de dados (Dev)"
-              style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-            >
-              <Trash2 size={18} />
-              <span className="hide-on-mobile">Limpar DB</span>
-            </button>
+
             <button 
               className="btn hide-on-mobile" 
               onClick={() => setIsImportOpen(true)}
@@ -240,31 +229,7 @@ export function Dispositivos() {
           </div>
         </AccessibleModal>
 
-        <AccessibleModal isOpen={isNukeModalOpen} onClose={() => setIsNukeModalOpen(false)} title="⚠️ Limpar Banco de Dados">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--color-danger)' }}>
-              <AlertTriangle size={32} />
-              <p style={{ margin: 0, fontWeight: 600 }}>Atenção! Ação irreversível.</p>
-            </div>
-            <p style={{ fontSize: '0.95rem', lineHeight: 1.5 }}>
-              Você está prestes a apagar <strong>TODO O BANCO DE DADOS</strong> (Dispositivos, Categorias, Tipos e Utilizações).
-              Esta ação serve apenas para propósitos de desenvolvimento.
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
-              <button className="btn" onClick={() => setIsNukeModalOpen(false)}>Cancelar</button>
-              <button 
-                className="btn btn-primary" 
-                style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                onClick={() => {
-                  deleteAllData();
-                  setIsNukeModalOpen(false);
-                }}
-              >
-                Sim, apagar tudo
-              </button>
-            </div>
-          </div>
-        </AccessibleModal>
+
       </div>
 
       <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />
