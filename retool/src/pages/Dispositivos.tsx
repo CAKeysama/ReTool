@@ -1,7 +1,8 @@
 import React from 'react';
 import { useDispositivosController } from '../presentation/hooks/useDispositivosController';
 import { FocusableList } from '../components/FocusableList';
-import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, Trash2, AlertTriangle } from 'lucide-react';
+import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
+import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { ImportModal } from '../components/ImportModal';
 
@@ -32,17 +33,41 @@ export function Dispositivos() {
     filteredDispositivos,
     paginatedDispositivos,
 
-    // Modais
+    // Modais individuais
     dispToDelete,
     setDispToDelete,
     isImportOpen,
     setIsImportOpen,
+
+    // Bulk Actions
+    isBulkModalOpen,
+    setIsBulkModalOpen,
+    bulkSelected,
+    bulkSearch,
+    setBulkSearch,
+    isBulkConfirmOpen,
+    setIsBulkConfirmOpen,
+    isBulkLoading,
+    bulkProgress,
+    bulkFilteredDispositivos,
+    toggleBulkSelect,
+    toggleSelectAll,
+    closeBulkModal,
+    handleBulkDisable,
+    handleBulkDelete,
 
     // Ações
     handleDelete,
     getBadgeColor,
     openDispForm
   } = useDispositivosController();
+
+  const bulkItems: BulkItem[] = bulkFilteredDispositivos.map(d => ({
+    id: d.id,
+    label: d.nome || 'Sem nome',
+    sublabel: d.codigo,
+    inactive: d.ativo === false
+  }));
 
   return (
     <>
@@ -63,11 +88,21 @@ export function Dispositivos() {
               <Upload size={18} />
               <span className="hide-on-mobile">Importar</span>
             </button>
-            <button 
-              className="btn btn-primary hide-on-mobile" 
+
+            <button
+              className="btn hide-on-mobile"
+              onClick={() => setIsBulkModalOpen(true)}
+              aria-label="Ações em massa"
+              style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <ListChecks size={18} />
+              <span className="hide-on-mobile">Ações em Massa</span>
+            </button>
+
+            <button
+              className="btn btn-primary btn-icon"
               onClick={() => openDispForm()}
               aria-label="Cadastrar novo dispositivo (Atalho: N)"
-              style={{ width: '40px', height: '40px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <Plus size={20} />
             </button>
@@ -195,9 +230,8 @@ export function Dispositivos() {
 
             {itemsPerPage !== 'all' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button 
-                  className="btn" 
-                  style={{ padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%' }}
+                <button
+                  className="btn btn-icon"
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(p => p - 1)}
                   aria-label="Página anterior"
@@ -207,9 +241,8 @@ export function Dispositivos() {
                 <span style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: 600, minWidth: '45px', textAlign: 'center' }}>
                   {currentPage} de {totalPages}
                 </span>
-                <button 
-                  className="btn" 
-                  style={{ padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '50%' }}
+                <button
+                  className="btn btn-icon"
                   disabled={currentPage >= totalPages}
                   onClick={() => setCurrentPage(p => p + 1)}
                   aria-label="Próxima página"
@@ -221,6 +254,7 @@ export function Dispositivos() {
           </div>
         )}
 
+        {/* Modal confirmação exclusão individual */}
         <AccessibleModal isOpen={!!dispToDelete} onClose={() => setDispToDelete(null)} title="Confirmar exclusão">
           <p>Tem certeza que deseja remover este dispositivo?</p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
@@ -229,10 +263,28 @@ export function Dispositivos() {
           </div>
         </AccessibleModal>
 
-
       </div>
 
       <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />
+
+      {/* Modal de Ações em Massa */}
+      <BulkActionModal
+        isOpen={isBulkModalOpen}
+        onClose={closeBulkModal}
+        items={bulkItems}
+        selected={bulkSelected}
+        search={bulkSearch}
+        onSearchChange={setBulkSearch}
+        onToggleItem={toggleBulkSelect}
+        onToggleAll={toggleSelectAll}
+        confirmAction={isBulkConfirmOpen}
+        onSetConfirmAction={setIsBulkConfirmOpen}
+        onDisable={handleBulkDisable}
+        onDelete={handleBulkDelete}
+        isLoading={isBulkLoading}
+        progress={bulkProgress}
+        canDisable={true}
+      />
 
       <button className="fab-button" onClick={() => openDispForm()} aria-label="Cadastrar novo dispositivo">
         <Plus size={24} />

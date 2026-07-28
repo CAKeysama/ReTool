@@ -29,23 +29,23 @@ interface ReToolContextType {
   produtos: Produto[];
   utilizacoes: Utilizacao[];
   addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'>) => Promise<void>;
-  updateDispositivo: (id: string, data: Partial<Dispositivo>) => Promise<void>;
-  deleteDispositivo: (id: string) => Promise<void>;
+  updateDispositivo: (id: string, data: Partial<Dispositivo>, silent?: boolean) => Promise<void>;
+  deleteDispositivo: (id: string, silent?: boolean) => Promise<void>;
   addCategoria: (data: Omit<Categoria, 'id'>) => Promise<string>;
-  updateCategoria: (id: string, data: Partial<Categoria>) => Promise<void>;
-  deleteCategoria: (id: string) => Promise<void>;
+  updateCategoria: (id: string, data: Partial<Categoria>, silent?: boolean) => Promise<void>;
+  deleteCategoria: (id: string, silent?: boolean) => Promise<void>;
   addTipo: (data: Omit<Tipo, 'id'>) => Promise<void>;
   updateTipo: (id: string, data: Partial<Tipo>) => Promise<void>;
   deleteTipo: (id: string) => Promise<void>;
   addFamilia: (data: Omit<Familia, 'id'>) => Promise<string>;
-  updateFamilia: (id: string, data: Partial<Familia>) => Promise<void>;
-  deleteFamilia: (id: string) => Promise<void>;
+  updateFamilia: (id: string, data: Partial<Familia>, silent?: boolean) => Promise<void>;
+  deleteFamilia: (id: string, silent?: boolean) => Promise<void>;
   addProduto: (data: Omit<Produto, 'id'>) => Promise<string>;
-  updateProduto: (id: string, data: Partial<Produto>) => Promise<void>;
-  deleteProduto: (id: string) => Promise<void>;
+  updateProduto: (id: string, data: Partial<Produto>, silent?: boolean) => Promise<void>;
+  deleteProduto: (id: string, silent?: boolean) => Promise<void>;
   addUtilizacao: (data: Omit<Utilizacao, 'id' | 'dataCriacao'>) => Promise<void>;
   updateUtilizacao: (id: string, data: Partial<Utilizacao>) => Promise<void>;
-  deleteUtilizacao: (id: string) => Promise<void>;
+  deleteUtilizacao: (id: string, silent?: boolean) => Promise<void>;
   importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<{ sucesso: number, erros: number }>;
   deleteAllData: () => Promise<void>;
   announce: (message: string, showToast?: boolean) => void;
@@ -119,12 +119,12 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     announce('Dispositivo adicionado com sucesso');
   };
 
-  const updateDispositivo = async (id: string, data: Partial<Dispositivo>) => {
+  const updateDispositivo = async (id: string, data: Partial<Dispositivo>, silent = false) => {
     await dispositivosRepo.update(id, data);
-    announce('Dispositivo atualizado com sucesso');
+    if (!silent) announce('Dispositivo atualizado com sucesso');
   };
 
-  const deleteDispositivo = async (id: string) => {
+  const deleteDispositivo = async (id: string, silent = false) => {
     await dispositivosRepo.delete(id);
     
     // Deletar relações de utilização associadas
@@ -132,7 +132,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     if (relacoes.length > 0) {
       await Promise.all(relacoes.map(u => utilizacoesRepo.delete(u.id)));
     }
-    announce('Dispositivo removido com sucesso');
+    if (!silent) announce('Dispositivo removido com sucesso');
   };
 
   const addCategoria = async (data: Omit<Categoria, 'id'>) => {
@@ -141,14 +141,14 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     return id;
   };
 
-  const updateCategoria = async (id: string, data: Partial<Categoria>) => {
+  const updateCategoria = async (id: string, data: Partial<Categoria>, silent = false) => {
     await categoriasRepo.updateCategoria(id, data);
-    announce('Categoria atualizada com sucesso');
+    if (!silent) announce('Categoria atualizada com sucesso');
   };
 
-  const deleteCategoria = async (id: string) => {
+  const deleteCategoria = async (id: string, silent = false) => {
     await categoriasRepo.deleteCategoria(id);
-    announce('Categoria removida com sucesso');
+    if (!silent) announce('Categoria removida com sucesso');
   };
 
   const addTipo = async (data: Omit<Tipo, 'id'>) => {
@@ -172,14 +172,14 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     return id;
   };
 
-  const updateFamilia = async (id: string, data: Partial<Familia>) => {
+  const updateFamilia = async (id: string, data: Partial<Familia>, silent = false) => {
     await familiasRepo.update(id, data);
-    announce('Família atualizada com sucesso');
+    if (!silent) announce('Família atualizada com sucesso');
   };
 
-  const deleteFamilia = async (id: string) => {
+  const deleteFamilia = async (id: string, silent = false) => {
     await familiasRepo.delete(id);
-    announce('Família removida com sucesso');
+    if (!silent) announce('Família removida com sucesso');
   };
 
   const addProduto = async (data: Omit<Produto, 'id'>) => {
@@ -188,14 +188,14 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     return id;
   };
 
-  const updateProduto = async (id: string, data: Partial<Produto>) => {
+  const updateProduto = async (id: string, data: Partial<Produto>, silent = false) => {
     await produtosRepo.update(id, data);
-    announce('Produto atualizado com sucesso');
+    if (!silent) announce('Produto atualizado com sucesso');
   };
 
-  const deleteProduto = async (id: string) => {
+  const deleteProduto = async (id: string, silent = false) => {
     await produtosRepo.delete(id);
-    announce('Produto removido com sucesso');
+    if (!silent) announce('Produto removido com sucesso');
   };
 
   const addUtilizacao = async (data: Omit<Utilizacao, 'id' | 'dataCriacao'>) => {
@@ -208,9 +208,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     announce('Utilização atualizada com sucesso');
   };
 
-  const deleteUtilizacao = async (id: string) => {
+  const deleteUtilizacao = async (id: string, silent = false) => {
     await utilizacoesRepo.delete(id);
-    announce('Utilização removida com sucesso');
+    if (!silent) announce('Utilização removida com sucesso');
   };
 
   const importarDispositivosEmLote = async (

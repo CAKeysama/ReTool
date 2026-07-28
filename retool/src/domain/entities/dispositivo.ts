@@ -12,4 +12,5 @@ export interface Dispositivo {
   imagemPeca?: string;
   imagemDispositivo?: string;
   dataCriacao?: string;
+  ativo?: boolean;
 }
