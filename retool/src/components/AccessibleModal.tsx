@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
 
 interface AccessibleModalProps {
   isOpen: boolean;
@@ -62,13 +63,12 @@ export function AccessibleModal({ isOpen, onClose, title, children, maxWidth = '
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
           <h2 id="modal-title" style={{ margin: 0 }}>{title}</h2>
-          <button 
-            onClick={onClose} 
-            className="btn" 
+          <button
+            onClick={onClose}
+            className="btn btn-icon"
             aria-label="Fechar janela"
-            style={{ padding: '4px 8px' }}
           >
-            X
+            <X size={16} />
           </button>
         </div>
         <div>

@@ -1,14 +1,25 @@
 import React, { useState, useMemo } from 'react';
 import { useReTool } from '../context/ReToolContext';
 import { FocusableList } from '../components/FocusableList';
-import { Search, Eye } from 'lucide-react';
+import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
+import { Search, Eye, ListChecks } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useBulkProgress } from '../hooks/useBulkProgress';
 
 export function Utilizacoes() {
-  const { utilizacoes, dispositivos } = useReTool();
+  const { utilizacoes, dispositivos, deleteUtilizacao, announce } = useReTool();
+  const BULK_THRESHOLD = 20;
+  const { progress: bulkProgress, runWithProgress } = useBulkProgress();
   const navigate = useNavigate();
   const [filterDispId, setFilterDispId] = useState('');
   const [filterText, setFilterText] = useState('');
+
+  // Bulk state
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkSearch, setBulkSearch] = useState('');
+  const [bulkConfirm, setBulkConfirm] = useState<'disable' | 'delete' | null>(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const filteredUtilizacoes = useMemo(() => {
     return utilizacoes.filter(u => {
@@ -20,11 +31,85 @@ export function Utilizacoes() {
     });
   }, [utilizacoes, filterDispId, filterText]);
 
+  // Filtered list inside the bulk modal
+  const bulkFiltered = useMemo(() => {
+    if (!bulkSearch.trim()) return utilizacoes;
+    const q = bulkSearch.toLowerCase();
+    return utilizacoes.filter(u => {
+      const disp = dispositivos.find(d => d.id === u.dispositivoId);
+      return (
+        u.descricao?.toLowerCase().includes(q) ||
+        u.setor?.toLowerCase().includes(q) ||
+        disp?.nome?.toLowerCase().includes(q)
+      );
+    });
+  }, [utilizacoes, dispositivos, bulkSearch]);
+
+  const bulkItems: BulkItem[] = bulkFiltered.map(u => {
+    const disp = dispositivos.find(d => d.id === u.dispositivoId);
+    return {
+      id: u.id,
+      label: u.descricao || 'Sem descrição',
+      sublabel: disp?.nome ? `${disp.nome} · ${u.setor || 'S/Setor'}` : u.setor,
+    };
+  });
+
+  const toggleItem = (id: string) => {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    const allIds = bulkFiltered.map(u => u.id);
+    const allSelected = allIds.length > 0 && allIds.every(id => bulkSelected.has(id));
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (allSelected) allIds.forEach(id => next.delete(id));
+      else allIds.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  const closeBulk = () => {
+    setIsBulkOpen(false);
+    setBulkSelected(new Set());
+    setBulkSearch('');
+    setBulkConfirm(null);
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkLoading(true);
+    const ids = Array.from(bulkSelected);
+    const useSilent = ids.length > BULK_THRESHOLD;
+    try {
+      await runWithProgress(ids, id => deleteUtilizacao(id, useSilent));
+      if (useSilent) announce(`${ids.length} utilizações excluídas com sucesso`);
+    } finally {
+      setBulkLoading(false);
+      closeBulk();
+    }
+  };
+
   return (
     <div>
-      <div style={{ marginBottom: 'var(--spacing-lg)' }}>
-        <h2>Últimas Utilizações</h2>
-        <p style={{ color: 'var(--color-text-body)' }}>Registro histórico de uso e movimentação de dispositivos.</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-lg)' }}>
+        <div>
+          <h2>Últimas Utilizações</h2>
+          <p style={{ color: 'var(--color-text-body)' }}>Registro histórico de uso e movimentação de dispositivos.</p>
+        </div>
+        <button
+          className="btn"
+          onClick={() => setIsBulkOpen(true)}
+          aria-label="Ações em massa"
+          style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}
+        >
+          <ListChecks size={18} />
+          <span className="hide-on-mobile">Ações em Massa</span>
+        </button>
       </div>
 
       <div style={{ 
@@ -85,6 +170,24 @@ export function Utilizacoes() {
             </div>
           )
         }}
+      />
+
+      {/* Modal de Ações em Massa — sem desativar (utilizações só podem ser excluídas) */}
+      <BulkActionModal
+        isOpen={isBulkOpen}
+        onClose={closeBulk}
+        items={bulkItems}
+        selected={bulkSelected}
+        search={bulkSearch}
+        onSearchChange={setBulkSearch}
+        onToggleItem={toggleItem}
+        onToggleAll={toggleAll}
+        confirmAction={bulkConfirm}
+        onSetConfirmAction={setBulkConfirm}
+        onDelete={handleBulkDelete}
+        isLoading={bulkLoading}
+        progress={bulkProgress}
+        canDisable={false}
       />
     </div>
   );

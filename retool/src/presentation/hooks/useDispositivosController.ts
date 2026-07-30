@@ -2,9 +2,10 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useReTool } from '../../context/ReToolContext';
 import { useHotkeys } from '../../hooks/useHotkeys';
+import { useBulkProgress } from '../../hooks/useBulkProgress';
 
 export function useDispositivosController() {
-  const { dispositivos, categorias, familias, produtos, deleteDispositivo, openDispForm, deleteAllData } = useReTool();
+  const { dispositivos, categorias, familias, produtos, deleteDispositivo, updateDispositivo, openDispForm, deleteAllData, announce } = useReTool();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -28,6 +29,89 @@ export function useDispositivosController() {
   const [dispToDelete, setDispToDelete] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isNukeModalOpen, setIsNukeModalOpen] = useState(false);
+
+  // --- Bulk Actions ---
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkSearch, setBulkSearch] = useState('');
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState<'disable' | 'delete' | null>(null);
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
+  const { progress: bulkProgress, runWithProgress } = useBulkProgress();
+
+  // Filtro interno do modal de bulk
+  const bulkFilteredDispositivos = useMemo(() => {
+    if (!bulkSearch.trim()) return dispositivos;
+    const q = bulkSearch.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return dispositivos.filter(d => {
+      const nome = (d.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const codigo = (d.codigo || '').toLowerCase();
+      return nome.includes(q) || codigo.includes(q);
+    });
+  }, [dispositivos, bulkSearch]);
+
+  const toggleBulkSelect = (id: string) => {
+    setBulkSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const allIds = bulkFilteredDispositivos.map(d => d.id);
+    const allSelected = allIds.length > 0 && allIds.every(id => bulkSelected.has(id));
+    if (allSelected) {
+      setBulkSelected(prev => {
+        const next = new Set(prev);
+        allIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setBulkSelected(prev => {
+        const next = new Set(prev);
+        allIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const BULK_THRESHOLD = 20;
+
+  const closeBulkModal = () => {
+    setIsBulkModalOpen(false);
+    setBulkSelected(new Set());
+    setBulkSearch('');
+    setIsBulkConfirmOpen(null);
+  };
+
+  const handleBulkDisable = async () => {
+    setIsBulkLoading(true);
+    const ids = Array.from(bulkSelected);
+    const useSilent = ids.length > BULK_THRESHOLD;
+    try {
+      await runWithProgress(ids, id => updateDispositivo(id, { ativo: false }, useSilent));
+      if (useSilent) announce(`${ids.length} dispositivos desativados com sucesso`);
+    } finally {
+      setIsBulkLoading(false);
+      setIsBulkConfirmOpen(null);
+      closeBulkModal();
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkLoading(true);
+    const ids = Array.from(bulkSelected);
+    const useSilent = ids.length > BULK_THRESHOLD;
+    try {
+      await runWithProgress(ids, id => deleteDispositivo(id, useSilent));
+      if (useSilent) announce(`${ids.length} dispositivos excluídos com sucesso`);
+    } finally {
+      setIsBulkLoading(false);
+      setIsBulkConfirmOpen(null);
+      closeBulkModal();
+    }
+  };
 
   const filteredDispositivos = useMemo(() => {
     const normalizeStr = (str: string | undefined | null) => {
@@ -137,13 +221,30 @@ export function useDispositivosController() {
     filteredDispositivos,
     paginatedDispositivos,
 
-    // Modais
+    // Modais individuais
     dispToDelete,
     setDispToDelete,
     isImportOpen,
     setIsImportOpen,
     isNukeModalOpen,
     setIsNukeModalOpen,
+
+    // Bulk Actions
+    isBulkModalOpen,
+    setIsBulkModalOpen,
+    bulkSelected,
+    bulkSearch,
+    setBulkSearch,
+    isBulkConfirmOpen,
+    setIsBulkConfirmOpen,
+    isBulkLoading,
+    bulkProgress,
+    bulkFilteredDispositivos,
+    toggleBulkSelect,
+    toggleSelectAll,
+    closeBulkModal,
+    handleBulkDisable,
+    handleBulkDelete,
 
     // Ações
     handleDelete,
