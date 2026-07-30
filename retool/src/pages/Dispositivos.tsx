@@ -169,8 +169,10 @@ export function Dispositivos() {
 
         <FocusableList
           items={paginatedDispositivos}
-          ariaLabel="Lista de dispositivos. Use setas para navegar e Enter para abrir detalhes."
+          ariaLabel="Lista de dispositivos. Use setas para navegar, Enter para detalhes, D para excluir e E para editar."
           onItemAction={(disp) => navigate(`/dispositivos/${disp.id}`)}
+          onDeleteItem={(disp) => setDispToDelete(disp.id)}
+          onEditItem={(disp) => openDispForm(disp.id)}
           renderItem={(disp, idx, isFocused) => {
             const cat = categorias.find(c => c.id === disp.categoriaId);
             const fam = familias.find(f => f.id === disp.familiaId);

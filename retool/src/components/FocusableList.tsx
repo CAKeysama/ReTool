@@ -5,10 +5,12 @@ interface FocusableListProps<T> {
   items: T[];
   renderItem: (item: T, index: number, isFocused: boolean) => React.ReactNode;
   onItemAction?: (item: T) => void;
+  onDeleteItem?: (item: T) => void;
+  onEditItem?: (item: T) => void;
   ariaLabel?: string;
 }
 
-export function FocusableList<T>({ items, renderItem, onItemAction, ariaLabel }: FocusableListProps<T>) {
+export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem, onEditItem, ariaLabel }: FocusableListProps<T>) {
   const { activeIndex, setActiveIndex, containerRef, handleKeyDown } = useKeyboardNavigation<HTMLUListElement>(items.length, 1);
 
   if (items.length === 0) {
@@ -45,6 +47,18 @@ export function FocusableList<T>({ items, renderItem, onItemAction, ariaLabel }:
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 onItemAction && onItemAction(item);
+              }
+              // D = deletar item focado
+              if (e.key === 'd' || e.key === 'D') {
+                e.preventDefault();
+                e.stopPropagation(); // impede o atalho global de navegar para /dispositivos
+                onDeleteItem && onDeleteItem(item);
+              }
+              // E = editar item focado
+              if (e.key === 'e' || e.key === 'E') {
+                e.preventDefault();
+                e.stopPropagation();
+                onEditItem && onEditItem(item);
               }
             }}
             style={{
