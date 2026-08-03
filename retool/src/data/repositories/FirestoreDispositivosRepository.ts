@@ -8,10 +8,48 @@ import { Produto } from '../../domain/entities/produto';
 import { IDispositivosRepository } from '../../domain/repositories/IDispositivosRepository';
 
 export class FirestoreDispositivosRepository implements IDispositivosRepository {
+  // Referência ao callback atual do listener para permitir pausar/retomar
+  private _listenerCallback: ((dispositivos: Dispositivo[]) => void) | null = null;
+  private _unsubscribe: (() => void) | null = null;
+
   subscribeAll(callback: (dispositivos: Dispositivo[]) => void): () => void {
-    return onSnapshot(collection(db, 'dispositivos'), (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Dispositivo)));
+    this._listenerCallback = callback;
+    const unsub = onSnapshot(collection(db, 'dispositivos'), (snapshot) => {
+      if (this._listenerCallback) {
+        this._listenerCallback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Dispositivo)));
+      }
     });
+    this._unsubscribe = unsub;
+    return () => {
+      this._unsubscribe?.();
+      this._listenerCallback = null;
+      this._unsubscribe = null;
+    };
+  }
+
+  /**
+   * Pausa o listener em tempo real para evitar WebChannel 404 durante writes massivos.
+   * O Firestore tenta entregar cada documento escrito em tempo real — com 472k docs
+   * isso mata a conexão WebChannel. Pausar previne esse problema.
+   */
+  pauseListener(): void {
+    this._unsubscribe?.();
+    this._unsubscribe = null;
+  }
+
+  /**
+   * Retoma o listener após uma operação em massa.
+   * Dispara imediatamente um snapshot completo com o estado atual do banco.
+   */
+  resumeListener(): void {
+    if (!this._listenerCallback) return;
+    const cb = this._listenerCallback;
+    const unsub = onSnapshot(collection(db, 'dispositivos'), (snapshot) => {
+      if (this._listenerCallback) {
+        this._listenerCallback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Dispositivo)));
+      }
+    });
+    this._unsubscribe = unsub;
   }
 
   async add(data: Omit<Dispositivo, 'id' | 'dataCriacao'>): Promise<string> {
@@ -27,6 +65,52 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
 
   async delete(id: string): Promise<void> {
     await deleteDoc(doc(db, 'dispositivos', id));
+  }
+
+  /**
+   * Deleta múltiplos dispositivos em lotes de 500 (limite do Firestore writeBatch).
+   * Executa até 5 lotes em paralelo para maximizar a velocidade.
+   * @param ids Lista de IDs a deletar
+   * @param onProgress Callback opcional para rastrear progresso (quantos deletados até agora)
+   */
+  async deleteLote(
+    ids: string[],
+    onProgress?: (done: number) => void
+  ): Promise<void> {
+    const BATCH_SIZE = 500;
+    const CONCURRENCY = 5; // lotes paralelos simultâneos
+
+    // Monta os lotes de 500
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      chunks.push(ids.slice(i, i + BATCH_SIZE));
+    }
+
+    let totalDone = 0;
+
+    // Pausa o listener para evitar WebChannel 404 durante writes massivos
+    this.pauseListener();
+    try {
+      // Processa em grupos de CONCURRENCY lotes simultâneos
+      for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+        const group = chunks.slice(i, i + CONCURRENCY);
+
+        await Promise.all(
+          group.map(async (chunk) => {
+            const batch = writeBatch(db);
+            for (const id of chunk) {
+              batch.delete(doc(db, 'dispositivos', id));
+            }
+            await batch.commit();
+            totalDone += chunk.length;
+            onProgress?.(totalDone);
+          })
+        );
+      }
+    } finally {
+      // Retoma o listener — dispara um snapshot único com o estado final
+      this.resumeListener();
+    }
   }
 
   async importarLote(
@@ -149,116 +233,94 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
       if (prodCount > 0) await prodBatch.commit();
     }
 
-    // 2. Processar dispositivos em lotes de 500
-    let batch = writeBatch(db);
-    let opCount = 0;
-    let sucesso = 0;
-    
-    // Pegar dispositivos atuais para atualizar se existir
-    let currentDispositivos: Dispositivo[] = [];
-    const unsub = onSnapshot(collection(db, 'dispositivos'), (snapshot) => {
-      currentDispositivos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Dispositivo));
-    });
-    // Wait briefly or query manually (to be safe and pure since onSnapshot is async, but we can query it)
-    // Actually, since this runs in the context provider or we already have the state passed down, we don't need a new onSnapshot inside!
-    // Wait, the parameter "novosDispositivos" can match against the "dispositivos" array in the db.
-    // Let's pass the current devices from the call! Wait, can we? Let's check. Yes, it's already a parameter: we can add `currentDispositivos` as an argument or query it.
-    // Let's look at the method signature:
-    // importarLote(novosDispositivos, newCategoriasNomes, newFamiliasNomes, newProdutosNomes, categoriasExistentes, familiasExistentes, produtosExistentes)
-    // Let's just fetch all devices once using a simple getDocs query or pass currentDispositivos from the UI.
-    // Passing currentDispositivos from UI or another snapshot listener is very easy and aligns with current architecture. Let's update the signature to pass currentDispositivos as well!
-    unsub(); // Clean up dummy onSnapshot
+    // 2. Processar dispositivos — pausa listener para evitar WebChannel 404
+    this.pauseListener();
+    try {
+      let sucesso = 0;
 
-    // Wait! Let's get the list of current devices from the parameter or by querying. Let's query them using getDocs to make the repository call self-contained and not depend on UI state!
-    // Yes, querying via getDocs is much cleaner and avoids passing large arrays from React state.
-    // Wait, let's import getDocs and query from firebase.
-    // Let's do that!
-    
-    const { getDocs } = await import('firebase/firestore');
-    const dispSnapshot = await getDocs(collection(db, 'dispositivos'));
-    const dbDispositivos = dispSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Dispositivo));
+      // Busca snapshot dos dispositivos atuais uma única vez (para upsert)
+      const { getDocs } = await import('firebase/firestore');
+      const dispSnapshot = await getDocs(collection(db, 'dispositivos'));
+      const dbDispositivos = dispSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Dispositivo));
 
-    for (const disp of novosDispositivos) {
-      if (disp.categoriaId) {
-        if (categoriasCriadas.has(disp.categoriaId)) {
-          disp.categoriaId = categoriasCriadas.get(disp.categoriaId);
-        } else {
-          let foundId = null;
-          for (const [nomeCat, catId] of categoriasCriadas.entries()) {
-            if (nomeCat.toLowerCase().trim() === disp.categoriaId.toLowerCase().trim()) {
-              foundId = catId;
-              break;
+      // Resolve IDs de categorias/famílias/produtos em cada dispositivo
+      for (const disp of novosDispositivos) {
+        if (disp.categoriaId) {
+          if (categoriasCriadas.has(disp.categoriaId)) {
+            disp.categoriaId = categoriasCriadas.get(disp.categoriaId);
+          } else {
+            for (const [nomeCat, catId] of categoriasCriadas.entries()) {
+              if (nomeCat.toLowerCase().trim() === disp.categoriaId.toLowerCase().trim()) {
+                disp.categoriaId = catId;
+                break;
+              }
             }
           }
-          if (foundId) disp.categoriaId = foundId;
         }
-      }
-      
-      if (disp.familiaId) {
-        if (familiasCriadas.has(disp.familiaId)) {
-          disp.familiaId = familiasCriadas.get(disp.familiaId);
-        } else {
-          let foundId = null;
-          for (const [nomeFam, famId] of familiasCriadas.entries()) {
-            if (nomeFam.toLowerCase().trim() === disp.familiaId.toLowerCase().trim()) {
-              foundId = famId;
-              break;
+
+        if (disp.familiaId) {
+          if (familiasCriadas.has(disp.familiaId)) {
+            disp.familiaId = familiasCriadas.get(disp.familiaId);
+          } else {
+            for (const [nomeFam, famId] of familiasCriadas.entries()) {
+              if (nomeFam.toLowerCase().trim() === disp.familiaId.toLowerCase().trim()) {
+                disp.familiaId = famId;
+                break;
+              }
             }
           }
-          if (foundId) disp.familiaId = foundId;
+        }
+
+        if (disp.produtoId) {
+          if (produtosCriados.has(disp.produtoId)) {
+            disp.produtoId = produtosCriados.get(disp.produtoId);
+          } else {
+            for (const [nomeProd, prodId] of produtosCriados.entries()) {
+              if (nomeProd.toLowerCase().trim() === disp.produtoId.toLowerCase().trim()) {
+                disp.produtoId = prodId;
+                break;
+              }
+            }
+          }
         }
       }
 
-      if (disp.produtoId) {
-        if (produtosCriados.has(disp.produtoId)) {
-          disp.produtoId = produtosCriados.get(disp.produtoId);
-        } else {
-          let foundId = null;
-          for (const [nomeProd, prodId] of produtosCriados.entries()) {
-            if (nomeProd.toLowerCase().trim() === disp.produtoId.toLowerCase().trim()) {
-              foundId = prodId;
-              break;
+      // Prepara todos os documentos
+      const BATCH_SIZE = 500;
+      const CONCURRENCY = 5;
+
+      // Divide em chunks de 500
+      const chunks: Partial<Dispositivo>[][] = [];
+      for (let i = 0; i < novosDispositivos.length; i += BATCH_SIZE) {
+        chunks.push(novosDispositivos.slice(i, i + BATCH_SIZE));
+      }
+
+      // Processa em grupos de CONCURRENCY batches paralelos
+      for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+        const group = chunks.slice(i, i + CONCURRENCY);
+        await Promise.all(
+          group.map(async (chunk) => {
+            const batch = writeBatch(db);
+            for (const disp of chunk) {
+              // Cada linha é um dispositivo único — sempre cria novo (sem upsert por código/nome)
+              const newId = uuidv4();
+              const docRef = doc(db, 'dispositivos', newId);
+              batch.set(docRef, {
+                ...disp,
+                id: newId,
+                dataCriacao: new Date().toISOString()
+              });
             }
-          }
-          if (foundId) disp.produtoId = foundId;
-        }
+            await batch.commit();
+            sucesso += chunk.length;
+          })
+        );
       }
 
-      let existingDisp = null;
-      if (disp.codigo) {
-        existingDisp = dbDispositivos.find(d => d.codigo === disp.codigo);
-      }
-      if (!existingDisp && disp.nome) {
-        existingDisp = dbDispositivos.find(d => d.nome === disp.nome);
-      }
-
-      const docRef = existingDisp 
-        ? doc(db, 'dispositivos', existingDisp.id)
-        : doc(db, 'dispositivos', uuidv4());
-        
-      const dataToSave = existingDisp 
-        ? { ...disp } 
-        : { ...disp, dataCriacao: new Date().toISOString() };
-
-      if (!existingDisp) {
-        (dataToSave as any).id = docRef.id;
-      }
-
-      batch.set(docRef, dataToSave, { merge: true });
-      opCount++;
-      sucesso++;
-
-      if (opCount === 500) {
-        await batch.commit();
-        batch = writeBatch(db);
-        opCount = 0;
-      }
+      return { sucesso, erros: 0 };
+    } finally {
+      // Retoma o listener — dispara um único snapshot com o estado final
+      this.resumeListener();
     }
-
-    if (opCount > 0) {
-      await batch.commit();
-    }
-
-    return { sucesso, erros: 0 };
   }
 }

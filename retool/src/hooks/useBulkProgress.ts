@@ -39,5 +39,5 @@ export function useBulkProgress(batchSize = 5) {
     setProgress(null);
   }, [batchSize]);
 
-  return { progress, runWithProgress };
+  return { progress, setProgress, runWithProgress };
 }

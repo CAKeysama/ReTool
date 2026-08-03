@@ -5,7 +5,7 @@ import { useHotkeys } from '../../hooks/useHotkeys';
 import { useBulkProgress } from '../../hooks/useBulkProgress';
 
 export function useDispositivosController() {
-  const { dispositivos, categorias, familias, produtos, deleteDispositivo, updateDispositivo, openDispForm, deleteAllData, announce } = useReTool();
+  const { dispositivos, categorias, familias, produtos, deleteDispositivo, updateDispositivo, openDispForm, deleteAllData, announce, deletarDispositivosEmLote } = useReTool();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -36,7 +36,7 @@ export function useDispositivosController() {
   const [bulkSearch, setBulkSearch] = useState('');
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState<'disable' | 'delete' | null>(null);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
-  const { progress: bulkProgress, runWithProgress } = useBulkProgress();
+  const { progress: bulkProgress, setProgress, runWithProgress } = useBulkProgress();
 
   // Filtro interno do modal de bulk
   const bulkFilteredDispositivos = useMemo(() => {
@@ -102,11 +102,20 @@ export function useDispositivosController() {
   const handleBulkDelete = async () => {
     setIsBulkLoading(true);
     const ids = Array.from(bulkSelected);
-    const useSilent = ids.length > BULK_THRESHOLD;
+    const total = ids.length;
+
+    // Inicializa o progresso
+    setProgress({ done: 0, total });
     try {
-      await runWithProgress(ids, id => deleteDispositivo(id, useSilent));
-      if (useSilent) announce(`${ids.length} dispositivos excluídos com sucesso`);
+      await deletarDispositivosEmLote(ids, (done, t) => {
+        setProgress({ done, total: t });
+      });
     } finally {
+      // Garante 100% visível brevemente antes de fechar
+      setProgress({ done: total, total });
+      await new Promise(res => setTimeout(res, 350));
+      setProgress(null);
+
       setIsBulkLoading(false);
       setIsBulkConfirmOpen(null);
       closeBulkModal();

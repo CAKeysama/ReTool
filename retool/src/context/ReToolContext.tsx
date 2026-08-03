@@ -31,6 +31,7 @@ interface ReToolContextType {
   addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'>) => Promise<void>;
   updateDispositivo: (id: string, data: Partial<Dispositivo>, silent?: boolean) => Promise<void>;
   deleteDispositivo: (id: string, silent?: boolean) => Promise<void>;
+  deletarDispositivosEmLote: (ids: string[], onProgress?: (done: number, total: number) => void) => Promise<void>;
   addCategoria: (data: Omit<Categoria, 'id'>) => Promise<string>;
   updateCategoria: (id: string, data: Partial<Categoria>, silent?: boolean) => Promise<void>;
   deleteCategoria: (id: string, silent?: boolean) => Promise<void>;
@@ -133,6 +134,40 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       await Promise.all(relacoes.map(u => utilizacoesRepo.delete(u.id)));
     }
     if (!silent) announce('Dispositivo removido com sucesso');
+  };
+
+  /**
+   * Deleta múltiplos dispositivos em lotes de 500 usando writeBatch (muito mais rápido).
+   * Também remove as utilizações relacionadas em lote.
+   */
+  const deletarDispositivosEmLote = async (
+    ids: string[],
+    onProgress?: (done: number, total: number) => void
+  ) => {
+    const total = ids.length;
+
+    // Deletar os dispositivos usando writeBatch em paralelo
+    await dispositivosRepo.deleteLote(ids, (done) => onProgress?.(done, total));
+
+    // Deletar utilizações associadas em lote
+    const idsSet = new Set(ids);
+    const utilizacoesRelacionadas = utilizacoes
+      .filter(u => idsSet.has(u.dispositivoId))
+      .map(u => u.id);
+
+    if (utilizacoesRelacionadas.length > 0) {
+      const { db } = await import('../data/datasources/firebase');
+      const { writeBatch: wb, doc: d } = await import('firebase/firestore');
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < utilizacoesRelacionadas.length; i += BATCH_SIZE) {
+        const chunk = utilizacoesRelacionadas.slice(i, i + BATCH_SIZE);
+        const batch = wb(db);
+        chunk.forEach(uid => batch.delete(d(db, 'utilizacoes', uid)));
+        await batch.commit();
+      }
+    }
+
+    announce(`${total} dispositivo${total !== 1 ? 's' : ''} excluído${total !== 1 ? 's' : ''} com sucesso`);
   };
 
   const addCategoria = async (data: Omit<Categoria, 'id'>) => {
@@ -280,7 +315,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   return (
     <ReToolContext.Provider value={{
       dispositivos, categorias, tipos, familias, produtos, utilizacoes,
-      addDispositivo, updateDispositivo, deleteDispositivo,
+      addDispositivo, updateDispositivo, deleteDispositivo, deletarDispositivosEmLote,
       addCategoria, updateCategoria, deleteCategoria,
       addTipo, updateTipo, deleteTipo,
       addFamilia, updateFamilia, deleteFamilia,

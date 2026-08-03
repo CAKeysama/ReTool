@@ -81,7 +81,9 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
     reader.onload = (e) => {
       try {
         const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
+        // Usar ArrayBuffer (recomendado pelo SheetJS para arquivos grandes)
+        // 'binary' + readAsBinaryString trunca arquivos com +17.500 linhas no browser
+        const workbook = XLSX.read(new Uint8Array(data as ArrayBuffer), { type: 'array', cellDates: false, dense: false });
         
         const devices: Partial<Dispositivo>[] = [];
         const missingCategories = new Set<string>();
@@ -188,9 +190,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                   : [];
 
                 if (codigo || nome) {
-                  const existingIdx = devices.findIndex(d => d.codigo === codigo && d.nome === nome);
-                  
-                  const deviceObj = {
+                  devices.push({
                     familiaId: famId,
                     produtoId: prodId,
                     categoriaId: catId,
@@ -201,13 +201,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                     palavrasChave: palavrasChave,
                     imagemPeca: '',
                     imagemDispositivo: ''
-                  };
-
-                  if (existingIdx >= 0) {
-                     devices[existingIdx] = { ...devices[existingIdx], ...deviceObj };
-                  } else {
-                     devices.push(deviceObj);
-                  }
+                  });
                 }
               } catch (rowErr) {
                 console.warn(`Erro ao processar linha Tabular ${index + 2} na aba ${sheetName}:`, rowErr);
@@ -231,7 +225,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
         setErrorMsg('Ocorreu um erro ao ler o arquivo. Verifique o formato.');
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const handleConfirm = async () => {
