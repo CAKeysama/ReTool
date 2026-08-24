@@ -6,7 +6,7 @@ export const mockDbState = {
   tipos: [] as any[],
   familias: [] as any[],
   produtos: [] as any[],
-  utilizacoes: [] as any[],
+  reutilizacoes: [] as any[],
 };
 
 export const resetMockDb = () => {
@@ -15,7 +15,7 @@ export const resetMockDb = () => {
   mockDbState.tipos = [];
   mockDbState.familias = [];
   mockDbState.produtos = [];
-  mockDbState.utilizacoes = [];
+  mockDbState.reutilizacoes = [];
 };
 
 // Mock do módulo 'uuid' globalmente para evitar SyntaxError por causa do ESM

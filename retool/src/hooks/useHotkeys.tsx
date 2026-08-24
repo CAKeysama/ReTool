@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
   / -> focus na busca
   H -> Home
   D -> Dispositivos
-  U -> Utilizações
+  U -> Reutilizações
   C -> Categorias
   N -> Novo registro
   Esc -> Close
@@ -51,7 +51,7 @@ export function useHotkeys(config?: HotkeysConfig) {
           navigate('/dispositivos');
           break;
         case 'u':
-          navigate('/utilizacoes');
+          navigate('/reutilizacoes');
           break;
         case 'c':
           navigate('/categorias');

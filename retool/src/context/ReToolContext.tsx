@@ -4,13 +4,13 @@ import { Categoria, Tipo } from '../domain/entities/categoria';
 import { Familia } from '../domain/entities/familia';
 import { Produto } from '../domain/entities/produto';
 import { Dispositivo } from '../domain/entities/dispositivo';
-import { Utilizacao } from '../domain/entities/utilizacao';
+import { Reutilizacao } from '../domain/entities/reutilizacao';
 
 import { FirestoreDispositivosRepository } from '../data/repositories/FirestoreDispositivosRepository';
 import { FirestoreCategoriasRepository } from '../data/repositories/FirestoreCategoriasRepository';
 import { FirestoreFamiliasRepository } from '../data/repositories/FirestoreFamiliasRepository';
 import { FirestoreProdutosRepository } from '../data/repositories/FirestoreProdutosRepository';
-import { FirestoreUtilizacoesRepository } from '../data/repositories/FirestoreUtilizacoesRepository';
+import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
 import { ImportarLoteUseCase } from '../application/usecases/ImportarLoteUseCase';
 
 // Inicialização de Repositórios e Casos de Uso (Interface Adapters / Application Layer)
@@ -18,7 +18,7 @@ const dispositivosRepo = new FirestoreDispositivosRepository();
 const categoriasRepo = new FirestoreCategoriasRepository();
 const familiasRepo = new FirestoreFamiliasRepository();
 const produtosRepo = new FirestoreProdutosRepository();
-const utilizacoesRepo = new FirestoreUtilizacoesRepository();
+const reutilizacoesRepo = new FirestoreReutilizacoesRepository();
 const importarLoteUseCase = new ImportarLoteUseCase(dispositivosRepo);
 
 interface ReToolContextType {
@@ -27,7 +27,7 @@ interface ReToolContextType {
   tipos: Tipo[];
   familias: Familia[];
   produtos: Produto[];
-  utilizacoes: Utilizacao[];
+  reutilizacoes: Reutilizacao[];
   addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'>) => Promise<void>;
   updateDispositivo: (id: string, data: Partial<Dispositivo>, silent?: boolean) => Promise<void>;
   deleteDispositivo: (id: string, silent?: boolean) => Promise<void>;
@@ -43,9 +43,9 @@ interface ReToolContextType {
   addProduto: (data: Omit<Produto, 'id'>) => Promise<string>;
   updateProduto: (id: string, data: Partial<Produto>, silent?: boolean) => Promise<void>;
   deleteProduto: (id: string, silent?: boolean) => Promise<void>;
-  addUtilizacao: (data: Omit<Utilizacao, 'id' | 'dataCriacao'>) => Promise<void>;
-  updateUtilizacao: (id: string, data: Partial<Utilizacao>) => Promise<void>;
-  deleteUtilizacao: (id: string, silent?: boolean) => Promise<void>;
+  addReutilizacao: (data: Omit<Reutilizacao, 'id' | 'dataCriacao'>) => Promise<void>;
+  updateReutilizacao: (id: string, data: Partial<Reutilizacao>) => Promise<void>;
+  deleteReutilizacao: (id: string, silent?: boolean) => Promise<void>;
   importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<{ sucesso: number, erros: number }>;
   deleteAllData: () => Promise<void>;
   announce: (message: string, showToast?: boolean) => void;
@@ -64,7 +64,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   const [tipos, setTipos] = useState<Tipo[]>([]);
   const [familias, setFamilias] = useState<Familia[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [utilizacoes, setUtilizacoes] = useState<Utilizacao[]>([]);
+  const [reutilizacoes, setReutilizacoes] = useState<Reutilizacao[]>([]);
 
   const [announcement, setAnnouncement] = useState('');
   const [toasts, setToasts] = useState<{id: string; text: string}[]>([]);
@@ -100,7 +100,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     const unsubCat = categoriasRepo.subscribeCategorias(setCategorias);
     const unsubTipos = categoriasRepo.subscribeTipos(setTipos);
     const unsubDisp = dispositivosRepo.subscribeAll(setDispositivos);
-    const unsubUtil = utilizacoesRepo.subscribeAll(setUtilizacoes);
+    const unsubUtil = reutilizacoesRepo.subscribeAll(setReutilizacoes);
     const unsubFam = familiasRepo.subscribeAll(setFamilias);
     const unsubProd = produtosRepo.subscribeAll(setProdutos);
 
@@ -127,10 +127,10 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   const deleteDispositivo = async (id: string, silent = false) => {
     await dispositivosRepo.delete(id);
     
-    // Deletar relações de utilização associadas
-    const relacoes = utilizacoes.filter(u => u.dispositivoId === id);
+    // Deletar relações de reutilização associadas
+    const relacoes = reutilizacoes.filter(u => u.dispositivoId === id);
     if (relacoes.length > 0) {
-      await Promise.all(relacoes.map(u => utilizacoesRepo.delete(u.id)));
+      await Promise.all(relacoes.map(u => reutilizacoesRepo.delete(u.id)));
     }
     if (!silent) announce('Dispositivo removido com sucesso');
   };
@@ -198,19 +198,19 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     if (!silent) announce('Produto removido com sucesso');
   };
 
-  const addUtilizacao = async (data: Omit<Utilizacao, 'id' | 'dataCriacao'>) => {
-    await utilizacoesRepo.add(data);
-    announce('Utilização adicionada com sucesso');
+  const addReutilizacao = async (data: Omit<Reutilizacao, 'id' | 'dataCriacao'>) => {
+    await reutilizacoesRepo.add(data);
+    announce('Reutilização adicionada com sucesso');
   };
 
-  const updateUtilizacao = async (id: string, data: Partial<Utilizacao>) => {
-    await utilizacoesRepo.update(id, data);
-    announce('Utilização atualizada com sucesso');
+  const updateReutilizacao = async (id: string, data: Partial<Reutilizacao>) => {
+    await reutilizacoesRepo.update(id, data);
+    announce('Reutilização atualizada com sucesso');
   };
 
-  const deleteUtilizacao = async (id: string, silent = false) => {
-    await utilizacoesRepo.delete(id);
-    if (!silent) announce('Utilização removida com sucesso');
+  const deleteReutilizacao = async (id: string, silent = false) => {
+    await reutilizacoesRepo.delete(id);
+    if (!silent) announce('Reutilização removida com sucesso');
   };
 
   const importarDispositivosEmLote = async (
@@ -249,7 +249,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         ...tipos.map(t => ({ col: 'tipos', id: t.id })),
         ...familias.map(f => ({ col: 'familias', id: f.id })),
         ...produtos.map(p => ({ col: 'produtos', id: p.id })),
-        ...utilizacoes.map(u => ({ col: 'utilizacoes', id: u.id }))
+        ...reutilizacoes.map(u => ({ col: 'reutilizacoes', id: u.id }))
       ];
 
       let batch = writeBatch(db);
@@ -279,13 +279,13 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <ReToolContext.Provider value={{
-      dispositivos, categorias, tipos, familias, produtos, utilizacoes,
+      dispositivos, categorias, tipos, familias, produtos, reutilizacoes,
       addDispositivo, updateDispositivo, deleteDispositivo,
       addCategoria, updateCategoria, deleteCategoria,
       addTipo, updateTipo, deleteTipo,
       addFamilia, updateFamilia, deleteFamilia,
       addProduto, updateProduto, deleteProduto,
-      addUtilizacao, updateUtilizacao, deleteUtilizacao,
+      addReutilizacao, updateReutilizacao, deleteReutilizacao,
       importarDispositivosEmLote, deleteAllData,
       announce, announcement,
       isDispFormOpen, editingDispId, openDispForm, closeDispForm

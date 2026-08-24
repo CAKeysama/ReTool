@@ -36,9 +36,9 @@ export function Layout() {
               </NavLink>
             </li>
             <li>
-              <NavLink to="/utilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+              <NavLink to="/reutilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
                 <List size={24} />
-                <span>Utilizações</span>
+                <span>Reutilizações</span>
               </NavLink>
             </li>
             <li>
@@ -83,7 +83,7 @@ export function Layout() {
               <SidebarLink to="/dispositivos" icon={<Component size={18} />} label="Dispositivos" shortcut="D" />
             </li>
             <li>
-              <SidebarLink to="/utilizacoes" icon={<List size={18} />} label="Utilizações" shortcut="U" />
+              <SidebarLink to="/reutilizacoes" icon={<List size={18} />} label="Reutilizações" shortcut="U" />
             </li>
             <li>
               <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" />
@@ -123,9 +123,9 @@ export function Layout() {
             </NavLink>
           </li>
           <li>
-            <NavLink to="/utilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+            <NavLink to="/reutilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
               <List size={24} />
-              <span>Utilizações</span>
+              <span>Reutilizações</span>
             </NavLink>
           </li>
           <li>

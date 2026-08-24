@@ -6,7 +6,7 @@ import { Home } from './pages/Home';
 import { Dispositivos } from './pages/Dispositivos';
 import { DispositivoDetails } from './pages/DispositivoDetails';
 import { Categorias } from './pages/Categorias';
-import { Utilizacoes } from './pages/Utilizacoes';
+import { Reutilizacoes } from './pages/Reutilizacoes';
 import { Sobre } from './pages/Sobre';
 
 function App() {
@@ -23,7 +23,7 @@ function App() {
             <Route path="dispositivos/:id" element={<DispositivoDetails />} />
             
             <Route path="categorias" element={<Categorias />} />
-            <Route path="utilizacoes" element={<Utilizacoes />} />
+            <Route path="reutilizacoes" element={<Reutilizacoes />} />
           </Route>
         </Routes>
       </BrowserRouter>
