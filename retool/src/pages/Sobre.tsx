@@ -118,7 +118,9 @@ export function Sobre() {
           <ul style={{ listStyleType: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.95rem', color: 'var(--color-text-dark)' }}>
             <li>• Rodrigo Vidrich</li>
             <li>• Gabriela Carvalho</li>
-            <li>• Viniccius</li>
+            <li>• Vinicius Urbano</li>
+            <li>• Flávio Gonella</li>
+            <li>• Bruno Phelipe</li>
           </ul>
         </section>
       </div>
