@@ -126,4 +126,19 @@ jest.mock('firebase/app', () => ({
 
 jest.mock('firebase/storage', () => ({
   getStorage: jest.fn(() => ({})),
+  ref: jest.fn((storage: any, path: string) => ({ fullPath: path })),
+  uploadBytesResumable: jest.fn((storageRef: any) => ({
+    snapshot: { ref: storageRef },
+    on: jest.fn((event: string, progressCb: any, errorCb: any, completeCb: any) => {
+      if (progressCb) {
+        progressCb({ bytesTransferred: 100, totalBytes: 100 });
+      }
+      if (completeCb) {
+        completeCb();
+      }
+    }),
+  })),
+  getDownloadURL: jest.fn(async (storageRef: any) => `https://firebasestorage.googleapis.com/v0/b/mock-bucket/o/${encodeURIComponent(storageRef?.fullPath || 'mock')}`),
+  deleteObject: jest.fn(async () => {}),
+  listAll: jest.fn(async () => ({ items: [], prefixes: [] })),
 }));

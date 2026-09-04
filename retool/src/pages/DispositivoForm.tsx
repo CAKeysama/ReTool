@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useReTool } from '../context/ReToolContext';
 import { Dispositivo } from '../domain/entities/dispositivo';
+import { FileAttachment } from '../domain/entities/fileAttachment';
 import { AccessibleModal } from '../components/AccessibleModal';
-import { Upload, ImageIcon, Plus, X, Loader2 } from 'lucide-react';
-import { storage } from '../config/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { FileUploadDropzone } from '../components/FileUploadDropzone';
+import { Plus, X, Loader2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export function DispositivoForm() {
@@ -12,6 +12,9 @@ export function DispositivoForm() {
   
   const isEditing = Boolean(editingDispId);
   const dispEdicao = isEditing ? dispositivos.find(p => p.id === editingDispId) : null;
+
+  // Garante um ID único estável para o dispositivo e sua pasta no Storage
+  const deviceStorageId = useMemo(() => editingDispId || uuidv4(), [editingDispId]);
 
   const [formData, setFormData] = useState<Partial<Dispositivo>>({
     nome: '',
@@ -25,6 +28,7 @@ export function DispositivoForm() {
     palavrasChave: [],
     imagemPeca: '',
     imagemDispositivo: '',
+    anexos: [],
   });
 
   const [tagInput, setTagInput] = useState('');
@@ -44,19 +48,14 @@ export function DispositivoForm() {
   const [newProdName, setNewProdName] = useState('');
   const [isAddingProd, setIsAddingProd] = useState(false);
 
-  // Uploading states (legacy/kept for safety, though disabled)
-  const [uploadingPeca, setUploadingPeca] = useState(false);
-  const [uploadingDispositivo, setUploadingDispositivo] = useState(false);
-
   const firstInputRef = useRef<HTMLInputElement>(null);
-  const fileInputPecaRef = useRef<HTMLInputElement>(null);
-  const fileInputDispRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isEditing && dispEdicao) {
       setFormData({
         ...dispEdicao,
-        palavrasChave: dispEdicao.palavrasChave || []
+        palavrasChave: dispEdicao.palavrasChave || [],
+        anexos: dispEdicao.anexos || []
       });
     }
   }, [isEditing, dispEdicao]);
@@ -81,12 +80,13 @@ export function DispositivoForm() {
       updateDispositivo(editingDispId, formData);
       closeDispForm();
     } else {
-      addDispositivo(formData as Omit<Dispositivo, 'id' | 'dataCriacao'>);
+      addDispositivo({
+        ...formData,
+        id: deviceStorageId
+      });
       closeDispForm();
     }
   };
-
-
 
   // Tags logic
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -165,17 +165,6 @@ export function DispositivoForm() {
     } finally {
       setIsAddingProd(false);
     }
-  };
-
-  // Upload físico real desativado temporariamente conforme solicitação do usuário
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'imagemPeca' | 'imagemDispositivo') => {
-    // Desativado
-    return;
-  };
-
-  const removeImage = (field: 'imagemPeca' | 'imagemDispositivo') => {
-    // Desativado
-    return;
   };
 
   return (
@@ -475,144 +464,81 @@ export function DispositivoForm() {
             />
           </div>
 
-          {/* Seção Inferior: Mídias (Upload Real de Arquivos Desativado Temporariamente) */}
+          {/* Seção de Mídias e Arquivos (Firebase Storage) */}
           <div style={{ marginTop: '8px' }}>
             <h4 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-primary)', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px', marginBottom: '12px' }}>
-              Upload de Arquivos Físicos (Imagens)
+              Arquivos Físicos e Fotos (Firebase Storage)
             </h4>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              
               {/* IMAGEM PEÇA Dropzone */}
-              <div>
-                <span className="input-label">IMAGEM PEÇA</span>
-                <input 
-                  type="file" 
-                  ref={fileInputPecaRef}
-                  style={{ display: 'none' }}
-                  accept="image/*"
-                  disabled={true}
-                  onChange={(e) => handleFileUpload(e, 'imagemPeca')}
-                />
-                <div 
-                  style={{
-                    border: '2px dashed var(--color-border)',
-                    borderRadius: 'var(--radius)',
-                    padding: '16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: 'rgba(0,0,0,0.02)',
-                    minHeight: '160px',
-                    cursor: 'not-allowed',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    opacity: 0.7,
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {formData.imagemPeca ? (
-                    <>
-                      <img 
-                        src={formData.imagemPeca} 
-                        alt="Peça" 
-                        style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '130px' }} 
-                      />
-                      <button 
-                        type="button" 
-                        className="btn" 
-                        disabled={true}
-                        style={{ position: 'absolute', top: '8px', right: '8px', padding: '2px 8px', fontSize: '0.75rem', height: 'auto', minHeight: 'auto', backgroundColor: 'rgba(255, 255, 255, 0.9)', borderColor: 'var(--color-border)', cursor: 'not-allowed' }}
-                      >
-                        Excluir
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#9ca3af', gap: '6px', textAlign: 'center' }}>
-                      <ImageIcon size={24} />
-                      <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Upload desativado</span>
-                      <span style={{ fontSize: '0.7rem' }}>Aguardando ativação do Firebase Storage</span>
-                    </div>
-                  )}
-                </div>
-                <input 
-                  type="text" 
-                  name="imagemPeca"
-                  className="input-field" 
-                  placeholder="Upload de imagem desabilitado"
-                  style={{ fontSize: '0.8rem', marginTop: '4px', cursor: 'not-allowed', backgroundColor: 'var(--color-hover)' }}
-                  value={formData.imagemPeca || ''} 
-                  disabled={true}
-                  onChange={handleChange}
-                />
-              </div>
+              <FileUploadDropzone
+                categoria="imagem_peca"
+                label="IMAGEM PEÇA"
+                currentValue={formData.imagemPeca}
+                deviceStorageId={deviceStorageId}
+                onUploadSuccess={(attachment) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    imagemPeca: attachment.downloadURL
+                  }));
+                  announce('Imagem da peça enviada com sucesso.');
+                }}
+                onRemoveImage={() => {
+                  setFormData(prev => ({
+                    ...prev,
+                    imagemPeca: ''
+                  }));
+                  announce('Imagem da peça removida.');
+                }}
+              />
 
-              {/* Imagem Dispositivo Dropzone */}
-              <div>
-                <span className="input-label">Imagem dispositivo</span>
-                <input 
-                  type="file" 
-                  ref={fileInputDispRef}
-                  style={{ display: 'none' }}
-                  accept="image/*"
-                  disabled={true}
-                  onChange={(e) => handleFileUpload(e, 'imagemDispositivo')}
-                />
-                <div 
-                  style={{
-                    border: '2px dashed var(--color-border)',
-                    borderRadius: 'var(--radius)',
-                    padding: '16px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: 'rgba(0,0,0,0.02)',
-                    minHeight: '160px',
-                    cursor: 'not-allowed',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    opacity: 0.7,
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  {formData.imagemDispositivo ? (
-                    <>
-                      <img 
-                        src={formData.imagemDispositivo} 
-                        alt="Dispositivo" 
-                        style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '130px' }} 
-                      />
-                      <button 
-                        type="button" 
-                        className="btn" 
-                        disabled={true}
-                        style={{ position: 'absolute', top: '8px', right: '8px', padding: '2px 8px', fontSize: '0.75rem', height: 'auto', minHeight: 'auto', backgroundColor: 'rgba(255, 255, 255, 0.9)', borderColor: 'var(--color-border)', cursor: 'not-allowed' }}
-                      >
-                        Excluir
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#9ca3af', gap: '6px', textAlign: 'center' }}>
-                      <ImageIcon size={24} />
-                      <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Upload desativado</span>
-                      <span style={{ fontSize: '0.7rem' }}>Aguardando ativação do Firebase Storage</span>
-                    </div>
-                  )}
-                </div>
-                <input 
-                  type="text" 
-                  name="imagemDispositivo"
-                  className="input-field" 
-                  placeholder="Upload de imagem desabilitado"
-                  style={{ fontSize: '0.8rem', marginTop: '4px', cursor: 'not-allowed', backgroundColor: 'var(--color-hover)' }}
-                  value={formData.imagemDispositivo || ''} 
-                  disabled={true}
-                  onChange={handleChange}
-                />
-              </div>
+              {/* IMAGEM DISPOSITIVO Dropzone */}
+              <FileUploadDropzone
+                categoria="imagem_dispositivo"
+                label="Imagem dispositivo"
+                currentValue={formData.imagemDispositivo}
+                deviceStorageId={deviceStorageId}
+                onUploadSuccess={(attachment) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    imagemDispositivo: attachment.downloadURL
+                  }));
+                  announce('Imagem do dispositivo enviada com sucesso.');
+                }}
+                onRemoveImage={() => {
+                  setFormData(prev => ({
+                    ...prev,
+                    imagemDispositivo: ''
+                  }));
+                  announce('Imagem do dispositivo removida.');
+                }}
+              />
+            </div>
 
+            {/* Documentos e Manuais Técnicos (PDF) */}
+            <div style={{ marginTop: '16px' }}>
+              <FileUploadDropzone
+                categoria="documento_pdf"
+                label="Documentos Técnicos e Manuais (PDF)"
+                helperText="Anexe ordens de serviço, manuais e desenhos técnicos"
+                currentAttachments={formData.anexos || []}
+                deviceStorageId={deviceStorageId}
+                onUploadSuccess={(attachment) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    anexos: [...(prev.anexos || []), attachment]
+                  }));
+                  announce(`Documento ${attachment.originalName} anexado com sucesso.`);
+                }}
+                onRemoveAttachment={(attachmentId) => {
+                  setFormData(prev => ({
+                    ...prev,
+                    anexos: (prev.anexos || []).filter(a => a.id !== attachmentId)
+                  }));
+                  announce('Documento removido dos anexos.');
+                }}
+              />
             </div>
           </div>
 

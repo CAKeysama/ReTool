@@ -28,7 +28,7 @@ interface ReToolContextType {
   familias: Familia[];
   produtos: Produto[];
   reutilizacoes: Reutilizacao[];
-  addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'>) => Promise<void>;
+  addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }) => Promise<void>;
   updateDispositivo: (id: string, data: Partial<Dispositivo>, silent?: boolean) => Promise<void>;
   deleteDispositivo: (id: string, silent?: boolean) => Promise<void>;
   addCategoria: (data: Omit<Categoria, 'id'>) => Promise<string>;
@@ -114,7 +114,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  const addDispositivo = async (data: Omit<Dispositivo, 'id' | 'dataCriacao'>) => {
+  const addDispositivo = async (data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }) => {
     await dispositivosRepo.add(data);
     announce('Dispositivo adicionado com sucesso');
   };

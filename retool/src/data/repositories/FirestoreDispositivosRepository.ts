@@ -5,6 +5,7 @@ import { Dispositivo } from '../../domain/entities/dispositivo';
 import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
 import { Produto } from '../../domain/entities/produto';
+import { storageService } from '../services/FirebaseStorageService';
 import { IDispositivosRepository } from '../../domain/repositories/IDispositivosRepository';
 
 export class FirestoreDispositivosRepository implements IDispositivosRepository {
@@ -14,8 +15,8 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
     });
   }
 
-  async add(data: Omit<Dispositivo, 'id' | 'dataCriacao'>): Promise<string> {
-    const id = uuidv4();
+  async add(data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }): Promise<string> {
+    const id = data.id || uuidv4();
     const newDevice = { ...data, id, dataCriacao: new Date().toISOString() };
     await setDoc(doc(db, 'dispositivos', id), newDevice);
     return id;
@@ -27,6 +28,7 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
 
   async delete(id: string): Promise<void> {
     await deleteDoc(doc(db, 'dispositivos', id));
+    await storageService.deleteFolder(`retool/dispositivos/${id}`);
   }
 
   async importarLote(

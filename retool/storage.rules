@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /retool/dispositivos/{dispositivoId}/{allPaths=**} {
+      // Leitura pública dos recursos da aplicação Baldan
+      allow read: if true;
+      
+      // Validação rigorosa na criação e atualização
+      allow write: if request.resource.size < 25 * 1024 * 1024 // Limite de 25MB
+                   && (
+                     request.resource.contentType.matches('image/(jpeg|png|webp)')
+                     || request.resource.contentType == 'application/pdf'
+                   );
+      
+      // Exclusão permitida para manutenção e limpeza em cascata
+      allow delete: if true;
+    }
+  }
+}

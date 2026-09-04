@@ -1,3 +1,5 @@
+import { FileAttachment } from './fileAttachment';
+
 export interface Dispositivo {
   id: string;
   nome?: string;
@@ -11,6 +13,8 @@ export interface Dispositivo {
   palavrasChave?: string[];
   imagemPeca?: string;
   imagemDispositivo?: string;
+  anexos?: FileAttachment[];
   dataCriacao?: string;
   ativo?: boolean;
 }
+

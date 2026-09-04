@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
-import { ArrowLeft, Edit, Plus, Box, Key, Trash } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
+import { formatFileSize } from '../utils/fileValidators';
 
 export function DispositivoDetails() {
   const { id } = useParams();
@@ -197,24 +198,101 @@ export function DispositivoDetails() {
             </div>
           )}
 
-          {/* Seção de Mídia Relacionada */}
-          {(disp.imagemPeca || disp.imagemDispositivo) && (
+          {/* Seção de Mídia Relacionada (Imagens e Documentos) */}
+          {(disp.imagemPeca || disp.imagemDispositivo || (disp.anexos && disp.anexos.length > 0)) && (
             <div style={{ marginTop: 'var(--spacing-lg)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-md)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: 'var(--spacing-sm)' }}>Mídia Relacionada</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
-                {disp.imagemPeca && (
-                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>IMAGEM PEÇA</span>
-                    <img src={disp.imagemPeca} alt="Imagem da peça" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }} />
-                  </div>
-                )}
-                {disp.imagemDispositivo && (
-                  <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>Imagem dispositivo</span>
-                    <img src={disp.imagemDispositivo} alt="Imagem do dispositivo" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)' }} />
-                  </div>
-                )}
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: 'var(--spacing-sm)' }}>
+                Arquivos e Mídias Anexadas
               </div>
+
+              {/* Fotos da Peça e Dispositivo */}
+              {(disp.imagemPeca || disp.imagemDispositivo) && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', marginBottom: (disp.anexos && disp.anexos.length > 0) ? 'var(--spacing-md)' : '0' }}>
+                  {disp.imagemPeca && (
+                    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', backgroundColor: '#f9fafb' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>IMAGEM PEÇA</span>
+                      <a href={disp.imagemPeca} target="_blank" rel="noopener noreferrer" title="Abrir imagem original">
+                        <img src={disp.imagemPeca} alt="Imagem da peça" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }} />
+                      </a>
+                    </div>
+                  )}
+                  {disp.imagemDispositivo && (
+                    <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', backgroundColor: '#f9fafb' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>Imagem dispositivo</span>
+                      <a href={disp.imagemDispositivo} target="_blank" rel="noopener noreferrer" title="Abrir imagem original">
+                        <img src={disp.imagemDispositivo} alt="Imagem do dispositivo" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }} />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Lista de Documentos e Manuais Técnicos (PDF) */}
+              {disp.anexos && disp.anexos.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: (disp.imagemPeca || disp.imagemDispositivo) ? 'var(--spacing-sm)' : '0' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                    DOCUMENTOS TÉCNICOS & MANUAIS (PDF)
+                  </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '10px' }}>
+                    {disp.anexos.map((anexo) => (
+                      <div
+                        key={anexo.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '10px 14px',
+                          backgroundColor: '#f9fafb',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: '0.85rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                          <FileText size={20} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
+                          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: '160px',
+                                color: 'var(--color-text-dark)',
+                              }}
+                              title={anexo.originalName}
+                            >
+                              {anexo.originalName}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
+                              {formatFileSize(anexo.size)} • {new Date(anexo.uploadedAt).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <a
+                          href={anexo.downloadURL}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-sm"
+                          style={{
+                            padding: '4px 8px',
+                            fontSize: '0.75rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            textDecoration: 'none',
+                          }}
+                          title="Visualizar ou baixar PDF"
+                        >
+                          <ExternalLink size={13} />
+                          <span>Abrir</span>
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
