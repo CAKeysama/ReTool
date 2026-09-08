@@ -100,6 +100,7 @@ export function Sobre() {
                 <li>• Guilherme Pedroso</li>
                 <li>• Luiz Ramos</li>
                 <li>• Pedro Henrique</li>
+                <li>• Ana Beatriz Medeiros</li>
               </ul>
             </div>
             <div>
