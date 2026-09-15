@@ -5,8 +5,10 @@ import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
 import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { ImportModal } from '../components/ImportModal';
+import { usePermissions } from '../hooks/usePermissions';
 
 export function Dispositivos() {
+  const { canCadastrar, canEditar, canExcluir } = usePermissions();
   const {
     categorias,
     familias,
@@ -79,33 +81,39 @@ export function Dispositivos() {
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
 
-            <button 
-              className="btn hide-on-mobile" 
-              onClick={() => setIsImportOpen(true)}
-              aria-label="Importar planilha de dispositivos"
-              style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              <Upload size={18} />
-              <span className="hide-on-mobile">Importar</span>
-            </button>
+            {canCadastrar && (
+              <button 
+                className="btn hide-on-mobile" 
+                onClick={() => setIsImportOpen(true)}
+                aria-label="Importar planilha de dispositivos"
+                style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <Upload size={18} />
+                <span className="hide-on-mobile">Importar</span>
+              </button>
+            )}
 
-            <button
-              className="btn hide-on-mobile"
-              onClick={() => setIsBulkModalOpen(true)}
-              aria-label="Ações em massa"
-              style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              <ListChecks size={18} />
-              <span className="hide-on-mobile">Ações em Massa</span>
-            </button>
+            {canExcluir && (
+              <button
+                className="btn hide-on-mobile"
+                onClick={() => setIsBulkModalOpen(true)}
+                aria-label="Ações em massa"
+                style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <ListChecks size={18} />
+                <span className="hide-on-mobile">Ações em Massa</span>
+              </button>
+            )}
 
-            <button
-              className="btn btn-primary btn-icon"
-              onClick={() => openDispForm()}
-              aria-label="Cadastrar novo dispositivo (Atalho: N)"
-            >
-              <Plus size={20} />
-            </button>
+            {canCadastrar && (
+              <button
+                className="btn btn-primary btn-icon"
+                onClick={() => openDispForm()}
+                aria-label="Cadastrar novo dispositivo (Atalho: N)"
+              >
+                <Plus size={20} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -169,10 +177,10 @@ export function Dispositivos() {
 
         <FocusableList
           items={paginatedDispositivos}
-          ariaLabel="Lista de dispositivos. Use setas para navegar, Enter para detalhes, D para excluir e E para editar."
+          ariaLabel="Lista de dispositivos. Use setas para navegar, Enter para detalhes."
           onItemAction={(disp) => navigate(`/dispositivos/${disp.id}`)}
-          onDeleteItem={(disp) => setDispToDelete(disp.id)}
-          onEditItem={(disp) => openDispForm(disp.id)}
+          onDeleteItem={canExcluir ? (disp) => setDispToDelete(disp.id) : undefined}
+          onEditItem={canEditar ? (disp) => openDispForm(disp.id) : undefined}
           renderItem={(disp, idx, isFocused) => {
             const cat = categorias.find(c => c.id === disp.categoriaId);
             const fam = familias.find(f => f.id === disp.familiaId);
@@ -288,9 +296,11 @@ export function Dispositivos() {
         canDisable={true}
       />
 
-      <button className="fab-button" onClick={() => openDispForm()} aria-label="Cadastrar novo dispositivo">
-        <Plus size={24} />
-      </button>
+      {canCadastrar && (
+        <button className="fab-button" onClick={() => openDispForm()} aria-label="Cadastrar novo dispositivo">
+          <Plus size={24} />
+        </button>
+      )}
     </>
   );
 }

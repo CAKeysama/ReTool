@@ -6,8 +6,10 @@ import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
 import { Plus, Trash, Edit, Info, Check, ListChecks } from 'lucide-react';
 import { useReTool } from '../context/ReToolContext';
 import { useBulkProgress } from '../hooks/useBulkProgress';
+import { usePermissions } from '../hooks/usePermissions';
 
 export function Categorias() {
+  const { canCadastrar, canEditar, canExcluir } = usePermissions();
   const {
     categorias,
     familias,
@@ -235,25 +237,29 @@ export function Categorias() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                className="btn btn-icon"
-                onClick={() => setIsCatBulkOpen(true)}
-                aria-label="Ações em massa para categorias"
-                title="Ações em Massa"
-              >
-                <ListChecks size={16} />
-              </button>
-              <button className="btn btn-primary btn-icon" onClick={() => openCatForm()} aria-label="Criar nova categoria">
-                <Plus size={18} />
-              </button>
+              {canExcluir && (
+                <button
+                  className="btn btn-icon"
+                  onClick={() => setIsCatBulkOpen(true)}
+                  aria-label="Ações em massa para categorias"
+                  title="Ações em Massa"
+                >
+                  <ListChecks size={16} />
+                </button>
+              )}
+              {canCadastrar && (
+                <button className="btn btn-primary btn-icon" onClick={() => openCatForm()} aria-label="Criar nova categoria">
+                  <Plus size={18} />
+                </button>
+              )}
             </div>
           </div>
 
           <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
             <FocusableList 
               items={categorias}
-              ariaLabel="Lista de categorias. Use setas para navegar e Enter para editar."
-              onItemAction={(c) => openCatForm(c.id, c.nome)}
+              ariaLabel="Lista de categorias."
+              onItemAction={canEditar ? (c) => openCatForm(c.id, c.nome) : undefined}
               renderItem={(c, idx, isFocused) => (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: c.ativo === false ? 0.6 : 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
@@ -263,15 +269,17 @@ export function Categorias() {
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                    <button
-                      className="btn btn-icon"
-                      tabIndex={isFocused ? 0 : -1}
-                      onClick={(e) => { e.stopPropagation(); openCatForm(c.id, c.nome); }}
-                      aria-label={`Editar categoria ${c.nome}`}
-                    >
-                      <Edit size={16} />
-                    </button>
-                    {c.ativo === false && (
+                    {canEditar && (
+                      <button
+                        className="btn btn-icon"
+                        tabIndex={isFocused ? 0 : -1}
+                        onClick={(e) => { e.stopPropagation(); openCatForm(c.id, c.nome); }}
+                        aria-label={`Editar categoria ${c.nome}`}
+                      >
+                        <Edit size={16} />
+                      </button>
+                    )}
+                    {canEditar && c.ativo === false && (
                       <button
                         className="btn btn-icon"
                         style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
@@ -282,15 +290,17 @@ export function Categorias() {
                         <Check size={16} />
                       </button>
                     )}
-                    <button
-                      className="btn btn-icon"
-                      style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                      tabIndex={isFocused ? 0 : -1}
-                      onClick={(e) => { e.stopPropagation(); setCatConfirmAction(c); }}
-                      aria-label={c.ativo === false ? `Excluir categoria ${c.nome}` : `Excluir ou desativar categoria ${c.nome}`}
-                    >
-                      <Trash size={16} />
-                    </button>
+                    {canExcluir && (
+                      <button
+                        className="btn btn-icon"
+                        style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                        tabIndex={isFocused ? 0 : -1}
+                        onClick={(e) => { e.stopPropagation(); setCatConfirmAction(c); }}
+                        aria-label={c.ativo === false ? `Excluir categoria ${c.nome}` : `Excluir ou desativar categoria ${c.nome}`}
+                      >
+                        <Trash size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -324,25 +334,29 @@ export function Categorias() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                className="btn btn-icon"
-                onClick={() => setIsFamBulkOpen(true)}
-                aria-label="Ações em massa para famílias"
-                title="Ações em Massa"
-              >
-                <ListChecks size={16} />
-              </button>
-              <button className="btn btn-primary btn-icon" onClick={() => openFamForm()} aria-label="Criar nova família">
-                <Plus size={18} />
-              </button>
+              {canExcluir && (
+                <button
+                  className="btn btn-icon"
+                  onClick={() => setIsFamBulkOpen(true)}
+                  aria-label="Ações em massa para famílias"
+                  title="Ações em Massa"
+                >
+                  <ListChecks size={16} />
+                </button>
+              )}
+              {canCadastrar && (
+                <button className="btn btn-primary btn-icon" onClick={() => openFamForm()} aria-label="Criar nova família">
+                  <Plus size={18} />
+                </button>
+              )}
             </div>
           </div>
 
           <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
             <FocusableList 
               items={familias}
-              ariaLabel="Lista de famílias. Use setas para navegar e Enter para editar."
-              onItemAction={(f) => openFamForm(f.id, f.nome)}
+              ariaLabel="Lista de famílias."
+              onItemAction={canEditar ? (f) => openFamForm(f.id, f.nome) : undefined}
               renderItem={(f, idx, isFocused) => (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: f.ativo === false ? 0.6 : 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
@@ -352,15 +366,17 @@ export function Categorias() {
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                    <button
-                      className="btn btn-icon"
-                      tabIndex={isFocused ? 0 : -1}
-                      onClick={(e) => { e.stopPropagation(); openFamForm(f.id, f.nome); }}
-                      aria-label={`Editar família ${f.nome}`}
-                    >
-                      <Edit size={16} />
-                    </button>
-                    {f.ativo === false && (
+                    {canEditar && (
+                      <button
+                        className="btn btn-icon"
+                        tabIndex={isFocused ? 0 : -1}
+                        onClick={(e) => { e.stopPropagation(); openFamForm(f.id, f.nome); }}
+                        aria-label={`Editar família ${f.nome}`}
+                      >
+                        <Edit size={16} />
+                      </button>
+                    )}
+                    {canEditar && f.ativo === false && (
                       <button
                         className="btn btn-icon"
                         style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
@@ -371,15 +387,17 @@ export function Categorias() {
                         <Check size={16} />
                       </button>
                     )}
-                    <button
-                      className="btn btn-icon"
-                      style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                      tabIndex={isFocused ? 0 : -1}
-                      onClick={(e) => { e.stopPropagation(); setFamConfirmAction(f); }}
-                      aria-label={f.ativo === false ? `Excluir família ${f.nome}` : `Excluir ou desativar família ${f.nome}`}
-                    >
-                      <Trash size={16} />
-                    </button>
+                    {canExcluir && (
+                      <button
+                        className="btn btn-icon"
+                        style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                        tabIndex={isFocused ? 0 : -1}
+                        onClick={(e) => { e.stopPropagation(); setFamConfirmAction(f); }}
+                        aria-label={f.ativo === false ? `Excluir família ${f.nome}` : `Excluir ou desativar família ${f.nome}`}
+                      >
+                        <Trash size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -413,25 +431,29 @@ export function Categorias() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button
-                className="btn btn-icon"
-                onClick={() => setIsProdBulkOpen(true)}
-                aria-label="Ações em massa para produtos"
-                title="Ações em Massa"
-              >
-                <ListChecks size={16} />
-              </button>
-              <button className="btn btn-primary btn-icon" onClick={() => openProdForm()} aria-label="Criar novo produto">
-                <Plus size={18} />
-              </button>
+              {canExcluir && (
+                <button
+                  className="btn btn-icon"
+                  onClick={() => setIsProdBulkOpen(true)}
+                  aria-label="Ações em massa para produtos"
+                  title="Ações em Massa"
+                >
+                  <ListChecks size={16} />
+                </button>
+              )}
+              {canCadastrar && (
+                <button className="btn btn-primary btn-icon" onClick={() => openProdForm()} aria-label="Criar novo produto">
+                  <Plus size={18} />
+                </button>
+              )}
             </div>
           </div>
 
           <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
             <FocusableList 
               items={produtos}
-              ariaLabel="Lista de produtos. Use setas para navegar e Enter para editar."
-              onItemAction={(p) => openProdForm(p.id, p.nome)}
+              ariaLabel="Lista de produtos."
+              onItemAction={canEditar ? (p) => openProdForm(p.id, p.nome) : undefined}
               renderItem={(p, idx, isFocused) => (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: p.ativo === false ? 0.6 : 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
@@ -441,15 +463,17 @@ export function Categorias() {
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                    <button
-                      className="btn btn-icon"
-                      tabIndex={isFocused ? 0 : -1}
-                      onClick={(e) => { e.stopPropagation(); openProdForm(p.id, p.nome); }}
-                      aria-label={`Editar produto ${p.nome}`}
-                    >
-                      <Edit size={16} />
-                    </button>
-                    {p.ativo === false && (
+                    {canEditar && (
+                      <button
+                        className="btn btn-icon"
+                        tabIndex={isFocused ? 0 : -1}
+                        onClick={(e) => { e.stopPropagation(); openProdForm(p.id, p.nome); }}
+                        aria-label={`Editar produto ${p.nome}`}
+                      >
+                        <Edit size={16} />
+                      </button>
+                    )}
+                    {canEditar && p.ativo === false && (
                       <button
                         className="btn btn-icon"
                         style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
@@ -460,15 +484,17 @@ export function Categorias() {
                         <Check size={16} />
                       </button>
                     )}
-                    <button
-                      className="btn btn-icon"
-                      style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                      tabIndex={isFocused ? 0 : -1}
-                      onClick={(e) => { e.stopPropagation(); setProdConfirmAction(p); }}
-                      aria-label={p.ativo === false ? `Excluir produto ${p.nome}` : `Excluir ou desativar produto ${p.nome}`}
-                    >
-                      <Trash size={16} />
-                    </button>
+                    {canExcluir && (
+                      <button
+                        className="btn btn-icon"
+                        style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                        tabIndex={isFocused ? 0 : -1}
+                        onClick={(e) => { e.stopPropagation(); setProdConfirmAction(p); }}
+                        aria-label={p.ativo === false ? `Excluir produto ${p.nome}` : `Excluir ou desativar produto ${p.nome}`}
+                      >
+                        <Trash size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )}

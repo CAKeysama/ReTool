@@ -6,11 +6,24 @@ import { AccessibleModal } from '../components/AccessibleModal';
 import { FileUploadDropzone } from '../components/FileUploadDropzone';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
+import { usePermissions } from '../hooks/usePermissions';
 
 export function DispositivoForm() {
+  const { canCadastrar, canEditar } = usePermissions();
   const { dispositivos, categorias, familias, produtos, addDispositivo, updateDispositivo, addCategoria, addFamilia, addProduto, announce, editingDispId, closeDispForm } = useReTool();
   
   const isEditing = Boolean(editingDispId);
+  const isAllowed = isEditing ? canEditar : canCadastrar;
+
+  useEffect(() => {
+    if (!isAllowed) {
+      announce(isEditing ? 'Seu perfil não tem permissão para editar dispositivos.' : 'Seu perfil não tem permissão para cadastrar dispositivos.');
+      closeDispForm();
+    }
+  }, [isAllowed, isEditing, announce, closeDispForm]);
+
+  if (!isAllowed) return null;
+
   const dispEdicao = isEditing ? dispositivos.find(p => p.id === editingDispId) : null;
 
   // Garante um ID único estável para o dispositivo e sua pasta no Storage

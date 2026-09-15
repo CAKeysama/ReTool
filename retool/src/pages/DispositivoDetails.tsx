@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
-import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink } from 'lucide-react';
+import { usePermissions } from '../hooks/usePermissions';
+import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink, Send } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
+import { SolicitarReutilizacaoModal } from '../components/SolicitarReutilizacaoModal';
 import { formatFileSize } from '../utils/fileValidators';
 
 export function DispositivoDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { dispositivos, categorias, reutilizacoes, familias, produtos, addReutilizacao, deleteReutilizacao, addProduto, openDispForm } = useReTool();
+  const { canCadastrar, canEditar, canExcluir, canSolicitar, isEngenharia } = usePermissions();
+  const { dispositivos, categorias, reutilizacoes, familias, produtos, addReutilizacao, deleteReutilizacao, addProduto, openDispForm, announce } = useReTool();
   
   const disp = dispositivos.find(p => p.id === id);
   const dispReutilizacoes = reutilizacoes.filter(u => u.dispositivoId === id);
@@ -17,6 +20,7 @@ export function DispositivoDetails() {
   const produto = produtos.find(p => p.id === disp?.produtoId);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSolicitarOpen, setIsSolicitarOpen] = useState(false);
   const [novaReutilizacao, setNovaReutilizacao] = useState({
     data: '',
     codigoPeca: '',
@@ -40,6 +44,10 @@ export function DispositivoDetails() {
   }
 
   const openModal = () => {
+    if (!canCadastrar) {
+      announce('Acesso negado: seu perfil não tem permissão para cadastrar reutilizações diretamente.');
+      return;
+    }
     const defaultPeso = disp.peso ? parseFloat(disp.peso.replace(',', '.')) : 0;
     setNovaReutilizacao({
       data: new Date().toISOString().split('T')[0],
@@ -58,6 +66,10 @@ export function DispositivoDetails() {
 
   const handleCreateReutilizacao = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCadastrar) {
+      announce('Acesso negado: seu perfil não tem permissão para cadastrar reutilizações diretamente.');
+      return;
+    }
     let finalProdutoId = novaReutilizacao.produtoId;
     
     if (finalProdutoId === 'custom') {
@@ -123,13 +135,37 @@ export function DispositivoDetails() {
             <div style={{ color: '#9ca3af', fontSize: '0.85rem' }}>{disp.codigo || 'S/C'}</div>
           </div>
         </div>
-        <button 
-          className="btn" 
-          onClick={() => openDispForm(disp.id)}
-          style={{ padding: '6px 16px', borderRadius: '20px', fontSize: '0.85rem' }}
-        >
-          <Edit size={14} /> Editar
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {canSolicitar && isEngenharia && (
+            <button 
+              className="btn" 
+              onClick={() => setIsSolicitarOpen(true)}
+              style={{ 
+                padding: '6px 16px', 
+                borderRadius: '20px', 
+                fontSize: '0.85rem',
+                backgroundColor: '#ea580c',
+                color: 'white',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Send size={14} /> Solicitar Reutilização
+            </button>
+          )}
+
+          {canEditar && (
+            <button 
+              className="btn" 
+              onClick={() => openDispForm(disp.id)}
+              style={{ padding: '6px 16px', borderRadius: '20px', fontSize: '0.85rem' }}
+            >
+              <Edit size={14} /> Editar
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="details-grid">
@@ -350,13 +386,39 @@ export function DispositivoDetails() {
             <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Histórico de Reutilizações</h3>
             <p style={{ color: '#6b7280', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Todas as reutilizações registradas para este dispositivo.</p>
           </div>
-          <button 
-            className="btn btn-primary" 
-            onClick={openModal}
-            aria-label="Registrar Nova Reutilização"
-          >
-            <Plus size={16} /> Nova Reutilização
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {canCadastrar && (
+              <button 
+                className="btn btn-primary" 
+                onClick={openModal}
+                aria-label="Registrar Nova Reutilização"
+              >
+                <Plus size={16} /> Nova Reutilização
+              </button>
+            )}
+
+            {canSolicitar && isEngenharia && (
+              <button 
+                className="btn" 
+                onClick={() => setIsSolicitarOpen(true)}
+                style={{ 
+                  backgroundColor: '#ea580c', 
+                  color: 'white', 
+                  border: 'none', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '6px', 
+                  padding: '8px 16px', 
+                  borderRadius: 'var(--radius-sm)', 
+                  fontWeight: 600,
+                  fontSize: '0.85rem'
+                }}
+                aria-label="Solicitar Reutilização"
+              >
+                <Send size={16} /> Solicitar Reutilização
+              </button>
+            )}
+          </div>
         </div>
         
         {dispReutilizacoes.length === 0 ? (
@@ -370,15 +432,16 @@ export function DispositivoDetails() {
                 <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid var(--color-border)' }}>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '45px', textAlign: 'center' }}>Nº</th>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '85px', whiteSpace: 'nowrap' }}>Data</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '110px', whiteSpace: 'nowrap' }}>Código da Peça</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '135px', whiteSpace: 'nowrap' }}>Descrição da Peça</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '90px', whiteSpace: 'nowrap' }}>Status</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '100px', whiteSpace: 'nowrap' }}>Código da Peça</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '130px', whiteSpace: 'nowrap' }}>Descrição da Peça</th>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '90px', whiteSpace: 'nowrap' }}>Produto</th>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '90px', whiteSpace: 'nowrap' }}>Peso Peça (kg)</th>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '110px', whiteSpace: 'nowrap' }}>Hard Saving (R$)</th>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '100px', whiteSpace: 'nowrap' }}>Responsável</th>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '80px', whiteSpace: 'nowrap' }}>Nº OS</th>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Descrição da Alteração Realizada</th>
-                  <th style={{ padding: '10px 8px', width: '40px' }}></th>
+                  {canExcluir && <th style={{ padding: '10px 8px', width: '40px' }}></th>}
                 </tr>
               </thead>
               <tbody>
@@ -404,6 +467,10 @@ export function DispositivoDetails() {
                   const cellTextColor = isMostRecent ? 'var(--color-primary)' : 'var(--color-text-dark)';
                   const normalCellColor = 'var(--color-text-dark)';
                   const fontWeightVal = isMostRecent ? 600 : 400;
+
+                  const statusU = u.status || 'aprovado';
+                  const isPendente = statusU === 'pendente';
+                  const isRejeitado = statusU === 'rejeitado';
 
                   return (
                     <tr 
@@ -431,6 +498,18 @@ export function DispositivoDetails() {
                         </div>
                       </td>
                       <td style={{ padding: '12px 8px', color: cellTextColor, fontWeight: fontWeightVal, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayDate}</td>
+                      <td style={{ padding: '12px 8px', whiteSpace: 'nowrap' }}>
+                        <span style={{
+                          padding: '3px 8px',
+                          borderRadius: '10px',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          backgroundColor: isPendente ? '#fef3c7' : isRejeitado ? '#fee2e2' : '#dcfce7',
+                          color: isPendente ? '#b45309' : isRejeitado ? '#b91c1c' : '#15803d'
+                        }}>
+                          {isPendente ? 'Pendente' : isRejeitado ? 'Rejeitado' : 'Aprovado'}
+                        </span>
+                      </td>
                       <td style={{ padding: '12px 8px', color: cellTextColor, fontWeight: fontWeightVal, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.codigoPeca || 'N/A'}</td>
                       <td style={{ padding: '12px 8px', color: normalCellColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.descricaoPeca}>{u.descricaoPeca || 'N/A'}</td>
                       <td style={{ padding: '12px 8px', color: cellTextColor, fontWeight: fontWeightVal, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayProduto}</td>
@@ -439,15 +518,18 @@ export function DispositivoDetails() {
                       <td style={{ padding: '12px 8px', color: normalCellColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={u.responsavel}>{u.responsavel || 'N/A'}</td>
                       <td style={{ padding: '12px 8px', color: normalCellColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.numeroOs || 'N/A'}</td>
                       <td style={{ padding: '12px 8px', color: '#4A4A4A', lineHeight: 1.4, wordBreak: 'break-word' }}>{u.descricaoAlteracao || 'N/A'}</td>
-                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                        <button 
-                          className="btn" 
-                          style={{ border: 'none', padding: 0, color: 'var(--color-danger)', background: 'transparent', boxShadow: 'none', minHeight: 'unset', height: 'auto' }}
-                          onClick={() => confirm('Apagar esta reutilização?') && deleteReutilizacao(u.id)}
-                        >
-                          <Trash size={14} />
-                        </button>
-                      </td>
+                      {canExcluir && (
+                        <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                          <button 
+                            className="btn" 
+                            style={{ border: 'none', padding: 0, color: 'var(--color-danger)', background: 'transparent', boxShadow: 'none', minHeight: 'unset', height: 'auto' }}
+                            onClick={() => confirm('Apagar esta reutilização?') && deleteReutilizacao(u.id)}
+                            title="Excluir reutilização"
+                          >
+                            <Trash size={14} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -579,6 +661,12 @@ export function DispositivoDetails() {
           </div>
         </form>
       </AccessibleModal>
+
+      <SolicitarReutilizacaoModal
+        dispositivo={disp}
+        isOpen={isSolicitarOpen}
+        onClose={() => setIsSolicitarOpen(false)}
+      />
     </>
   );
 }

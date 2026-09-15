@@ -11,4 +11,11 @@ export interface Reutilizacao {
   numeroOs: string;
   descricaoAlteracao: string;
   dataCriacao?: string;
+  status?: 'pendente' | 'aprovado' | 'rejeitado';
+  solicitanteId?: string;
+  solicitanteNome?: string;
+  aprovadorId?: string;
+  aprovadorNome?: string;
+  dataAprovacao?: string;
+  motivoRejeicao?: string;
 }

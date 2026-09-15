@@ -3,7 +3,7 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["vite/client"],
+    "types": ["vite/client", "jest"],
     "allowJs": true,
     "strict": false,
     "skipLibCheck": true,

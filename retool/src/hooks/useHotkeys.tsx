@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from './usePermissions';
 
 /*
   Atalhos Globais:
@@ -8,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
   D -> Dispositivos
   U -> Reutilizações
   C -> Categorias
-  N -> Novo registro
+  N -> Novo registro (requer permissão de cadastro)
   Esc -> Close
 */
 
@@ -20,6 +21,7 @@ interface HotkeysConfig {
 
 export function useHotkeys(config?: HotkeysConfig) {
   const navigate = useNavigate();
+  const { canCadastrar, canEditar } = usePermissions();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -54,10 +56,12 @@ export function useHotkeys(config?: HotkeysConfig) {
           navigate('/reutilizacoes');
           break;
         case 'c':
-          navigate('/categorias');
+          if (canCadastrar || canEditar) {
+            navigate('/categorias');
+          }
           break;
         case 'n':
-          if (config?.onNewRecord) {
+          if (canCadastrar && config?.onNewRecord) {
             config.onNewRecord();
           }
           break;
@@ -66,5 +70,5 @@ export function useHotkeys(config?: HotkeysConfig) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate, config]);
+  }, [navigate, config, canCadastrar, canEditar]);
 }

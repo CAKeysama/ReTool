@@ -11,7 +11,9 @@ import { FirestoreCategoriasRepository } from '../data/repositories/FirestoreCat
 import { FirestoreFamiliasRepository } from '../data/repositories/FirestoreFamiliasRepository';
 import { FirestoreProdutosRepository } from '../data/repositories/FirestoreProdutosRepository';
 import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
+import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 import { ImportarLoteUseCase } from '../application/usecases/ImportarLoteUseCase';
+import { useAuth } from './AuthContext';
 
 // Inicialização de Repositórios e Casos de Uso (Interface Adapters / Application Layer)
 const dispositivosRepo = new FirestoreDispositivosRepository();
@@ -19,6 +21,7 @@ const categoriasRepo = new FirestoreCategoriasRepository();
 const familiasRepo = new FirestoreFamiliasRepository();
 const produtosRepo = new FirestoreProdutosRepository();
 const reutilizacoesRepo = new FirestoreReutilizacoesRepository();
+const auditRepo = new FirestoreAuditLogRepository();
 const importarLoteUseCase = new ImportarLoteUseCase(dispositivosRepo);
 
 interface ReToolContextType {
@@ -44,6 +47,9 @@ interface ReToolContextType {
   updateProduto: (id: string, data: Partial<Produto>, silent?: boolean) => Promise<void>;
   deleteProduto: (id: string, silent?: boolean) => Promise<void>;
   addReutilizacao: (data: Omit<Reutilizacao, 'id' | 'dataCriacao'>) => Promise<void>;
+  solicitarReutilizacao: (data: Omit<Reutilizacao, 'id' | 'dataCriacao' | 'status'>, solicitanteNome: string, solicitanteId?: string) => Promise<void>;
+  aprovarReutilizacao: (id: string, aprovadorNome: string, aprovadorId?: string) => Promise<void>;
+  rejeitarReutilizacao: (id: string, motivo: string, aprovadorNome: string, aprovadorId?: string) => Promise<void>;
   updateReutilizacao: (id: string, data: Partial<Reutilizacao>) => Promise<void>;
   deleteReutilizacao: (id: string, silent?: boolean) => Promise<void>;
   importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<{ sucesso: number, erros: number }>;
@@ -59,6 +65,7 @@ interface ReToolContextType {
 const ReToolContext = createContext<ReToolContextType | undefined>(undefined);
 
 export const ReToolProvider = ({ children }: { children: ReactNode }) => {
+  const { userProfile, currentRole } = useAuth();
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [tipos, setTipos] = useState<Tipo[]>([]);
@@ -72,16 +79,6 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   const [isDispFormOpen, setIsDispFormOpen] = useState(false);
   const [editingDispId, setEditingDispId] = useState<string | null>(null);
 
-  const openDispForm = useCallback((id?: string) => {
-    setEditingDispId(id || null);
-    setIsDispFormOpen(true);
-  }, []);
-
-  const closeDispForm = useCallback(() => {
-    setIsDispFormOpen(false);
-    setEditingDispId(null);
-  }, []);
-
   const announce = useCallback((message: string, showToast = true) => {
     setAnnouncement('');
     setTimeout(() => setAnnouncement(message), 50); 
@@ -93,6 +90,27 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         setToasts(prev => prev.filter(t => t.id !== id));
       }, 3500);
     }
+  }, []);
+
+  const openDispForm = useCallback((id?: string) => {
+    if (id) {
+      if (currentRole !== 'admin' && currentRole !== 'projetista') {
+        announce('Acesso negado: seu perfil não possui permissão para editar dispositivos.');
+        return;
+      }
+    } else {
+      if (currentRole !== 'admin' && currentRole !== 'projetista') {
+        announce('Acesso negado: seu perfil não possui permissão para cadastrar dispositivos.');
+        return;
+      }
+    }
+    setEditingDispId(id || null);
+    setIsDispFormOpen(true);
+  }, [currentRole, announce]);
+
+  const closeDispForm = useCallback(() => {
+    setIsDispFormOpen(false);
+    setEditingDispId(null);
   }, []);
 
   // Inscrição em tempo real usando os Repositórios do Domínio
@@ -114,18 +132,52 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  const logAuditExclusao = async (tipoEntidade: any, id: string, nome?: string, dadosAnteriores?: any) => {
+    try {
+      await auditRepo.registrarLog({
+        dataHora: new Date().toISOString(),
+        usuarioUid: userProfile?.uid || 'sistema',
+        usuarioNome: userProfile?.nome || 'Administradora',
+        usuarioEmail: userProfile?.email || '',
+        usuarioPerfil: currentRole,
+        acao: 'exclusao',
+        tipoEntidade,
+        entidadeId: id,
+        entidadeNome: nome || id,
+        detalhes: `Exclusão de ${tipoEntidade}: ${nome || id}`,
+        dadosAnteriores
+      });
+    } catch (e) {
+      console.warn('Erro ao registrar log de auditoria da exclusão:', e);
+    }
+  };
+
   const addDispositivo = async (data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: seu perfil não possui permissão para cadastrar dispositivos.');
+      return;
+    }
     await dispositivosRepo.add(data);
     announce('Dispositivo adicionado com sucesso');
   };
 
   const updateDispositivo = async (id: string, data: Partial<Dispositivo>, silent = false) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      if (!silent) announce('Acesso negado: seu perfil não possui permissão para editar dispositivos.');
+      return;
+    }
     await dispositivosRepo.update(id, data);
     if (!silent) announce('Dispositivo atualizado com sucesso');
   };
 
   const deleteDispositivo = async (id: string, silent = false) => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras têm permissão para excluir dispositivos.');
+      return;
+    }
+    const disp = dispositivos.find(d => d.id === id);
     await dispositivosRepo.delete(id);
+    await logAuditExclusao('dispositivo', id, disp?.nome, disp);
     
     // Deletar relações de reutilização associadas
     const relacoes = reutilizacoes.filter(u => u.dispositivoId === id);
@@ -136,80 +188,200 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addCategoria = async (data: Omit<Categoria, 'id'>) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: seu perfil não possui permissão para cadastrar categorias.');
+      return '';
+    }
     const id = await categoriasRepo.addCategoria(data);
     announce('Categoria adicionada com sucesso');
     return id;
   };
 
   const updateCategoria = async (id: string, data: Partial<Categoria>, silent = false) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      if (!silent) announce('Acesso negado: seu perfil não possui permissão para editar categorias.');
+      return;
+    }
     await categoriasRepo.updateCategoria(id, data);
     if (!silent) announce('Categoria atualizada com sucesso');
   };
 
   const deleteCategoria = async (id: string, silent = false) => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras têm permissão para excluir categorias.');
+      return;
+    }
+    const cat = categorias.find(c => c.id === id);
     await categoriasRepo.deleteCategoria(id);
+    await logAuditExclusao('categoria', id, cat?.nome, cat);
     if (!silent) announce('Categoria removida com sucesso');
   };
 
   const addTipo = async (data: Omit<Tipo, 'id'>) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: seu perfil não possui permissão para cadastrar tipos.');
+      return;
+    }
     await categoriasRepo.addTipo(data);
     announce('Tipo adicionado com sucesso');
   };
 
   const updateTipo = async (id: string, data: Partial<Tipo>) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: seu perfil não possui permissão para editar tipos.');
+      return;
+    }
     await categoriasRepo.updateTipo(id, data);
     announce('Tipo atualizado com sucesso');
   };
 
   const deleteTipo = async (id: string) => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras têm permissão para excluir tipos.');
+      return;
+    }
+    const tip = tipos.find(t => t.id === id);
     await categoriasRepo.deleteTipo(id);
+    await logAuditExclusao('tipo', id, tip?.nome, tip);
     announce('Tipo removido com sucesso');
   };
 
   const addFamilia = async (data: Omit<Familia, 'id'>) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: seu perfil não possui permissão para cadastrar famílias.');
+      return '';
+    }
     const id = await familiasRepo.add(data);
     announce('Família adicionada com sucesso');
     return id;
   };
 
   const updateFamilia = async (id: string, data: Partial<Familia>, silent = false) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      if (!silent) announce('Acesso negado: seu perfil não possui permissão para editar famílias.');
+      return;
+    }
     await familiasRepo.update(id, data);
     if (!silent) announce('Família atualizada com sucesso');
   };
 
   const deleteFamilia = async (id: string, silent = false) => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras têm permissão para excluir famílias.');
+      return;
+    }
+    const fam = familias.find(f => f.id === id);
     await familiasRepo.delete(id);
+    await logAuditExclusao('familia', id, fam?.nome, fam);
     if (!silent) announce('Família removida com sucesso');
   };
 
   const addProduto = async (data: Omit<Produto, 'id'>) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: seu perfil não possui permissão para cadastrar produtos.');
+      return '';
+    }
     const id = await produtosRepo.add(data);
     announce('Produto adicionado com sucesso');
     return id;
   };
 
   const updateProduto = async (id: string, data: Partial<Produto>, silent = false) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      if (!silent) announce('Acesso negado: seu perfil não possui permissão para editar produtos.');
+      return;
+    }
     await produtosRepo.update(id, data);
     if (!silent) announce('Produto atualizado com sucesso');
   };
 
   const deleteProduto = async (id: string, silent = false) => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras têm permissão para excluir produtos.');
+      return;
+    }
+    const prod = produtos.find(p => p.id === id);
     await produtosRepo.delete(id);
+    await logAuditExclusao('produto', id, prod?.nome, prod);
     if (!silent) announce('Produto removido com sucesso');
   };
 
   const addReutilizacao = async (data: Omit<Reutilizacao, 'id' | 'dataCriacao'>) => {
-    await reutilizacoesRepo.add(data);
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: Engenharia deve utilizar a opção Solicitar Reutilização.');
+      return;
+    }
+    await reutilizacoesRepo.add({
+      ...data,
+      status: data.status || 'aprovado'
+    });
     announce('Reutilização adicionada com sucesso');
   };
 
+  const solicitarReutilizacao = async (
+    data: Omit<Reutilizacao, 'id' | 'dataCriacao' | 'status'>,
+    solicitanteNome: string,
+    solicitanteId?: string
+  ) => {
+    if (currentRole === 'gerencia') {
+      announce('Acesso negado: perfil de Gerência possui acesso somente de consulta.');
+      return;
+    }
+    await reutilizacoesRepo.add({
+      ...data,
+      status: 'pendente',
+      solicitanteNome,
+      solicitanteId: solicitanteId || userProfile?.uid || 'eng'
+    });
+    announce('Solicitação de reutilização enviada com sucesso');
+  };
+
+  const aprovarReutilizacao = async (id: string, aprovadorNome: string, aprovadorId?: string) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Apenas Projetistas ou Administradoras podem aprovar reutilizações.');
+      return;
+    }
+    await reutilizacoesRepo.update(id, {
+      status: 'aprovado',
+      aprovadorNome: aprovadorNome || userProfile?.nome || 'Projetista',
+      aprovadorId: aprovadorId || userProfile?.uid || 'proj',
+      dataAprovacao: new Date().toISOString()
+    });
+    announce('Solicitação de reutilização aprovada com sucesso');
+  };
+
+  const rejeitarReutilizacao = async (id: string, motivo: string, aprovadorNome: string, aprovadorId?: string) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Apenas Projetistas ou Administradoras podem rejeitar reutilizações.');
+      return;
+    }
+    await reutilizacoesRepo.update(id, {
+      status: 'rejeitado',
+      motivoRejeicao: motivo,
+      aprovadorNome: aprovadorNome || userProfile?.nome || 'Projetista',
+      aprovadorId: aprovadorId || userProfile?.uid || 'proj',
+      dataAprovacao: new Date().toISOString()
+    });
+    announce('Solicitação de reutilização rejeitada');
+  };
+
   const updateReutilizacao = async (id: string, data: Partial<Reutilizacao>) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: seu perfil não possui permissão para editar reutilizações.');
+      return;
+    }
     await reutilizacoesRepo.update(id, data);
     announce('Reutilização atualizada com sucesso');
   };
 
   const deleteReutilizacao = async (id: string, silent = false) => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras têm permissão para excluir reutilizações.');
+      return;
+    }
+    const reu = reutilizacoes.find(u => u.id === id);
     await reutilizacoesRepo.delete(id);
+    await logAuditExclusao('reutilizacao', id, reu?.descricaoAlteracao || id, reu);
     if (!silent) announce('Reutilização removida com sucesso');
   };
 
@@ -219,6 +391,10 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     newFamiliasNomes: string[],
     newProdutosNomes: string[]
   ) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: apenas Administradoras e Projetistas podem importar dispositivos.');
+      return { sucesso: 0, erros: novosDispositivos.length };
+    }
     try {
       const result = await importarLoteUseCase.execute(
         novosDispositivos,
@@ -239,6 +415,10 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteAllData = async () => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras têm permissão para apagar todo o banco de dados.');
+      return;
+    }
     try {
       const { db } = await import('../data/datasources/firebase');
       const { writeBatch, doc } = await import('firebase/firestore');
@@ -286,6 +466,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       addFamilia, updateFamilia, deleteFamilia,
       addProduto, updateProduto, deleteProduto,
       addReutilizacao, updateReutilizacao, deleteReutilizacao,
+      solicitarReutilizacao, aprovarReutilizacao, rejeitarReutilizacao,
       importarDispositivosEmLote, deleteAllData,
       announce, announcement,
       isDispFormOpen, editingDispId, openDispForm, closeDispForm

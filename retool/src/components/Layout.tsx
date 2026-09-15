@@ -3,10 +3,17 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Settings, Home, List, Component, Menu, X } from 'lucide-react';
 import { useReTool } from '../context/ReToolContext';
 import { useHotkeys } from '../hooks/useHotkeys';
+import { usePermissions } from '../hooks/usePermissions';
 import { DispositivoForm } from '../pages/DispositivoForm';
+import { UserNavMenu } from './UserNavMenu';
+import { UsersManagementModal } from './UsersManagementModal';
+import { AuditLogsModal } from './AuditLogsModal';
 
 export function Layout() {
   const { announcement, isDispFormOpen } = useReTool();
+  const { canCadastrar, canEditar, canExcluir } = usePermissions();
+  const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
+  const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   useHotkeys();
   const location = useLocation();
   
@@ -15,11 +22,23 @@ export function Layout() {
 
   if (isFullScreenMode) {
     return (
-      <div className="app-container" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)', paddingBottom: '90px' }}>
+      <div className="app-container" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)', paddingBottom: '90px', position: 'relative' }}>
         <div aria-live="polite" className="sr-only">{announcement}</div>
+        
+        {/* TOP RIGHT PROFILE BADGE EM TELAS FULLSCREEN */}
+        <div style={{ position: 'absolute', top: '16px', right: '24px', zIndex: 100, width: '220px' }}>
+          <UserNavMenu 
+            onOpenUsersModal={() => setIsUsersModalOpen(true)} 
+            onOpenLogsModal={() => setIsLogsModalOpen(true)} 
+          />
+        </div>
+
         <Outlet />
         {isDispFormOpen && <DispositivoForm />}
         
+        <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
+        <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />
+
         {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
         <nav className="bottom-nav" aria-label="Navegação Mobile">
           <ul className="bottom-nav-list">
@@ -41,12 +60,14 @@ export function Layout() {
                 <span>Reutilizações</span>
               </NavLink>
             </li>
-            <li>
-              <NavLink to="/categorias" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                <Settings size={24} />
-                <span>Categorias</span>
-              </NavLink>
-            </li>
+            {(canCadastrar || canEditar) && (
+              <li>
+                <NavLink to="/categorias" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+                  <Settings size={24} />
+                  <span>Categorias</span>
+                </NavLink>
+              </li>
+            )}
           </ul>
         </nav>
       </div>
@@ -60,7 +81,7 @@ export function Layout() {
       <nav className="sidebar" aria-label="Navegação Principal">
         
         {/* LOGO AREA */}
-        <div style={{ marginBottom: 'var(--spacing-2xl)' }}>
+        <div style={{ marginBottom: 'var(--spacing-lg)' }}>
           <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800 }}>
             <span style={{ color: 'var(--color-gray-steel)' }}>Re</span>
             <span style={{ color: 'var(--color-primary)' }}>Tool</span>
@@ -68,6 +89,14 @@ export function Layout() {
           <div style={{ color: '#9ca3af', fontSize: '0.75rem', fontWeight: 500, marginTop: '2px' }}>
             Gestão Industrial
           </div>
+        </div>
+
+        {/* PERFIL DE ACESSO RBAC */}
+        <div style={{ marginBottom: 'var(--spacing-lg)' }}>
+          <UserNavMenu 
+            onOpenUsersModal={() => setIsUsersModalOpen(true)} 
+            onOpenLogsModal={() => setIsLogsModalOpen(true)} 
+          />
         </div>
 
         {/* MENU */}
@@ -85,9 +114,11 @@ export function Layout() {
             <li>
               <SidebarLink to="/reutilizacoes" icon={<List size={18} />} label="Reutilizações" shortcut="U" />
             </li>
-            <li>
-              <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" />
-            </li>
+            {(canCadastrar || canEditar) && (
+              <li>
+                <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" />
+              </li>
+            )}
           </ul>
         </div>
 
@@ -98,9 +129,9 @@ export function Layout() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', fontSize: '0.75rem', color: '#6b7280' }}>
             <div style={{ display: 'flex', gap: '6px' }}><span>/</span> Buscar</div>
-            <div style={{ display: 'flex', gap: '6px' }}><span>N</span> Novo</div>
-            <div style={{ display: 'flex', gap: '6px' }}><span>E</span> Editar</div>
-            <div style={{ display: 'flex', gap: '6px' }}><span>D</span> Excluir</div>
+            {canCadastrar && <div style={{ display: 'flex', gap: '6px' }}><span>N</span> Novo</div>}
+            {canEditar && <div style={{ display: 'flex', gap: '6px' }}><span>E</span> Editar</div>}
+            {canExcluir && <div style={{ display: 'flex', gap: '6px' }}><span>D</span> Excluir</div>}
             <div style={{ display: 'flex', gap: '6px' }}><span>Esc</span> Fechar</div>
             <div style={{ display: 'flex', gap: '6px', gridColumn: 'span 2' }}><span>Tab</span> Navegar</div>
           </div>
@@ -142,6 +173,8 @@ export function Layout() {
       </main>
       
       {isDispFormOpen && <DispositivoForm />}
+      <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
+      <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />
     </div>
   );
 }

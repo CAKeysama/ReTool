@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
 import { Search, Box, Wrench, Tag, Info, Plus, Bug, X } from 'lucide-react';
 import { useHotkeys } from '../hooks/useHotkeys';
+import { usePermissions } from '../hooks/usePermissions';
 import baldanWatermark from '../assets/logotipo - preferencial_horizontal (aplicação monocromática positiva).png';
 
 const BUG_EXPLOSION_PARTICLES = [
@@ -22,6 +23,7 @@ const BUG_EXPLOSION_PARTICLES = [
 
 export function Home() {
   const { dispositivos, reutilizacoes, categorias, familias, produtos, openDispForm } = useReTool();
+  const { canCadastrar, canEditar } = usePermissions();
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState(dispositivos);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -256,9 +258,11 @@ export function Home() {
         <button className="btn" onClick={() => navigate(`/dispositivos?q=${encodeURIComponent(query)}`)} style={{ borderRadius: '20px', padding: '8px 20px' }}>
           Buscar dispositivos
         </button>
-        <button className="btn btn-primary" aria-label="Cadastrar novo dispositivo" onClick={() => openDispForm()} style={{ width: '40px', height: '40px', padding: 0 }}>
-          <Plus size={20} />
-        </button>
+        {canCadastrar && (
+          <button className="btn btn-primary" aria-label="Cadastrar novo dispositivo" onClick={() => openDispForm()} style={{ width: '40px', height: '40px', padding: 0 }}>
+            <Plus size={20} />
+          </button>
+        )}
       </div>
 
       {/* Cartões Coloridos */}
@@ -275,7 +279,9 @@ export function Home() {
         <div style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
           <HomeCard count={dispositivos.length} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
           <HomeCard count={reutilizacoes.length} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
-          <HomeCard count={categorias.length} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
+          {(canCadastrar || canEditar) && (
+            <HomeCard count={categorias.length} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
+          )}
         </div>
       </div>
 
