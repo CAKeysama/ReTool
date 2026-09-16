@@ -8,6 +8,8 @@ export interface UserProfile {
   ativo: boolean;
   criadoEm?: string;
   atualizadoEm?: string;
+  /** Tier solicitado no cadastro, quando diferente do padrão (Gerência). */
+  perfilSolicitado?: UserRole;
 }
 
 export interface RoleConfig {

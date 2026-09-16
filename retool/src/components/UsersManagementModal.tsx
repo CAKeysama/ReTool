@@ -314,6 +314,11 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                       <td style={{ padding: '12px 16px' }}>
                         <div style={{ fontWeight: 600, color: '#111827' }}>{user.nome}</div>
                         <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>{user.email}</div>
+                        {!user.ativo && user.perfilSolicitado && user.perfilSolicitado !== 'gerencia' && (
+                          <div style={{ fontSize: '0.7rem', color: '#b45309', fontWeight: 600, marginTop: '2px' }}>
+                            Solicitou: {ROLES_CONFIG[user.perfilSolicitado].titulo}
+                          </div>
+                        )}
                       </td>
 
                       <td style={{ padding: '12px 16px' }}>

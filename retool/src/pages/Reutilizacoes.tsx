@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useReTool } from '../context/ReToolContext';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { FocusableList } from '../components/FocusableList';
 import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
 import { Search, Eye, ListChecks, Check, X, Clock, CheckCircle2, XCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
 
 export function Reutilizacoes() {
@@ -15,6 +15,8 @@ export function Reutilizacoes() {
   const BULK_THRESHOLD = 20;
   const { progress: bulkProgress, runWithProgress } = useBulkProgress();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [destacarId, setDestacarId] = useState('');
   const [filterDispId, setFilterDispId] = useState('');
   const [filterText, setFilterText] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | 'pendente' | 'aprovado' | 'rejeitado'>('todos');
@@ -25,6 +27,15 @@ export function Reutilizacoes() {
   const [bulkSearch, setBulkSearch] = useState('');
   const [bulkConfirm, setBulkConfirm] = useState<'disable' | 'delete' | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Navegação vinda de uma notificação: filtra o dispositivo e destaca a solicitação.
+  useEffect(() => {
+    const st = location.state as { reutilizacaoId?: string; dispositivoId?: string } | null;
+    if (st?.reutilizacaoId) {
+      setDestacarId(st.reutilizacaoId);
+      if (st.dispositivoId) setFilterDispId(st.dispositivoId);
+    }
+  }, [location.state]);
 
   const filteredReutilizacoes = useMemo(() => {
     return reutilizacoes.filter(u => {
@@ -236,7 +247,10 @@ export function Reutilizacoes() {
           const isRejeitado = statusU === 'rejeitado';
 
           return (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '12px' }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '12px',
+              ...(u.id === destacarId ? { boxShadow: '0 0 0 2px var(--color-primary)', borderRadius: '8px', padding: '8px' } : {})
+            }}>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <span style={{

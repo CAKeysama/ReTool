@@ -10,11 +10,14 @@ import {
 import { auth, getSecondaryAuthApp } from '../data/datasources/firebase';
 import { UserProfile, UserRole, ROLES_CONFIG, RoleConfig } from '../domain/entities/user';
 import { AuditLog } from '../domain/entities/auditLog';
+import { Notificacao, idNotificacao } from '../domain/entities/notificacao';
 import { FirestoreUsersRepository } from '../data/repositories/FirestoreUsersRepository';
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
+import { FirestoreNotificationsRepository } from '../data/repositories/FirestoreNotificationsRepository';
 
 const usersRepo = new FirestoreUsersRepository();
 const auditRepo = new FirestoreAuditLogRepository();
+const notificationsRepo = new FirestoreNotificationsRepository();
 
 /** Traduz códigos do Firebase Auth para mensagens amigáveis. */
 export function traduzirErroAuth(err: unknown): string {
@@ -50,8 +53,15 @@ interface AuthContextType {
   users: UserProfile[];
   auditLogs: AuditLog[];
   login: (email: string, pass: string) => Promise<void>;
-  register: (email: string, pass: string, nome: string) => Promise<void>;
+  register: (email: string, pass: string, nome: string, perfilSolicitado?: UserRole) => Promise<void>;
   logout: () => Promise<void>;
+  /** Aprova (com o tier solicitado) ou recusa uma solicitação de conta. */
+  decidirSolicitacaoConta: (uid: string, aprovar: boolean) => Promise<void>;
+  // Notificações do usuário autenticado
+  notifications: Notificacao[];
+  criarNotificacao: (n: Notificacao) => Promise<void>;
+  marcarNotificacaoLida: (id: string, lida: boolean) => Promise<void>;
+  marcarNotificacaoResolvida: (id: string, resolvida: boolean) => Promise<void>;
   /** Exclusivo da Administração: cria conta com o perfil indicado via app
    *  secundário do Firebase, preservando a sessão da administradora. */
   createUserByAdmin: (email: string, pass: string, nome: string, perfil: UserRole) => Promise<void>;
@@ -83,14 +93,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  * escolhido pelo próprio visitante — e as regras do Firestore também
  * recusam qualquer tentativa direta de escrita diferente disso.
  */
-async function criarPerfilRestrito(user: FirebaseUser, nome: string): Promise<void> {
+async function criarPerfilRestrito(user: FirebaseUser, nome: string, perfilSolicitado: UserRole = 'gerencia'): Promise<void> {
   const profile: UserProfile = {
     uid: user.uid,
     email: user.email || '',
     nome,
     perfil: 'gerencia',
     ativo: false,
-    criadoEm: new Date().toISOString()
+    criadoEm: new Date().toISOString(),
+    perfilSolicitado
   };
   await usersRepo.setProfile(profile);
 }
@@ -101,6 +112,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [notifications, setNotifications] = useState<Notificacao[]>([]);
 
   // Carrega lista de usuários em tempo real para administração
   useEffect(() => {
@@ -111,6 +123,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       unsubLogs();
     };
   }, []);
+
+  // Notificações do usuário autenticado, em tempo real
+  useEffect(() => {
+    if (!userProfile?.uid) {
+      setNotifications([]);
+      return;
+    }
+    return notificationsRepo.subscribeParaUsuario(userProfile.uid, setNotifications);
+  }, [userProfile?.uid]);
 
   // Monitora autenticação do Firebase Auth
   useEffect(() => {
@@ -214,12 +235,35 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const register = async (email: string, pass: string, nome: string) => {
+  const register = async (email: string, pass: string, nome: string, perfilSolicitado: UserRole = 'gerencia') => {
     setLoading(true);
     const normalizedEmail = email.trim().toLowerCase();
     try {
       const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, pass);
-      await criarPerfilRestrito(cred.user, nome.trim());
+      await criarPerfilRestrito(cred.user, nome.trim(), perfilSolicitado);
+
+      // Tier diferente de Gerência: avisa a Administração para análise.
+      if (perfilSolicitado !== 'gerencia') {
+        const admins = users.filter(u => u.perfil === 'admin' && u.ativo);
+        for (const admin of admins) {
+          try {
+            await notificationsRepo.criar({
+              id: idNotificacao('conta_nova', cred.user.uid, admin.uid),
+              tipo: 'conta_nova',
+              destinatarioUid: admin.uid,
+              remetenteUid: cred.user.uid,
+              titulo: 'Nova solicitação de conta',
+              descricao: `${nome.trim()} solicitou o perfil ${ROLES_CONFIG[perfilSolicitado].titulo}.`,
+              dataHora: new Date().toISOString(),
+              lida: false,
+              entidadeId: cred.user.uid,
+              perfilSolicitado
+            });
+          } catch (e) {
+            console.warn('Falha ao notificar a Administração:', e);
+          }
+        }
+      }
 
       await auditRepo.registrarLog({
         dataHora: new Date().toISOString(),
@@ -316,6 +360,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const toggleUserStatus = async (uid: string, ativo: boolean) => {
     await usersRepo.updateStatus(uid, ativo);
     const targetUser = users.find(u => u.uid === uid);
+
+    // Aprovação via modal também resolve as solicitações de conta pendentes.
+    if (ativo && userProfile) {
+      const pendentes = notifications.filter(
+        n => n.tipo === 'conta_nova' && n.entidadeId === uid && n.destinatarioUid === userProfile.uid && !n.resolvida
+      );
+      for (const n of pendentes) {
+        await notificationsRepo.marcarResolvida(n.id, true).catch(() => undefined);
+      }
+    }
+
     await auditRepo.registrarLog({
       dataHora: new Date().toISOString(),
       usuarioUid: userProfile?.uid || 'desconhecido',
@@ -334,6 +389,74 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const targetUser = users.find(u => u.uid === uid);
     await usersRepo.deleteProfile(uid);
     await registrarExclusaoComAuditoria('usuario', uid, targetUser?.nome || uid);
+  };
+
+  const criarNotificacao = useCallback(async (n: Notificacao) => {
+    await notificationsRepo.criar(n);
+  }, []);
+
+  const marcarNotificacaoLida = useCallback(async (id: string, lida: boolean) => {
+    await notificationsRepo.marcarLida(id, lida);
+  }, []);
+
+  const marcarNotificacaoResolvida = useCallback(async (id: string, resolvida: boolean) => {
+    await notificationsRepo.marcarResolvida(id, resolvida);
+  }, []);
+
+  /** Aprova a solicitação de conta (com o tier solicitado) ou a recusa. */
+  const decidirSolicitacaoConta = async (uid: string, aprovar: boolean) => {
+    const alvo = users.find(u => u.uid === uid);
+    if (!alvo) return;
+    const perfilFinal: UserRole = aprovar ? (alvo.perfilSolicitado || alvo.perfil) : alvo.perfil;
+
+    if (aprovar) {
+      await usersRepo.updateRole(uid, perfilFinal);
+      await usersRepo.updateStatus(uid, true);
+    }
+
+    // Comunica a decisão ao solicitante (antes da remoção, na recusa).
+    await notificationsRepo.criar({
+      id: idNotificacao('conta_decidida', uid, uid),
+      tipo: 'conta_decidida',
+      destinatarioUid: uid,
+      remetenteUid: userProfile?.uid || 'admin',
+      titulo: aprovar ? 'Solicitação de conta aprovada' : 'Solicitação de conta recusada',
+      descricao: aprovar
+        ? `Seu acesso foi liberado com o perfil ${ROLES_CONFIG[perfilFinal].titulo}.`
+        : 'Sua solicitação de acesso foi recusada pela Administração.',
+      dataHora: new Date().toISOString(),
+      lida: false,
+      entidadeId: uid,
+      perfilSolicitado: alvo.perfilSolicitado,
+      decisao: aprovar ? 'aprovada' : 'recusada'
+    });
+
+    if (!aprovar) {
+      await usersRepo.deleteProfile(uid);
+    }
+
+    // Resolve as notificações de solicitação pendentes da Administração.
+    const pendentes = notifications.filter(
+      n => n.tipo === 'conta_nova' && n.entidadeId === uid && n.destinatarioUid === userProfile?.uid
+    );
+    for (const n of pendentes) {
+      await notificationsRepo.marcarResolvida(n.id, true);
+    }
+
+    await auditRepo.registrarLog({
+      dataHora: new Date().toISOString(),
+      usuarioUid: userProfile?.uid || 'desconhecido',
+      usuarioNome: userProfile?.nome || 'Administradora',
+      usuarioEmail: userProfile?.email || '',
+      usuarioPerfil: userProfile?.perfil || 'admin',
+      acao: aprovar ? 'desbloqueio_usuario' : 'exclusao',
+      tipoEntidade: 'usuario',
+      entidadeId: uid,
+      entidadeNome: alvo.nome,
+      detalhes: aprovar
+        ? `Solicitação de conta aprovada com perfil ${ROLES_CONFIG[perfilFinal].titulo}`
+        : 'Solicitação de conta recusada; perfil removido do sistema'
+    });
   };
 
   const registrarExclusaoComAuditoria = useCallback(async (
@@ -375,9 +498,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         register,
         logout,
         createUserByAdmin,
+        decidirSolicitacaoConta,
         updateUserRole,
         toggleUserStatus,
         deleteUser,
+        notifications,
+        criarNotificacao,
+        marcarNotificacaoLida,
+        marcarNotificacaoResolvida,
         registrarExclusaoComAuditoria,
         canConsultar: roleConfig.canConsultar,
         canCadastrar: roleConfig.canCadastrar,

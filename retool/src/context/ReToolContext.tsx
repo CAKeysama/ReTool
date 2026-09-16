@@ -13,6 +13,7 @@ import { FirestoreProdutosRepository } from '../data/repositories/FirestoreProdu
 import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 import { ImportarLoteUseCase } from '../application/usecases/ImportarLoteUseCase';
+import { idNotificacao } from '../domain/entities/notificacao';
 import { useAuth } from './AuthContext';
 
 // Inicialização de Repositórios e Casos de Uso (Interface Adapters / Application Layer)
@@ -65,7 +66,7 @@ interface ReToolContextType {
 const ReToolContext = createContext<ReToolContextType | undefined>(undefined);
 
 export const ReToolProvider = ({ children }: { children: ReactNode }) => {
-  const { userProfile, currentRole } = useAuth();
+  const { userProfile, currentRole, users, criarNotificacao } = useAuth();
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [tipos, setTipos] = useState<Tipo[]>([]);
@@ -327,13 +328,63 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: perfil de Gerência possui acesso somente de consulta.');
       return;
     }
-    await reutilizacoesRepo.add({
+    const solicitanteUid = solicitanteId || userProfile?.uid || 'eng';
+    const novoId = await reutilizacoesRepo.add({
       ...data,
       status: 'pendente',
       solicitanteNome,
-      solicitanteId: solicitanteId || userProfile?.uid || 'eng'
+      solicitanteId: solicitanteUid
     });
+
+    // Notifica os responsáveis pela aprovação (Admin e Projetista), sem duplicatas.
+    const dispositivo = dispositivos.find(d => d.id === data.dispositivoId);
+    const aprovadores = users.filter(
+      u => u.ativo && (u.perfil === 'admin' || u.perfil === 'projetista') && u.uid !== solicitanteUid
+    );
+    for (const aprovador of aprovadores) {
+      try {
+        await criarNotificacao({
+          id: idNotificacao('reutilizacao_nova', novoId, aprovador.uid),
+          tipo: 'reutilizacao_nova',
+          destinatarioUid: aprovador.uid,
+          remetenteUid: solicitanteUid,
+          titulo: 'Nova solicitação de reutilização',
+          descricao: `${solicitanteNome} solicitou reutilização de ${dispositivo?.nome || 'um dispositivo'}.`,
+          dataHora: new Date().toISOString(),
+          lida: false,
+          entidadeId: novoId,
+          dispositivoId: data.dispositivoId
+        });
+      } catch (e) {
+        console.warn('Falha ao notificar aprovador:', e);
+      }
+    }
+
     announce('Solicitação de reutilização enviada com sucesso');
+  };
+
+  const notificarDecisaoReutilizacao = async (id: string, decisao: 'aprovada' | 'rejeitada', motivo?: string) => {
+    const reu = reutilizacoes.find(u => u.id === id);
+    if (!reu?.solicitanteId || reu.solicitanteId === userProfile?.uid) return;
+    try {
+      await criarNotificacao({
+      id: idNotificacao('reutilizacao_decidida', id, reu.solicitanteId),
+      tipo: 'reutilizacao_decidida',
+      destinatarioUid: reu.solicitanteId,
+      remetenteUid: userProfile?.uid || '',
+      titulo: decisao === 'aprovada' ? 'Solicitação de reutilização aprovada' : 'Solicitação de reutilização rejeitada',
+      descricao: decisao === 'aprovada'
+        ? `Sua solicitação de reutilização foi aprovada por ${userProfile?.nome || 'a Ferramentaria'}.`
+        : `Sua solicitação de reutilização foi rejeitada. ${motivo ? `Motivo: ${motivo}` : ''}`.trim(),
+      dataHora: new Date().toISOString(),
+      lida: false,
+      entidadeId: id,
+      dispositivoId: reu.dispositivoId,
+      decisao
+      });
+    } catch (e) {
+      console.warn('Falha ao notificar solicitante:', e);
+    }
   };
 
   const aprovarReutilizacao = async (id: string, aprovadorNome: string, aprovadorId?: string) => {
@@ -347,6 +398,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       aprovadorId: aprovadorId || userProfile?.uid || 'proj',
       dataAprovacao: new Date().toISOString()
     });
+    await notificarDecisaoReutilizacao(id, 'aprovada');
     announce('Solicitação de reutilização aprovada com sucesso');
   };
 
@@ -362,6 +414,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       aprovadorId: aprovadorId || userProfile?.uid || 'proj',
       dataAprovacao: new Date().toISOString()
     });
+    await notificarDecisaoReutilizacao(id, 'rejeitada', motivo);
     announce('Solicitação de reutilização rejeitada');
   };
 

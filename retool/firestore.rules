@@ -84,6 +84,10 @@ service cloud.firestore {
             && request.resource.data.ativo == false
             && request.resource.data.email == request.auth.token.email
             && request.resource.data.uid == userId
+            && (
+              !('perfilSolicitado' in request.resource.data)
+              || request.resource.data.perfilSolicitado in ['admin', 'projetista', 'engenharia', 'gerencia']
+            )
           )
         );
 
@@ -165,6 +169,69 @@ service cloud.firestore {
       allow update: if canAprovar();
 
       allow delete: if canExcluir();
+    }
+
+    // --------------------- NOTIFICAÇÕES ------------------------------
+    // Cada documento pertence a um destinatário (destinatarioUid).
+    // O status exibido é derivado em tempo real da entidade referenciada
+    // (reutilização ou usuário), mantendo a notificação sempre atualizada.
+
+    match /notifications/{notifId} {
+      function destUid() {
+        return request.resource.data.destinatarioUid;
+      }
+
+      function destExiste() {
+        return exists(/databases/$(database)/documents/users/$(destUid()));
+      }
+
+      function destPerfil() {
+        return userDoc(destUid()).perfil;
+      }
+
+      // Somente o destinatário lê as próprias notificações.
+      allow get, list: if signedIn()
+        && resource.data.destinatarioUid == request.auth.uid;
+
+      allow create: if signedIn()
+        && request.resource.data.remetenteUid == request.auth.uid
+        && (
+          // Solicitação de conta com tier != Gerência -> Administração.
+          // O remetente é o próprio solicitante (conta recém-criada, inativa),
+          // validado pelo perfilSolicitado gravado no seu próprio documento.
+          (
+            request.resource.data.tipo == 'conta_nova'
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && userDoc(request.auth.uid).perfil == 'gerencia'
+            && userDoc(request.auth.uid).perfilSolicitado == request.resource.data.perfilSolicitado
+            && destExiste()
+            && destPerfil() == 'admin'
+          )
+          // Demais fluxos exigem remetente com conta ativa.
+          || (
+            isActiveUser(request.auth.uid)
+            && (
+              // Nova solicitação de reutilização -> quem pode aprová-la.
+              (
+                request.resource.data.tipo == 'reutilizacao_nova'
+                && destExiste()
+                && destPerfil() in ['admin', 'projetista']
+              )
+              // Decisões (reutilização ou conta) -> destinatário existente.
+              || (
+                request.resource.data.tipo in ['reutilizacao_decidida', 'conta_decidida']
+                && destExiste()
+              )
+            )
+          )
+        );
+
+      // O destinatário pode apenas marcar como lida/resolvida.
+      allow update: if signedIn()
+        && resource.data.destinatarioUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lida', 'resolvida']);
+
+      allow delete: if false;
     }
   }
 }

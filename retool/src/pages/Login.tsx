@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth, traduzirErroAuth } from '../context/AuthContext';
+import { ROLES_CONFIG, UserRole } from '../domain/entities/user';
 import { useNavigate } from 'react-router-dom';
 import { 
   Lock, 
@@ -20,6 +21,7 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nome, setNome] = useState('');
+  const [perfilSolicitado, setPerfilSolicitado] = useState<UserRole>('gerencia');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
@@ -35,7 +37,7 @@ export function Login() {
         if (!nome.trim()) throw new Error('Por favor, informe seu nome completo.');
         if (password.length < 6) throw new Error('A senha deve conter no mínimo 6 caracteres.');
         if (password !== confirmPassword) throw new Error('As senhas informadas não coincidem.');
-        await register(email, password, nome);
+        await register(email, password, nome, perfilSolicitado);
         setSucesso('Conta criada com sucesso! Seu acesso está aguardando aprovação da Administradora — você poderá entrar assim que for liberado.');
         setIsRegistering(false);
         setPassword('');
@@ -333,6 +335,34 @@ export function Login() {
                     }}
                   />
                 </div>
+              </div>
+            )}
+
+            {isRegistering && (
+              <div>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                  Perfil Solicitado
+                </label>
+                <select
+                  value={perfilSolicitado}
+                  onChange={e => setPerfilSolicitado(e.target.value as UserRole)}
+                  style={{ 
+                    width: '100%', 
+                    padding: '11px 12px', 
+                    borderRadius: '8px', 
+                    border: '1.5px solid #cbd5e1', 
+                    backgroundColor: '#ffffff', 
+                    color: '#0f172a',
+                    fontSize: '0.86rem',
+                    boxSizing: 'border-box'
+                  }}
+                >
+                  {(Object.keys(ROLES_CONFIG) as UserRole[]).map(r => (
+                    <option key={r} value={r}>
+                      {ROLES_CONFIG[r].titulo}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 

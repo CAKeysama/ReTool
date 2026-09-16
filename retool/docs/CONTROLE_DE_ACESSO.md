@@ -115,7 +115,28 @@ criada **manualmente uma única vez**:
 > Se as regras já estiverem publicadas, apenas esse bootstrap manual
 > funciona — o auto-provisionamento do app cria contas restritas e inativas.
 
-## 6. Deploy das regras
+## 6. Notificações
+
+Coleção `notifications` (um documento por destinatário, `destinatarioUid`),
+com **ids determinísticos** (`tipo_entidade_destinatario`) que impedem
+duplicatas por construção.
+
+| Tipo | Quando | Destinatário | Ação ao clicar |
+| --- | --- | --- | --- |
+| `reutilizacao_nova` | Solicitação de reutilização criada (pendente) | Perfis que aprovam (admin/projetista) | Abre `/reutilizacoes` com a solicitação destacada |
+| `reutilizacao_decidida` | Aprovação/rejeição da solicitação | Solicitante | Abre `/reutilizacoes` com a solicitação destacada |
+| `conta_nova` | Cadastro público solicitando tier ≠ Gerência | Administração | Abre o gerenciamento de usuários; botões Aprovar/Recusar na própria notificação |
+| `conta_decidida` | Decisão da Administração sobre a conta | Solicitante | Marca como lida |
+
+- O **status exibido é derivado em tempo real** da entidade referenciada
+  (reutilização ou usuário), então a notificação acompanha o fluxo sem
+  escritas extras.
+- Somente o destinatário lê as próprias notificações; só o remetente legítimo
+  cria (validado nas regras por tipo e papel do destinatário).
+- Ícone de sino com contador de não lidas no Layout (sidebar e fullscreen);
+  clicar marca como lida e navega; botão dedicado também marca como lida.
+
+## 7. Deploy das regras
 
 ```bash
 cd retool

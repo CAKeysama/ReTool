@@ -8,6 +8,7 @@ import { DispositivoForm } from '../pages/DispositivoForm';
 import { UserNavMenu } from './UserNavMenu';
 import { UsersManagementModal } from './UsersManagementModal';
 import { AuditLogsModal } from './AuditLogsModal';
+import { NotificationsMenu } from './NotificationsMenu';
 
 export function Layout() {
   const { announcement, isDispFormOpen } = useReTool();
@@ -26,11 +27,14 @@ export function Layout() {
         <div aria-live="polite" className="sr-only">{announcement}</div>
         
         {/* TOP RIGHT PROFILE BADGE EM TELAS FULLSCREEN */}
-        <div style={{ position: 'absolute', top: '16px', right: '24px', zIndex: 100, width: '220px' }}>
-          <UserNavMenu 
-            onOpenUsersModal={() => setIsUsersModalOpen(true)} 
-            onOpenLogsModal={() => setIsLogsModalOpen(true)} 
-          />
+        <div style={{ position: 'absolute', top: '16px', right: '24px', zIndex: 100, width: '280px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <UserNavMenu 
+              onOpenUsersModal={() => setIsUsersModalOpen(true)} 
+              onOpenLogsModal={() => setIsLogsModalOpen(true)} 
+            />
+          </div>
+          <NotificationsMenu align="right" onOpenUsersModal={() => setIsUsersModalOpen(true)} />
         </div>
 
         <Outlet />
@@ -91,12 +95,15 @@ export function Layout() {
           </div>
         </div>
 
-        {/* PERFIL DE ACESSO RBAC */}
-        <div style={{ marginBottom: 'var(--spacing-lg)' }}>
-          <UserNavMenu 
-            onOpenUsersModal={() => setIsUsersModalOpen(true)} 
-            onOpenLogsModal={() => setIsLogsModalOpen(true)} 
-          />
+        {/* PERFIL DE ACESSO RBAC + NOTIFICAÇÕES */}
+        <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <UserNavMenu 
+              onOpenUsersModal={() => setIsUsersModalOpen(true)} 
+              onOpenLogsModal={() => setIsLogsModalOpen(true)} 
+            />
+          </div>
+          <NotificationsMenu align="left" onOpenUsersModal={() => setIsUsersModalOpen(true)} />
         </div>
 
         {/* MENU */}
