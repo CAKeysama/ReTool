@@ -28,7 +28,7 @@ export function Layout() {
         
         {/* TOP RIGHT PROFILE BADGE EM TELAS FULLSCREEN */}
         <div style={{ position: 'absolute', top: '16px', right: '24px', zIndex: 100, width: '280px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <UserNavMenu 
               onOpenUsersModal={() => setIsUsersModalOpen(true)} 
               onOpenLogsModal={() => setIsLogsModalOpen(true)} 
@@ -96,8 +96,8 @@ export function Layout() {
         </div>
 
         {/* PERFIL DE ACESSO RBAC + NOTIFICAÇÕES */}
-        <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-          <div style={{ flex: 1 }}>
+        <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', gap: '8px', alignItems: 'flex-start', minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <UserNavMenu 
               onOpenUsersModal={() => setIsUsersModalOpen(true)} 
               onOpenLogsModal={() => setIsLogsModalOpen(true)} 
