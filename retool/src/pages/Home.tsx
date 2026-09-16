@@ -155,8 +155,8 @@ export function Home() {
         }}
       />
 
-      {/* Botão Institucional - Top Right */}
-      <div style={{ position: 'absolute', top: 'var(--spacing-xl)', right: 'var(--spacing-xl)' }}>
+      {/* Botão Institucional - Top Left (o top right é ocupado por perfil + notificações) */}
+      <div style={{ position: 'absolute', top: 'var(--spacing-xl)', left: 'var(--spacing-xl)' }}>
         <button
           className="btn"
           onClick={() => navigate('/sobre')}
