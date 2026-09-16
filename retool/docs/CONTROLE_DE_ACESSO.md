@@ -18,6 +18,11 @@ O controle de acesso opera em **duas camadas independentes e complementares**:
 
 ## 2. Perfis de Acesso (papéis)
 
+Matriz oficial (imagem institucional *"Retool ADM – Controle de Acesso"*),
+travada como teste de regressão em `src/tests/domain/entities/user.test.ts`.
+Para a Engenharia, o "Solicitar" das colunas Cadastrar/Aprovar da imagem é a
+ação de **solicitar reutilização** (`canSolicitar`).
+
 Definidos em `src/domain/entities/user.ts` (`ROLES_CONFIG`):
 
 | Papel | Consultar | Cadastrar | Editar | Excluir | Aprovar | Solicitar reutilização | Gerir usuários | Ver auditoria |

@@ -32,7 +32,7 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   admin: {
     id: 'admin',
     titulo: 'Programadora / Administradora',
-    descricao: 'Responsável pelo sistema, permissões, cadastros, aprovações e exclusões com rastreabilidade.',
+    descricao: 'Responsável pelo sistema: cria e bloqueia usuários, define perfis de acesso, cadastra, edita e exclui registros, aprova solicitações e administra permissões. Todas as exclusões são registradas em histórico/log.',
     badgeBg: '#f3e8ff',
     badgeText: '#6b21a8',
     borderColor: '#a855f7',
@@ -49,7 +49,7 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   projetista: {
     id: 'projetista',
     titulo: 'Projetista – Ferramentaria',
-    descricao: 'Atua na análise e aprovação das solicitações, cadastro e edição. Não pode excluir registros.',
+    descricao: 'Atua na análise e aprovação das solicitações: consulta dispositivos e projetos, cadastra e edita informações, aprova solicitações de reutilização e atualiza status e andamento. Não pode excluir registros.',
     badgeBg: '#dcfce7',
     badgeText: '#15803d',
     borderColor: '#22c55e',
@@ -66,7 +66,7 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   engenharia: {
     id: 'engenharia',
     titulo: 'Engenharia de Processo / Industrial',
-    descricao: 'Consulta dispositivos existentes e solicita reutilizações. Não pode cadastrar, editar ou excluir.',
+    descricao: 'Faz a consulta e solicita reutilização de dispositivos: consulta dispositivos existentes, verifica possibilidade de reutilização, solicita reutilização e acompanha o status da solicitação. Não pode cadastrar, editar ou excluir registros.',
     badgeBg: '#ffedd5',
     badgeText: '#c2410c',
     borderColor: '#f97316',
@@ -83,7 +83,7 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   gerencia: {
     id: 'gerencia',
     titulo: 'Gerência',
-    descricao: 'Acompanha indicadores, resultados, consultas e movimentações do sistema (somente leitura).',
+    descricao: 'Acompanha e consulta as informações do sistema: consulta projetos, dispositivos e reutilizações, acompanha indicadores e resultados e visualiza histórico e movimentações. Não pode cadastrar, editar, excluir ou aprovar.',
     badgeBg: '#dbeafe',
     badgeText: '#1e40af',
     borderColor: '#3b82f6',

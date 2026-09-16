@@ -158,7 +158,7 @@ service cloud.firestore {
 
       allow create: if canSolicitar()
         // A solicitação deve ser atribuída ao próprio solicitante.
-        && request.resource.data.usuarioUid == request.auth.uid;
+        && request.resource.data.solicitanteId == request.auth.uid;
 
       // Aprovação/rejeição/edição ficam com Ferramentaria e Administração.
       allow update: if canAprovar();

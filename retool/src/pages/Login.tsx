@@ -154,7 +154,7 @@ export function Login() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#e9d5ff' }}>Programadora / Administradora</div>
-                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Acesso total, gestão de usuários e logs de exclusão.</div>
+                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Responsável pelo sistema; todas as exclusões são registradas em histórico/log.</div>
                 </div>
               </div>
 
@@ -172,7 +172,7 @@ export function Login() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#bbf7d0' }}>Projetista – Ferramentaria</div>
-                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Cadastra, edita e aprova reutilizações (não exclui).</div>
+                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Análise e aprovação das solicitações; não pode excluir registros.</div>
                 </div>
               </div>
 
@@ -190,7 +190,7 @@ export function Login() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fed7aa' }}>Engenharia de Processo / Industrial</div>
-                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Consulta dispositivos e solicita reutilizações.</div>
+                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Consulta dispositivos e solicita reutilização; não cadastra, edita ou exclui.</div>
                 </div>
               </div>
 
@@ -208,7 +208,7 @@ export function Login() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#bfdbfe' }}>Gerência</div>
-                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Consulta indicadores, projetos e histórico de movimentações.</div>
+                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Acompanha e consulta o sistema; não cadastra, edita, exclui ou aprova.</div>
                 </div>
               </div>
             </div>

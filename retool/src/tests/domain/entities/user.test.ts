@@ -1,5 +1,18 @@
 import { describe, it, expect } from '@jest/globals';
-import { ROLES_CONFIG } from '../../../domain/entities/user';
+import { ROLES_CONFIG, UserRole } from '../../../domain/entities/user';
+
+// Matriz oficial de permissões (imagem "Retool ADM – Controle de Acesso").
+// A coluna "Solicitar" da Engenharia aparece nas colunas Cadastrar/Aprovar
+// da imagem como a ação de *solicitar reutilização* (canSolicitar).
+const MATRIZ_OFICIAL: Record<UserRole, {
+  consultar: boolean; cadastrar: boolean; editar: boolean;
+  excluir: boolean; aprovar: boolean; solicitar?: boolean;
+}> = {
+  admin:      { consultar: true,  cadastrar: true,  editar: true,  excluir: true,  aprovar: true  },
+  projetista: { consultar: true,  cadastrar: true,  editar: true,  excluir: false, aprovar: true  },
+  engenharia: { consultar: true,  cadastrar: false, editar: false, excluir: false, aprovar: false, solicitar: true  },
+  gerencia:   { consultar: true,  cadastrar: false, editar: false, excluir: false, aprovar: false, solicitar: false },
+};
 
 describe('RBAC - Permissões por Perfil de Usuário', () => {
   it('deve conceder permissões totais para a Programadora / Administradora', () => {
@@ -42,5 +55,34 @@ describe('RBAC - Permissões por Perfil de Usuário', () => {
     expect(gerencia.canAprovar).toBe(false);
     expect(gerencia.canSolicitar).toBe(false);
     expect(gerencia.canVerLogs).toBe(true);     // Consulta histórico e movimentações
+  });
+
+  it('deve refletir exatamente a matriz oficial da imagem de Controle de Acesso', () => {
+    (Object.keys(MATRIZ_OFICIAL) as UserRole[]).forEach(perfil => {
+      const esperado = MATRIZ_OFICIAL[perfil];
+      const config = ROLES_CONFIG[perfil];
+
+      expect(config.canConsultar).toBe(esperado.consultar);
+      expect(config.canCadastrar).toBe(esperado.cadastrar);
+      expect(config.canEditar).toBe(esperado.editar);
+      expect(config.canExcluir).toBe(esperado.excluir);
+      expect(config.canAprovar).toBe(esperado.aprovar);
+
+      if (esperado.solicitar !== undefined) {
+        expect(config.canSolicitar).toBe(esperado.solicitar);
+      }
+    });
+  });
+
+  it('deve reservar gestão de usuários e auditoria completa apenas para Administração/Gerência', () => {
+    expect(ROLES_CONFIG.admin.canGerenciarUsuarios).toBe(true);
+    expect(ROLES_CONFIG.projetista.canGerenciarUsuarios).toBe(false);
+    expect(ROLES_CONFIG.engenharia.canGerenciarUsuarios).toBe(false);
+    expect(ROLES_CONFIG.gerencia.canGerenciarUsuarios).toBe(false);
+
+    expect(ROLES_CONFIG.admin.canVerLogs).toBe(true);
+    expect(ROLES_CONFIG.gerencia.canVerLogs).toBe(true);   // Histórico e movimentações
+    expect(ROLES_CONFIG.projetista.canVerLogs).toBe(false);
+    expect(ROLES_CONFIG.engenharia.canVerLogs).toBe(false);
   });
 });
