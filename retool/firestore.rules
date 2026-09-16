@@ -1,0 +1,169 @@
+rules_version = '2';
+
+// =====================================================================
+// ReTool — Regras de Segurança do Firestore (RBAC server-side)
+// =====================================================================
+// O controle de acesso é aplicado NO SERVIDOR: nenhum cliente consegue
+// elevar o próprio perfil, editar dados de terceiros ou apagar auditoria
+// burlando a interface — toda escrita é validada aqui contra o perfil
+// persistido na coleção `users`.
+//
+// Perfis (ver src/domain/entities/user.ts):
+//   admin      -> acesso total + gestão de usuários + auditoria
+//   projetista -> cadastra/edita/aprova, NUNCA exclui
+//   engenharia -> consulta + solicita reutilizações
+//   gerencia   -> somente leitura + consulta de auditoria
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------- FUNÇÕES AUXILIARES ----------------------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    // Usuário possui perfil ativo no sistema?
+    function isActiveUser(uid) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(uid))
+        && userDoc(uid).ativo == true;
+    }
+
+    function isAdmin() {
+      return isActiveUser(request.auth.uid)
+        && userDoc(request.auth.uid).perfil == 'admin';
+    }
+
+    // Papéis com permissão de escrita nas coleções industriais
+    function canCadastrar() {
+      return isActiveUser(request.auth.uid)
+        && userDoc(request.auth.uid).perfil in ['admin', 'projetista'];
+    }
+
+    function canEditar() {
+      return canCadastrar();
+    }
+
+    // Exclusão é prerrogativa exclusiva da Administração (com auditoria)
+    function canExcluir() {
+      return isAdmin();
+    }
+
+    function canAprovar() {
+      return isActiveUser(request.auth.uid)
+        && userDoc(request.auth.uid).perfil in ['admin', 'projetista'];
+    }
+
+    function canSolicitar() {
+      return isActiveUser(request.auth.uid)
+        && userDoc(request.auth.uid).perfil in ['admin', 'projetista', 'engenharia'];
+    }
+
+    // ------------------------- USUÁRIOS -----------------------------
+
+    match /users/{userId} {
+      // Qualquer autenticado consulta a lista (necessário p/ UI de gestão
+      // e auditoria; a escrita é estritamente controlada abaixo).
+      allow get, list: if signedIn();
+
+      allow create: if signedIn()
+        // a) A Administração provisionando qualquer conta;
+        && (
+          isAdmin()
+          // b) Auto-provisionamento restrito: apenas o próprio documento,
+          //    sempre com perfil limitado e aguardando aprovação.
+          || (
+            userId == request.auth.uid
+            && request.resource.data.perfil == 'gerencia'
+            && request.resource.data.ativo == false
+            && request.resource.data.email == request.auth.token.email
+            && request.resource.data.uid == userId
+          )
+        );
+
+      allow update: if isActiveUser(userId) && (
+        // Administração gerencia qualquer conta (perfil, bloqueio, nome);
+        isAdmin()
+        // O próprio usuário pode alterar apenas o nome — jamais o perfil
+        // ou o status (impede auto-escalonamento de privilégios).
+        || (
+          userId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome'])
+        )
+      );
+
+      // Contas são bloqueadas (ativo=false), nunca apagadas: preserva a
+      // rastreabilidade e evita órfãos entre Auth e Firestore.
+      allow delete: if false;
+    }
+
+    // -------------------- LOGS DE AUDITORIA -------------------------
+
+    match /audit_logs/{logId} {
+      allow get, list: if signedIn()
+        && isActiveUser(request.auth.uid)
+        && userDoc(request.auth.uid).perfil in ['admin', 'gerencia'];
+
+      allow create: if isAdmin()
+        // Impede atribuir a autoria da ação a outro usuário.
+        && request.resource.data.usuarioUid == request.auth.uid;
+
+      // Logs são imutáveis e indeléveis: nem a administração remove
+      // trilhas de auditoria diretamente no banco.
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ---------------- COLEÇÕES INDUSTRIAIS (CRUD) -------------------
+    // dispositivos, categorias, familias, produtos
+
+    match /dispositivos/{docId} {
+      allow get, list: if signedIn();
+      allow create: if canCadastrar();
+      allow update: if canEditar();
+      allow delete: if canExcluir();
+    }
+
+    match /categorias/{docId} {
+      allow get, list: if signedIn();
+      allow create: if canCadastrar();
+      allow update: if canEditar();
+      allow delete: if canExcluir();
+    }
+
+    match /familias/{docId} {
+      allow get, list: if signedIn();
+      allow create: if canCadastrar();
+      allow update: if canEditar();
+      allow delete: if canExcluir();
+    }
+
+    match /produtos/{docId} {
+      allow get, list: if signedIn();
+      allow create: if canCadastrar();
+      allow update: if canEditar();
+      allow delete: if canExcluir();
+    }
+
+    // ------------------- REUTILIZAÇÕES ------------------------------
+
+    match /reutilizacoes/{docId} {
+      allow get, list: if signedIn();
+
+      allow create: if canSolicitar()
+        // A solicitação deve ser atribuída ao próprio solicitante.
+        && request.resource.data.usuarioUid == request.auth.uid;
+
+      // Aprovação/rejeição/edição ficam com Ferramentaria e Administração.
+      allow update: if canAprovar();
+
+      allow delete: if canExcluir();
+    }
+  }
+}

@@ -1,19 +1,45 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { 
+import {
   User as FirebaseUser,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  getAuth,
   signOut as firebaseSignOut
 } from 'firebase/auth';
-import { auth } from '../data/datasources/firebase';
-import { UserProfile, UserRole, ROLES_CONFIG, RoleConfig, DEFAULT_SUPERUSER } from '../domain/entities/user';
+import { auth, getSecondaryAuthApp } from '../data/datasources/firebase';
+import { UserProfile, UserRole, ROLES_CONFIG, RoleConfig } from '../domain/entities/user';
 import { AuditLog } from '../domain/entities/auditLog';
 import { FirestoreUsersRepository } from '../data/repositories/FirestoreUsersRepository';
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 
 const usersRepo = new FirestoreUsersRepository();
 const auditRepo = new FirestoreAuditLogRepository();
+
+/** Traduz códigos do Firebase Auth para mensagens amigáveis. */
+export function traduzirErroAuth(err: unknown): string {
+  const code = (err as { code?: string })?.code || '';
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'E-mail ou senha incorretos.';
+    case 'auth/email-already-in-use':
+      return 'Este e-mail já está cadastrado no sistema.';
+    case 'auth/weak-password':
+      return 'A senha deve conter no mínimo 6 caracteres.';
+    case 'auth/too-many-requests':
+      return 'Muitas tentativas seguidas. Aguarde alguns minutos e tente novamente.';
+    case 'auth/invalid-email':
+      return 'Informe um e-mail válido.';
+    case 'auth/network-request-failed':
+      return 'Falha de conexão. Verifique sua internet e tente novamente.';
+    case 'auth/user-disabled':
+      return 'Esta conta foi desativada pela Administradora. Contate o suporte.';
+    default:
+      return (err as Error)?.message || 'Erro ao processar autenticação.';
+  }
+}
 
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
@@ -24,8 +50,11 @@ interface AuthContextType {
   users: UserProfile[];
   auditLogs: AuditLog[];
   login: (email: string, pass: string) => Promise<void>;
-  register: (email: string, pass: string, nome: string, perfil: UserRole) => Promise<void>;
+  register: (email: string, pass: string, nome: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Exclusivo da Administração: cria conta com o perfil indicado via app
+   *  secundário do Firebase, preservando a sessão da administradora. */
+  createUserByAdmin: (email: string, pass: string, nome: string, perfil: UserRole) => Promise<void>;
   updateUserRole: (uid: string, perfil: UserRole) => Promise<void>;
   toggleUserStatus: (uid: string, ativo: boolean) => Promise<void>;
   registrarExclusaoComAuditoria: (
@@ -47,17 +76,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Criação de conta pública: SEMPRE gera um perfil restrito (Gerência) e
+ * inativo, aguardando aprovação da Administração. Jamais aceita um perfil
+ * escolhido pelo próprio visitante — e as regras do Firestore também
+ * recusam qualquer tentativa direta de escrita diferente disso.
+ */
+async function criarPerfilRestrito(user: FirebaseUser, nome: string): Promise<void> {
+  const profile: UserProfile = {
+    uid: user.uid,
+    email: user.email || '',
+    nome,
+    perfil: 'gerencia',
+    ativo: false,
+    criadoEm: new Date().toISOString()
+  };
+  await usersRepo.setProfile(profile);
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('retool_user_profile');
-    if (!saved) return null;
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return null;
-    }
-  });
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -85,43 +124,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (fbUser) {
         try {
-          const profile = await usersRepo.getProfile(fbUser.uid);
-          if (profile) {
-            if (!profile.ativo) {
-              await firebaseSignOut(auth);
-              setUserProfile(null);
-              localStorage.removeItem('retool_user_profile');
-              setLoading(false);
-              return;
+          let profile = await usersRepo.getProfile(fbUser.uid);
+
+          if (!profile) {
+            // Autenticado sem perfil no Firestore: provisiona conta
+            // restrita (Gerência) e pendente de aprovação. Se as regras do
+            // Firestore recusarem a escrita, encerra a sessão.
+            try {
+              await criarPerfilRestrito(
+                fbUser,
+                fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuário'
+              );
+              profile = await usersRepo.getProfile(fbUser.uid);
+            } catch (e) {
+              console.warn('Não foi possível provisionar perfil para o usuário:', e);
             }
-            setUserProfile(profile);
-            localStorage.setItem('retool_user_profile', JSON.stringify(profile));
-          } else {
-            // Se usuário existe no Auth mas não no Firestore, cria seu perfil inicial
-            const isSuper = fbUser.email?.toLowerCase() === DEFAULT_SUPERUSER.email.toLowerCase();
-            const newProfile: UserProfile = {
-              uid: fbUser.uid,
-              email: fbUser.email || '',
-              nome: isSuper ? DEFAULT_SUPERUSER.nome : (fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuário'),
-              perfil: isSuper ? 'admin' : 'gerencia',
-              ativo: true,
-              criadoEm: new Date().toISOString()
-            };
-            await usersRepo.setProfile(newProfile);
-            setUserProfile(newProfile);
-            localStorage.setItem('retool_user_profile', JSON.stringify(newProfile));
           }
 
-          // Inscrição em tempo real para mudanças no perfil (ex: alteração de perfil feita pelo admin)
+          if (!profile || !profile.ativo) {
+            await firebaseSignOut(auth);
+            setUserProfile(null);
+            setLoading(false);
+            return;
+          }
+
+          setUserProfile(profile);
+
+          // Inscrição em tempo real para mudanças no perfil (ex.: alteração
+          // de papel ou bloqueio feitos pela Administração).
           unsubProfile = usersRepo.subscribeProfile(fbUser.uid, (updatedProfile) => {
             if (updatedProfile) {
               if (!updatedProfile.ativo) {
                 firebaseSignOut(auth);
                 setUserProfile(null);
-                localStorage.removeItem('retool_user_profile');
               } else {
                 setUserProfile(updatedProfile);
-                localStorage.setItem('retool_user_profile', JSON.stringify(updatedProfile));
               }
             }
           });
@@ -130,7 +167,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       } else {
         setUserProfile(null);
-        localStorage.removeItem('retool_user_profile');
       }
       setLoading(false);
     });
@@ -144,100 +180,99 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (email: string, pass: string) => {
     setLoading(true);
     const normalizedEmail = email.trim().toLowerCase();
-    const isSuper = normalizedEmail === DEFAULT_SUPERUSER.email.toLowerCase();
 
     try {
-      let cred;
-      try {
-        cred = await signInWithEmailAndPassword(auth, normalizedEmail, pass);
-      } catch (authErr: any) {
-        // Se for o Super Usuário institucional e ainda não existir no Firebase Auth, provisiona automaticamente!
-        if (isSuper && (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential')) {
-          cred = await createUserWithEmailAndPassword(auth, normalizedEmail, pass || DEFAULT_SUPERUSER.senha);
-          const superProfile: UserProfile = {
-            uid: cred.user.uid,
-            email: DEFAULT_SUPERUSER.email,
-            nome: DEFAULT_SUPERUSER.nome,
-            perfil: 'admin',
-            ativo: true,
-            criadoEm: new Date().toISOString()
-          };
-          await usersRepo.setProfile(superProfile);
-          setUserProfile(superProfile);
-          localStorage.setItem('retool_user_profile', JSON.stringify(superProfile));
-          return;
-        }
-        throw authErr;
-      }
+      const cred = await signInWithEmailAndPassword(auth, normalizedEmail, pass);
+      const profile = await usersRepo.getProfile(cred.user.uid);
 
-      let profile = await usersRepo.getProfile(cred.user.uid);
       if (!profile) {
-        profile = {
-          uid: cred.user.uid,
-          email: cred.user.email || normalizedEmail,
-          nome: isSuper ? DEFAULT_SUPERUSER.nome : (cred.user.displayName || normalizedEmail.split('@')[0]),
-          perfil: isSuper ? 'admin' : 'gerencia',
-          ativo: true,
-          criadoEm: new Date().toISOString()
-        };
-        await usersRepo.setProfile(profile);
+        // Conta no Auth sem perfil (provisionada fora do fluxo da aplicação).
+        await firebaseSignOut(auth);
+        throw new Error(
+          'Esta conta não possui um perfil vinculado no ReTool. Solicite à Administração a configuração do seu acesso.'
+        );
       }
 
       if (!profile.ativo) {
         await firebaseSignOut(auth);
         setUserProfile(null);
-        localStorage.removeItem('retool_user_profile');
-        throw new Error('Este usuário foi desativado pela Administradora. Contate o suporte.');
+        throw new Error(
+          profile.perfil === 'gerencia'
+            ? 'Sua conta foi criada e está aguardando aprovação da Administradora.'
+            : 'Este usuário foi desativado pela Administradora. Contate o suporte.'
+        );
       }
 
       setUserProfile(profile);
-      localStorage.setItem('retool_user_profile', JSON.stringify(profile));
-      localStorage.removeItem('retool_simulated_role');
     } finally {
       setLoading(false);
     }
   };
 
-  const register = async (email: string, pass: string, nome: string, perfil: UserRole) => {
+  const register = async (email: string, pass: string, nome: string) => {
     setLoading(true);
     const normalizedEmail = email.trim().toLowerCase();
     try {
       const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, pass);
-      
-      // Apenas o e-mail institucional oficial do Super Usuário é forçado para admin
-      const isSuperEmail = normalizedEmail === DEFAULT_SUPERUSER.email.toLowerCase();
-      const finalRole: UserRole = isSuperEmail ? 'admin' : perfil;
+      await criarPerfilRestrito(cred.user, nome.trim());
 
-      const newProfile: UserProfile = {
-        uid: cred.user.uid,
-        email: normalizedEmail,
-        nome: nome.trim(),
-        perfil: finalRole,
-        ativo: true,
-        criadoEm: new Date().toISOString()
-      };
-
-      await usersRepo.setProfile(newProfile);
-      setUserProfile(newProfile);
-      localStorage.setItem('retool_user_profile', JSON.stringify(newProfile));
-      localStorage.removeItem('retool_simulated_role');
-
-      // Registra log da criação de usuário
       await auditRepo.registrarLog({
         dataHora: new Date().toISOString(),
         usuarioUid: cred.user.uid,
-        usuarioNome: nome,
+        usuarioNome: nome.trim(),
         usuarioEmail: normalizedEmail,
-        usuarioPerfil: finalRole,
+        usuarioPerfil: 'gerencia',
         acao: 'alteracao_perfil',
         tipoEntidade: 'usuario',
         entidadeId: cred.user.uid,
-        entidadeNome: nome,
-        detalhes: `Novo usuário registrado com perfil ${ROLES_CONFIG[finalRole].titulo}`
+        entidadeNome: nome.trim(),
+        detalhes: 'Novo usuário registrado com perfil restrito (Gerência), aguardando aprovação da Administradora.'
       });
+
+      // Encerra a sessão: contas pendentes não podem circular pela aplicação
+      // nem mesmo com o perfil limitado — o acesso só inicia após aprovação.
+      await firebaseSignOut(auth);
+      setUserProfile(null);
     } finally {
       setLoading(false);
     }
+  };
+
+  const createUserByAdmin = async (email: string, pass: string, nome: string, perfil: UserRole) => {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // App secundário: a conta criada NÃO substitui a sessão da administradora.
+    const secondaryAuth = getAuth(getSecondaryAuthApp());
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, normalizedEmail, pass);
+
+    const newProfile: UserProfile = {
+      uid: cred.user.uid,
+      email: normalizedEmail,
+      nome: nome.trim(),
+      perfil,
+      ativo: true,
+      criadoEm: new Date().toISOString()
+    };
+
+    try {
+      await usersRepo.setProfile(newProfile);
+    } finally {
+      // Encerra apenas a sessão efêmera do app secundário.
+      await firebaseSignOut(secondaryAuth).catch(() => undefined);
+    }
+
+    await auditRepo.registrarLog({
+      dataHora: new Date().toISOString(),
+      usuarioUid: userProfile?.uid || 'desconhecido',
+      usuarioNome: userProfile?.nome || 'Administradora',
+      usuarioEmail: userProfile?.email || '',
+      usuarioPerfil: userProfile?.perfil || 'admin',
+      acao: 'alteracao_perfil',
+      tipoEntidade: 'usuario',
+      entidadeId: cred.user.uid,
+      entidadeNome: nome.trim(),
+      detalhes: `Usuário provisionado pela Administração com perfil ${ROLES_CONFIG[perfil].titulo}`
+    });
   };
 
   const logout = async () => {
@@ -248,18 +283,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     setFirebaseUser(null);
     setUserProfile(null);
-    localStorage.removeItem('retool_user_profile');
-    localStorage.removeItem('retool_simulated_role');
   };
 
   const updateUserRole = async (uid: string, perfil: UserRole) => {
     await usersRepo.updateRole(uid, perfil);
-    
+
     // Se o usuário atual teve o próprio perfil alterado, atualiza o estado local
     if (userProfile && userProfile.uid === uid) {
-      const updated = { ...userProfile, perfil };
-      setUserProfile(updated);
-      localStorage.setItem('retool_user_profile', JSON.stringify(updated));
+      setUserProfile({ ...userProfile, perfil });
     }
 
     const targetUser = users.find(u => u.uid === uid);
@@ -332,6 +363,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         register,
         logout,
+        createUserByAdmin,
         updateUserRole,
         toggleUserStatus,
         registrarExclusaoComAuditoria,

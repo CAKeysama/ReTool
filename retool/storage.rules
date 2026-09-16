@@ -1,19 +1,48 @@
 rules_version = '2';
+
+// ReTool — Regras de Segurança do Storage
+// Acesso a anexos exige sessão ativa; escrita/exclusão respeitam o RBAC
+// (cadastro/edição: admin+projetista; exclusão: somente admin).
+
 service firebase.storage {
   match /b/{bucket}/o {
     match /retool/dispositivos/{dispositivoId}/{allPaths=**} {
-      // Leitura pública dos recursos da aplicação Baldan
-      allow read: if true;
-      
-      // Validação rigorosa na criação e atualização
-      allow write: if request.resource.size < 25 * 1024 * 1024 // Limite de 25MB
-                   && (
-                     request.resource.contentType.matches('image/(jpeg|png|webp)')
-                     || request.resource.contentType == 'application/pdf'
-                   );
-      
-      // Exclusão permitida para manutenção e limpeza em cascata
-      allow delete: if true;
+
+      function signedIn() {
+        return request.auth != null;
+      }
+
+      function userDoc() {
+        return firestore.get(/databases/(default)/documents/users/(request.auth.uid)).data;
+      }
+
+      function isActiveUser() {
+        return signedIn()
+          && firestore.exists(/databases/(default)/documents/users/(request.auth.uid))
+          && userDoc().ativo == true;
+      }
+
+      function canCadastrar() {
+        return isActiveUser() && userDoc().perfil in ['admin', 'projetista'];
+      }
+
+      function isAdmin() {
+        return isActiveUser() && userDoc().perfil == 'admin';
+      }
+
+      // Leitura apenas para usuários autenticados com conta ativa.
+      allow read: if isActiveUser();
+
+      // Upload com validação de tamanho/tipo, restrito a quem pode cadastrar.
+      allow create, update: if canCadastrar()
+        && request.resource.size < 25 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/(jpeg|png|webp)')
+          || request.resource.contentType == 'application/pdf'
+        );
+
+      // Exclusão (limpeza em cascata de anexos) apenas pela Administração.
+      allow delete: if isAdmin();
     }
   }
 }

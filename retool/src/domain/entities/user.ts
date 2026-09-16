@@ -99,10 +99,4 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   },
 };
 
-export const DEFAULT_SUPERUSER = {
-  email: 'admin@retool.com',
-  senha: 'admin123',
-  nome: 'Super Administradora',
-  perfil: 'admin' as UserRole
-};
 

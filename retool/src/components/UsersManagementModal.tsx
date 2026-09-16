@@ -19,7 +19,7 @@ interface UsersManagementModalProps {
 }
 
 export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalProps) {
-  const { users, updateUserRole, toggleUserStatus, register, canGerenciarUsuarios } = useAuth();
+  const { users, updateUserRole, toggleUserStatus, createUserByAdmin } = useAuth();
   
   // Estado para criar novo usuário diretamente pela administradora
   const [showAddForm, setShowAddForm] = useState(false);
@@ -43,8 +43,8 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
       if (novaSenha.length < 6) {
         throw new Error('A senha deve conter no mínimo 6 caracteres.');
       }
-      await register(novoEmail, novaSenha, novoNome, novoPerfil);
-      setSucessoMsg(`Usuário ${novoNome} cadastrado com sucesso!`);
+      await createUserByAdmin(novoEmail, novaSenha, novoNome, novoPerfil);
+      setSucessoMsg(`Usuário ${novoNome} cadastrado com sucesso com o perfil ${ROLES_CONFIG[novoPerfil].titulo}!`);
       setNovoEmail('');
       setNovoNome('');
       setNovaSenha('');
@@ -316,26 +316,32 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                       </td>
 
                       <td style={{ padding: '12px 16px' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          fontSize: '0.72rem',
-                          fontWeight: 600,
-                          backgroundColor: user.ativo ? '#dcfce7' : '#fee2e2',
-                          color: user.ativo ? '#15803d' : '#b91c1c'
-                        }}>
-                          {user.ativo ? '● Ativo' : '● Bloqueado'}
-                        </span>
+                        {(() => {
+                          const isPendente = !user.ativo && user.perfil === 'gerencia';
+                          const label = user.ativo ? '● Ativo' : isPendente ? '● Aguardando Aprovação' : '● Bloqueado';
+                          return (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '3px 8px',
+                              borderRadius: '12px',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              backgroundColor: user.ativo ? '#dcfce7' : isPendente ? '#fef3c7' : '#fee2e2',
+                              color: user.ativo ? '#15803d' : isPendente ? '#b45309' : '#b91c1c'
+                            }}>
+                              {label}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                         <button
                           type="button"
                           onClick={() => toggleUserStatus(user.uid, !user.ativo)}
-                          title={user.ativo ? 'Bloquear usuário no ReTool' : 'Desbloquear usuário'}
+                          title={user.ativo ? 'Bloquear usuário no ReTool' : 'Aprovar/desbloquear usuário'}
                           style={{
                             padding: '6px 12px',
                             borderRadius: '6px',
@@ -347,7 +353,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                             cursor: 'pointer'
                           }}
                         >
-                          {user.ativo ? 'Bloquear Acesso' : 'Desbloquear'}
+                          {user.ativo ? 'Bloquear Acesso' : 'Aprovar Acesso'}
                         </button>
                       </td>
                     </tr>

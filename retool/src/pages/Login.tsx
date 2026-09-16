@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { ROLES_CONFIG, UserRole, DEFAULT_SUPERUSER } from '../domain/entities/user';
+import { useAuth, traduzirErroAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { 
   Lock, 
@@ -12,8 +11,8 @@ import {
   Building2, 
   ArrowRight,
   AlertCircle,
-  KeyRound,
-  ShieldCheck
+  Info,
+  CheckCircle2
 } from 'lucide-react';
 
 export function Login() {
@@ -23,44 +22,38 @@ export function Login() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [nome, setNome] = useState('');
-  const [perfil, setPerfil] = useState<UserRole>('engenharia');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const [sucesso, setSucesso] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErro('');
+    setSucesso('');
 
     try {
       if (isRegistering) {
         if (!nome.trim()) throw new Error('Por favor, informe seu nome completo.');
         if (password.length < 6) throw new Error('A senha deve conter no mínimo 6 caracteres.');
-        await register(email, password, nome, perfil);
+        if (password !== confirmPassword) throw new Error('As senhas informadas não coincidem.');
+        await register(email, password, nome);
+        setSucesso('Conta criada com sucesso! Seu acesso está aguardando aprovação da Administradora — você poderá entrar assim que for liberado.');
+        setIsRegistering(false);
+        setPassword('');
+        setConfirmPassword('');
       } else {
         await login(email, password);
+        navigate('/dispositivos');
       }
-      navigate('/dispositivos');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-        setErro('E-mail ou senha incorretos.');
-      } else if (err.code === 'auth/email-already-in-use') {
-        setErro('Este e-mail já está cadastrado no sistema.');
-      } else {
-        setErro(err.message || 'Erro ao processar autenticação.');
-      }
+      setErro(traduzirErroAuth(err));
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFillSuperUser = () => {
-    setEmail(DEFAULT_SUPERUSER.email);
-    setPassword(DEFAULT_SUPERUSER.senha);
-    setIsRegistering(false);
-    setErro('');
   };
 
   return (
@@ -234,50 +227,43 @@ export function Login() {
             </h2>
             <p style={{ color: '#64748b', fontSize: '0.86rem', marginTop: '6px' }}>
               {isRegistering 
-                ? 'Cadastre seu usuário institucional com seu perfil de atuação.' 
+                ? 'Cadastre seu usuário institucional. O acesso é liberado após aprovação da Administradora.' 
                 : 'Informe seu e-mail institucional e senha para entrar.'}
             </p>
           </div>
 
-          {/* BANNER INSTITUCIONAL DO SUPER USUÁRIO */}
-          {!isRegistering && (
+          {/* AVISO INSTITUCIONAL DE PROVISIONAMENTO */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            padding: '10px 14px',
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            marginBottom: '18px'
+          }}>
+            <Info size={16} color="#2563eb" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ fontSize: '0.74rem', color: '#475569', lineHeight: 1.5 }}>
+              Contas institucionais são provisionadas e aprovadas pela Administração do sistema.
+              Novos cadastros entram com acesso restrito até a liberação.
+            </div>
+          </div>
+
+          {sucesso && (
             <div style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: '8px',
               padding: '10px 14px',
-              backgroundColor: '#f8fafc',
-              border: '1px solid #e2e8f0',
+              backgroundColor: '#dcfce7',
+              color: '#15803d',
               borderRadius: '8px',
+              fontSize: '0.82rem',
               marginBottom: '18px'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ShieldCheck size={18} color="#7c3aed" />
-                <div>
-                  <div style={{ fontSize: '0.76rem', fontWeight: 700, color: '#1e293b' }}>Super Administrador</div>
-                  <div style={{ fontSize: '0.70rem', color: '#64748b' }}>admin@retool.com · admin123</div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleFillSuperUser}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '5px 10px',
-                  borderRadius: '6px',
-                  backgroundColor: '#f3e8ff',
-                  color: '#6b21a8',
-                  border: '1px solid #d8b4fe',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                <KeyRound size={12} />
-                <span>Preencher</span>
-              </button>
+              <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>{sucesso}</span>
             </div>
           )}
 
@@ -382,28 +368,28 @@ export function Login() {
             {isRegistering && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  Perfil Institucional Solicitado
+                  Confirmar Senha
                 </label>
-                <select
-                  value={perfil}
-                  onChange={e => setPerfil(e.target.value as UserRole)}
-                  style={{ 
-                    width: '100%', 
-                    padding: '11px 12px', 
-                    borderRadius: '8px', 
-                    border: '1.5px solid #cbd5e1', 
-                    backgroundColor: '#ffffff', 
-                    color: '#0f172a',
-                    fontSize: '0.86rem',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {(Object.keys(ROLES_CONFIG) as UserRole[]).map(r => (
-                    <option key={r} value={r}>
-                      {ROLES_CONFIG[r].titulo}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    type="password"
+                    required
+                    placeholder="Repita a senha"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    style={{ 
+                      width: '100%', 
+                      padding: '11px 12px 11px 38px', 
+                      borderRadius: '8px', 
+                      border: '1.5px solid #cbd5e1', 
+                      backgroundColor: '#ffffff',
+                      color: '#0f172a',
+                      fontSize: '0.88rem',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
               </div>
             )}
 
@@ -428,7 +414,7 @@ export function Login() {
                 boxShadow: '0 4px 12px rgba(225, 29, 72, 0.3)'
               }}
             >
-              <span>{loading ? 'Processando autenticação...' : (isRegistering ? 'Cadastrar e Entrar' : 'Entrar no ReTool')}</span>
+              <span>{loading ? 'Processando autenticação...' : (isRegistering ? 'Cadastrar e Aguardar Aprovação' : 'Entrar no ReTool')}</span>
               <ArrowRight size={18} />
             </button>
           </form>
