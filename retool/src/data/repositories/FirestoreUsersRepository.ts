@@ -1,5 +1,5 @@
 import { db } from '../datasources/firebase';
-import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { UserProfile, UserRole } from '../../domain/entities/user';
 
 export class FirestoreUsersRepository {
@@ -27,6 +27,10 @@ export class FirestoreUsersRepository {
       ativo,
       atualizadoEm: new Date().toISOString()
     });
+  }
+
+  async deleteProfile(uid: string): Promise<void> {
+    await deleteDoc(doc(db, 'users', uid));
   }
 
   subscribeAll(callback: (users: UserProfile[]) => void): () => void {

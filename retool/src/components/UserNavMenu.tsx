@@ -149,40 +149,35 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
           maxHeight: 'calc(100vh - 160px)',
           overflowY: 'auto'
         }}>
-          {/* Header do Dropdown */}
+          {/* Informações básicas do usuário */}
           <div style={{ 
             padding: '4px 8px 8px 8px', 
             borderBottom: '1px solid #f3f4f6', 
             marginBottom: '4px' 
           }}>
-            <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#9ca3af', fontWeight: 700 }}>
-              Sessão Ativa
-            </div>
             <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#111827' }}>
               {userProfile?.nome || 'Usuário ReTool'}
             </div>
             <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>
-              {userProfile?.email || (firebaseUser ? firebaseUser.email : 'Sessão Local')}
+              {userProfile?.email || (firebaseUser ? firebaseUser.email : '')}
             </div>
           </div>
 
-          {/* Detalhes do Perfil Institucional Ativo */}
+          {/* Tipo de perfil */}
           <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
             padding: '8px 10px',
             backgroundColor: roleConfig.badgeBg,
             borderRadius: '6px',
             border: `1px solid ${roleConfig.borderColor}`,
             margin: '4px 0'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-              {getRoleIcon(currentRole)}
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: roleConfig.badgeText }}>
-                {roleConfig.titulo}
-              </span>
-            </div>
-            <div style={{ fontSize: '0.68rem', color: '#4b5563', lineHeight: 1.3 }}>
-              {roleConfig.descricao}
-            </div>
+            {getRoleIcon(currentRole)}
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: roleConfig.badgeText }}>
+              {roleConfig.titulo}
+            </span>
           </div>
 
           <div style={{ height: '1px', backgroundColor: '#f3f4f6', margin: '4px 0' }} />

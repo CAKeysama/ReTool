@@ -62,8 +62,19 @@ A matriz acima é aplicada nos dois lugares ao mesmo tempo:
 - `ativo: false` derruba a sessão em tempo real (`subscribeProfile` no
   `AuthContext`) e todas as regras do Firestore passam a recusar escritas do
   usuário bloqueado.
-- Contas nunca são apagadas do Firestore (`allow delete: false`), preservando
-  a rastreabilidade.
+
+### 3.4 Exclusão de usuários (somente Administração)
+- Disponível no modal *Gerenciamento de Acessos & Perfis*, com **confirmação
+  obrigatória** antes de excluir.
+- A exclusão remove o perfil do Firestore (`allow delete: if isAdmin()` nas
+  regras) e registra auditoria; a lista é atualizada em tempo real via
+  `onSnapshot`.
+- A própria conta não pode ser excluída (botão desabilitado), evitando
+  auto-lockout.
+- Observação: o Firebase Auth não permite apagar a conta de autenticação pelo
+  SDK client; sem o perfil no Firestore, porém, o login é recusado e todas as
+  regras do banco/storage negam acesso — a conta fica inoperante. Para
+  remoção definitiva do Auth, use o Firebase Console.
 
 ## 4. Segurança aplicada (o que foi corrigido)
 

@@ -98,9 +98,10 @@ service cloud.firestore {
         )
       );
 
-      // Contas são bloqueadas (ativo=false), nunca apagadas: preserva a
-      // rastreabilidade e evita órfãos entre Auth e Firestore.
-      allow delete: if false;
+      // A Administração pode excluir contas (a ação fica registrada em
+      // auditoria). O bloqueio (ativo=false) segue como opção padrão, pois
+      // preserva o vínculo histórico da conta.
+      allow delete: if isAdmin();
     }
 
     // -------------------- LOGS DE AUDITORIA -------------------------

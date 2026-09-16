@@ -5,10 +5,6 @@ import {
   Lock, 
   Mail, 
   User, 
-  SlidersHorizontal, 
-  HardHat, 
-  Cpu, 
-  Building2, 
   ArrowRight,
   AlertCircle,
   Info,
@@ -127,7 +123,7 @@ export function Login() {
               marginBottom: '12px',
               color: '#ffffff' 
             }}>
-              Controle de Acesso por Perfil de Usuário
+              Gestão de Dispositivos e Reutilização Industrial
             </h2>
             <p style={{ 
               color: '#cbd5e1', 
@@ -135,82 +131,29 @@ export function Login() {
               lineHeight: 1.55, 
               marginBottom: '28px' 
             }}>
-              Cada área possui estritamente as permissões necessárias para suas atividades industriais, assegurando integridade e rastreabilidade total das operações.
+              O ReTool centraliza o cadastro de dispositivos, famílias, categorias e produtos da ferramentaria e o fluxo de reutilização de peças, com rastreabilidade das operações.
             </p>
 
-            {/* LISTA DOS 4 PERFIS DE ACESSO */}
+            {/* SOBRE O PROJETO */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(168, 85, 247, 0.35)'
-              }}>
-                <div style={{ width: '34px', height: '34px', borderRadius: '8px', backgroundColor: '#7c3aed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <SlidersHorizontal size={18} color="white" />
+              {[
+                'Cadastro e consulta de dispositivos da ferramentaria',
+                'Solicitação e aprovação de reutilização de peças',
+                'Histórico e auditoria das operações'
+              ].map(item => (
+                <div key={item} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.12)'
+                }}>
+                  <span style={{ color: 'var(--color-primary)', fontWeight: 900, fontSize: '0.9rem' }}>•</span>
+                  <span style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>{item}</span>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#e9d5ff' }}>Programadora / Administradora</div>
-                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Responsável pelo sistema; todas as exclusões são registradas em histórico/log.</div>
-                </div>
-              </div>
-
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(34, 197, 94, 0.35)'
-              }}>
-                <div style={{ width: '34px', height: '34px', borderRadius: '8px', backgroundColor: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <HardHat size={18} color="white" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#bbf7d0' }}>Projetista – Ferramentaria</div>
-                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Análise e aprovação das solicitações; não pode excluir registros.</div>
-                </div>
-              </div>
-
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(249, 115, 22, 0.35)'
-              }}>
-                <div style={{ width: '34px', height: '34px', borderRadius: '8px', backgroundColor: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Cpu size={18} color="white" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fed7aa' }}>Engenharia de Processo / Industrial</div>
-                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Consulta dispositivos e solicita reutilização; não cadastra, edita ou exclui.</div>
-                </div>
-              </div>
-
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(59, 130, 246, 0.35)'
-              }}>
-                <div style={{ width: '34px', height: '34px', borderRadius: '8px', backgroundColor: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Building2 size={18} color="white" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#bfdbfe' }}>Gerência</div>
-                  <div style={{ fontSize: '0.75rem', color: '#cbd5e1', marginTop: '2px' }}>Acompanha e consulta o sistema; não cadastra, edita, exclui ou aprova.</div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 

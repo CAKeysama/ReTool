@@ -4,13 +4,9 @@ import { ROLES_CONFIG, UserRole, UserProfile } from '../domain/entities/user';
 import { 
   X, 
   Users, 
-  ShieldCheck, 
-  UserCheck, 
-  UserX, 
-  Check, 
-  Lock, 
   UserPlus,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 
 interface UsersManagementModalProps {
@@ -19,7 +15,7 @@ interface UsersManagementModalProps {
 }
 
 export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalProps) {
-  const { users, updateUserRole, toggleUserStatus, createUserByAdmin } = useAuth();
+  const { users, updateUserRole, toggleUserStatus, createUserByAdmin, deleteUser, userProfile } = useAuth();
   
   // Estado para criar novo usuário diretamente pela administradora
   const [showAddForm, setShowAddForm] = useState(false);
@@ -30,6 +26,29 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
   const [loadingAdd, setLoadingAdd] = useState(false);
   const [erroAdd, setErroAdd] = useState('');
   const [sucessoMsg, setSucessoMsg] = useState('');
+
+  // Estado da exclusão de usuário (com confirmação)
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [erroLista, setErroLista] = useState('');
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    setDeleting(true);
+    setErroLista('');
+    const alvo = userToDelete;
+    try {
+      await deleteUser(alvo.uid);
+      setSucessoMsg(`Usuário ${alvo.nome} excluído do sistema.`);
+      setUserToDelete(null);
+    } catch (err: unknown) {
+      console.error(err);
+      setErroLista('Não foi possível excluir o usuário. Tente novamente.');
+      setUserToDelete(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -111,7 +130,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                 Gerenciamento de Acessos & Perfis
               </h2>
               <div style={{ fontSize: '0.8rem', color: '#7e22ce' }}>
-                Atribua papéis de acesso, crie novos colaboradores e bloqueie acessos conforme a governança.
+                Crie colaboradores, atribua papéis e gerencie acessos.
               </div>
             </div>
           </div>
@@ -136,6 +155,11 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
         {sucessoMsg && (
           <div style={{ padding: '10px 24px', backgroundColor: '#dcfce7', color: '#15803d', fontSize: '0.85rem', fontWeight: 600 }}>
             {sucessoMsg}
+          </div>
+        )}
+        {erroLista && (
+          <div style={{ padding: '10px 24px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 600 }}>
+            {erroLista}
           </div>
         )}
 
@@ -355,6 +379,29 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                         >
                           {user.ativo ? 'Bloquear Acesso' : 'Aprovar Acesso'}
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={() => { setErroLista(''); setSucessoMsg(''); setUserToDelete(user); }}
+                          disabled={user.uid === userProfile?.uid}
+                          title={user.uid === userProfile?.uid ? 'Não é possível excluir a própria conta' : 'Excluir usuário'}
+                          aria-label={`Excluir usuário ${user.nome}`}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '6px 8px',
+                            marginLeft: '6px',
+                            borderRadius: '6px',
+                            border: '1px solid #fca5a5',
+                            backgroundColor: '#fef2f2',
+                            color: '#b91c1c',
+                            cursor: user.uid === userProfile?.uid ? 'not-allowed' : 'pointer',
+                            opacity: user.uid === userProfile?.uid ? 0.4 : 1
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -398,6 +445,89 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
           </button>
         </div>
       </div>
+
+      {/* CONFIRMAÇÃO DE EXCLUSÃO */}
+      {userToDelete && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-user-title"
+        >
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: 'var(--radius)',
+            maxWidth: '420px',
+            width: '100%',
+            padding: '24px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.25)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '8px',
+                backgroundColor: '#fee2e2', color: '#b91c1c',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+              }}>
+                <Trash2 size={18} />
+              </div>
+              <h3 id="delete-user-title" style={{ margin: 0, fontSize: '1rem', color: '#111827', fontWeight: 700 }}>
+                Excluir usuário
+              </h3>
+            </div>
+
+            <p style={{ margin: '0 0 20px', fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
+              Remover <strong>{userToDelete.nome}</strong> ({userToDelete.email}) do sistema?
+              Esta ação não pode ser desfeita.
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                disabled={deleting}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  backgroundColor: 'white',
+                  color: '#374151',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  fontWeight: 600,
+                  fontSize: '0.82rem',
+                  cursor: deleting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {deleting ? 'Excluindo...' : 'Excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

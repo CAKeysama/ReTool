@@ -57,6 +57,7 @@ interface AuthContextType {
   createUserByAdmin: (email: string, pass: string, nome: string, perfil: UserRole) => Promise<void>;
   updateUserRole: (uid: string, perfil: UserRole) => Promise<void>;
   toggleUserStatus: (uid: string, ativo: boolean) => Promise<void>;
+  deleteUser: (uid: string) => Promise<void>;
   registrarExclusaoComAuditoria: (
     tipoEntidade: AuditLog['tipoEntidade'],
     entidadeId: string,
@@ -153,13 +154,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Inscrição em tempo real para mudanças no perfil (ex.: alteração
           // de papel ou bloqueio feitos pela Administração).
           unsubProfile = usersRepo.subscribeProfile(fbUser.uid, (updatedProfile) => {
-            if (updatedProfile) {
-              if (!updatedProfile.ativo) {
-                firebaseSignOut(auth);
-                setUserProfile(null);
-              } else {
-                setUserProfile(updatedProfile);
-              }
+            if (!updatedProfile) {
+              // Perfil removido do sistema (ex.: exclusão pela Administração).
+              firebaseSignOut(auth);
+              setUserProfile(null);
+              return;
+            }
+            if (!updatedProfile.ativo) {
+              firebaseSignOut(auth);
+              setUserProfile(null);
+            } else {
+              setUserProfile(updatedProfile);
             }
           });
         } catch (err) {
@@ -325,6 +330,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
+  const deleteUser = async (uid: string) => {
+    const targetUser = users.find(u => u.uid === uid);
+    await usersRepo.deleteProfile(uid);
+    await registrarExclusaoComAuditoria('usuario', uid, targetUser?.nome || uid);
+  };
+
   const registrarExclusaoComAuditoria = useCallback(async (
     tipoEntidade: AuditLog['tipoEntidade'],
     entidadeId: string,
@@ -366,6 +377,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         createUserByAdmin,
         updateUserRole,
         toggleUserStatus,
+        deleteUser,
         registrarExclusaoComAuditoria,
         canConsultar: roleConfig.canConsultar,
         canCadastrar: roleConfig.canCadastrar,
