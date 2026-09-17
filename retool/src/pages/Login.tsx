@@ -70,7 +70,7 @@ export function Login() {
         display: 'grid',
         gridTemplateColumns: '1.25fr 1fr',
         backgroundColor: 'white',
-        borderRadius: '16px',
+        borderRadius: 'var(--radius-lg)',
         boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.15)',
         overflow: 'hidden',
         border: '1px solid #e2e8f0'
@@ -89,7 +89,7 @@ export function Login() {
               <div style={{
                 width: '38px',
                 height: '38px',
-                borderRadius: '8px',
+                borderRadius: 'var(--radius-sm)',
                 backgroundColor: 'var(--color-primary)',
                 display: 'flex',
                 alignItems: 'center',
@@ -148,7 +148,7 @@ export function Login() {
                   alignItems: 'center',
                   gap: '10px',
                   padding: '12px 14px',
-                  borderRadius: '10px',
+                  borderRadius: 'var(--radius)',
                   backgroundColor: 'rgba(255,255,255,0.06)',
                   border: '1px solid rgba(255,255,255,0.12)'
                 }}>
@@ -185,7 +185,7 @@ export function Login() {
             padding: '10px 14px',
             backgroundColor: '#f8fafc',
             border: '1px solid #e2e8f0',
-            borderRadius: '8px',
+            borderRadius: 'var(--radius-sm)',
             marginBottom: '18px'
           }}>
             <Info size={16} color="#2563eb" style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -203,7 +203,7 @@ export function Login() {
               padding: '10px 14px',
               backgroundColor: '#dcfce7',
               color: '#15803d',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-sm)',
               fontSize: '0.82rem',
               marginBottom: '18px'
             }}>
@@ -220,7 +220,7 @@ export function Login() {
               padding: '10px 14px',
               backgroundColor: '#fee2e2',
               color: '#b91c1c',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-sm)',
               fontSize: '0.82rem',
               marginBottom: '18px'
             }}>
@@ -232,7 +232,7 @@ export function Login() {
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {isRegistering && (
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                <label className="input-label">
                   Nome Completo
                 </label>
                 <div style={{ position: 'relative' }}>
@@ -243,23 +243,15 @@ export function Login() {
                     placeholder="Seu nome completo"
                     value={nome}
                     onChange={e => setNome(e.target.value)}
-                    style={{ 
-                      width: '100%', 
-                      padding: '11px 12px 11px 38px', 
-                      borderRadius: '8px', 
-                      border: '1.5px solid #cbd5e1', 
-                      backgroundColor: '#ffffff',
-                      color: '#0f172a',
-                      fontSize: '0.88rem',
-                      boxSizing: 'border-box'
-                    }}
+                    className="input-field"
+                    style={{ paddingLeft: '38px' }}
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+              <label className="input-label">
                 E-mail Institucional
               </label>
               <div style={{ position: 'relative' }}>
@@ -273,7 +265,7 @@ export function Login() {
                   style={{ 
                     width: '100%', 
                     padding: '11px 12px 11px 38px', 
-                    borderRadius: '8px', 
+                    borderRadius: 'var(--radius-sm)', 
                     border: '1.5px solid #cbd5e1', 
                     backgroundColor: '#ffffff',
                     color: '#0f172a',
@@ -285,7 +277,7 @@ export function Login() {
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+              <label className="input-label">
                 Senha
               </label>
               <div style={{ position: 'relative' }}>
@@ -299,7 +291,7 @@ export function Login() {
                   style={{ 
                     width: '100%', 
                     padding: '11px 12px 11px 38px', 
-                    borderRadius: '8px', 
+                    borderRadius: 'var(--radius-sm)', 
                     border: '1.5px solid #cbd5e1', 
                     backgroundColor: '#ffffff',
                     color: '#0f172a',
@@ -312,7 +304,7 @@ export function Login() {
 
             {isRegistering && (
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                <label className="input-label">
                   Confirmar Senha
                 </label>
                 <div style={{ position: 'relative' }}>
@@ -323,16 +315,8 @@ export function Login() {
                     placeholder="Repita a senha"
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
-                    style={{ 
-                      width: '100%', 
-                      padding: '11px 12px 11px 38px', 
-                      borderRadius: '8px', 
-                      border: '1.5px solid #cbd5e1', 
-                      backgroundColor: '#ffffff',
-                      color: '#0f172a',
-                      fontSize: '0.88rem',
-                      boxSizing: 'border-box'
-                    }}
+                    className="input-field"
+                    style={{ paddingLeft: '38px' }}
                   />
                 </div>
               </div>
@@ -340,22 +324,13 @@ export function Login() {
 
             {isRegistering && (
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                <label className="input-label">
                   Perfil Solicitado
                 </label>
                 <select
                   value={perfilSolicitado}
                   onChange={e => setPerfilSolicitado(e.target.value as UserRole)}
-                  style={{ 
-                    width: '100%', 
-                    padding: '11px 12px', 
-                    borderRadius: '8px', 
-                    border: '1.5px solid #cbd5e1', 
-                    backgroundColor: '#ffffff', 
-                    color: '#0f172a',
-                    fontSize: '0.86rem',
-                    boxSizing: 'border-box'
-                  }}
+                  className="input-field"
                 >
                   {(Object.keys(ROLES_CONFIG) as UserRole[]).map(r => (
                     <option key={r} value={r}>
@@ -369,23 +344,8 @@ export function Login() {
             <button
               type="submit"
               disabled={loading}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--color-primary)',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 700,
-                fontSize: '0.94rem',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                marginTop: '6px',
-                boxShadow: '0 4px 12px rgba(225, 29, 72, 0.3)'
-              }}
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '6px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 700 }}
             >
               <span>{loading ? 'Processando autenticação...' : (isRegistering ? 'Cadastrar e Aguardar Aprovação' : 'Entrar no ReTool')}</span>
               <ArrowRight size={18} />

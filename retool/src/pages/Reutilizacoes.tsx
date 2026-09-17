@@ -298,7 +298,7 @@ export function Reutilizacoes() {
                         aprovarReutilizacao(u.id, userProfile?.nome || 'Projetista', userProfile?.uid);
                       }}
                       style={{
-                        backgroundColor: '#16a34a',
+                        backgroundColor: 'var(--color-success)',
                         color: 'white',
                         border: 'none',
                         display: 'flex',
@@ -324,7 +324,7 @@ export function Reutilizacoes() {
                         }
                       }}
                       style={{
-                        backgroundColor: '#ef4444',
+                        backgroundColor: 'var(--color-danger)',
                         color: 'white',
                         border: 'none',
                         display: 'flex',

@@ -172,18 +172,13 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
             <button
               type="button"
               onClick={() => setShowAddForm(prev => !prev)}
+              className="btn"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: 'var(--radius-sm)',
-                backgroundColor: showAddForm ? '#6b7280' : '#7c3aed',
-                color: 'white',
-                border: 'none',
+                backgroundColor: showAddForm ? 'var(--color-hover)' : '#7c3aed',
+                borderColor: showAddForm ? 'var(--color-border)' : '#7c3aed',
+                color: showAddForm ? 'var(--color-text-dark)' : 'white',
                 fontWeight: 600,
-                fontSize: '0.82rem',
-                cursor: 'pointer'
+                fontSize: '0.82rem'
               }}
             >
               <UserPlus size={16} />
@@ -194,8 +189,8 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
           {/* FORMULÁRIO DE NOVO USUÁRIO */}
           {showAddForm && (
             <form onSubmit={handleCreateUser} style={{
-              backgroundColor: '#f9fafb',
-              padding: '16px',
+              backgroundColor: 'var(--color-hover)',
+              padding: 'var(--spacing-md)',
               borderRadius: 'var(--radius-sm)',
               border: '1px solid var(--color-border)',
               marginBottom: '20px',
@@ -216,7 +211,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
+                  <label className="input-label">
                     Nome Completo
                   </label>
                   <input
@@ -225,11 +220,11 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     value={novoNome}
                     onChange={e => setNovoNome(e.target.value)}
                     placeholder="Ex: Ana Beatriz"
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                    className="input-field"
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
+                  <label className="input-label">
                     E-mail Institucional
                   </label>
                   <input
@@ -238,14 +233,14 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     value={novoEmail}
                     onChange={e => setNovoEmail(e.target.value)}
                     placeholder="usuario@empresa.com"
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                    className="input-field"
                   />
                 </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
+                  <label className="input-label">
                     Senha Inicial (mín. 6 dígitos)
                   </label>
                   <input
@@ -254,17 +249,17 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     value={novaSenha}
                     onChange={e => setNovaSenha(e.target.value)}
                     placeholder="••••••••"
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
+                    className="input-field"
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
+                  <label className="input-label">
                     Perfil de Acesso
                   </label>
                   <select
                     value={novoPerfil}
                     onChange={e => setNovoPerfil(e.target.value as UserRole)}
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: 'white' }}
+                    className="input-field"
                   >
                     {(Object.keys(ROLES_CONFIG) as UserRole[]).map(role => (
                       <option key={role} value={role}>
@@ -279,12 +274,11 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                 <button
                   type="submit"
                   disabled={loadingAdd}
+                  className="btn"
                   style={{
                     backgroundColor: '#7c3aed',
+                    borderColor: '#7c3aed',
                     color: 'white',
-                    border: 'none',
-                    padding: '8px 20px',
-                    borderRadius: '6px',
                     fontWeight: 600,
                     cursor: loadingAdd ? 'not-allowed' : 'pointer'
                   }}
@@ -371,15 +365,15 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                           type="button"
                           onClick={() => toggleUserStatus(user.uid, !user.ativo)}
                           title={user.ativo ? 'Bloquear usuário no ReTool' : 'Aprovar/desbloquear usuário'}
+                          className="btn"
                           style={{
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                            border: user.ativo ? '1px solid #fca5a5' : '1px solid #86efac',
+                            borderColor: user.ativo ? '#fca5a5' : '#86efac',
                             backgroundColor: user.ativo ? '#fef2f2' : '#f0fdf4',
                             color: user.ativo ? '#b91c1c' : '#15803d',
+                            padding: '4px 12px',
+                            minHeight: 30,
                             fontSize: '0.75rem',
-                            fontWeight: 600,
-                            cursor: 'pointer'
+                            fontWeight: 600
                           }}
                         >
                           {user.ativo ? 'Bloquear Acesso' : 'Aprovar Acesso'}
@@ -391,14 +385,10 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                           disabled={user.uid === userProfile?.uid}
                           title={user.uid === userProfile?.uid ? 'Não é possível excluir a própria conta' : 'Excluir usuário'}
                           aria-label={`Excluir usuário ${user.nome}`}
+                          className="btn btn-icon"
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: '6px 8px',
-                            marginLeft: '6px',
-                            borderRadius: '6px',
-                            border: '1px solid #fca5a5',
+                            width: 30, height: 30, minHeight: 30, marginLeft: '6px',
+                            borderColor: '#fca5a5',
                             backgroundColor: '#fef2f2',
                             color: '#b91c1c',
                             cursor: user.uid === userProfile?.uid ? 'not-allowed' : 'pointer',
@@ -435,16 +425,8 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
           <button
             type="button"
             onClick={onClose}
-            style={{
-              padding: '8px 18px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid #d1d5db',
-              backgroundColor: 'white',
-              color: '#374151',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-              cursor: 'pointer'
-            }}
+            className="btn"
+            style={{ fontWeight: 600, fontSize: '0.85rem' }}
           >
             Concluir
           </button>
@@ -499,16 +481,8 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                 type="button"
                 onClick={() => setUserToDelete(null)}
                 disabled={deleting}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: '1px solid #d1d5db',
-                  backgroundColor: 'white',
-                  color: '#374151',
-                  fontWeight: 600,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer'
-                }}
+                className="btn"
+                style={{ fontWeight: 600, fontSize: '0.82rem' }}
               >
                 Cancelar
               </button>
@@ -516,16 +490,8 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={deleting}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  backgroundColor: '#dc2626',
-                  color: 'white',
-                  fontWeight: 600,
-                  fontSize: '0.82rem',
-                  cursor: deleting ? 'not-allowed' : 'pointer'
-                }}
+                className="btn btn-primary"
+                style={{ fontWeight: 600, fontSize: '0.82rem', cursor: deleting ? 'not-allowed' : 'pointer' }}
               >
                 {deleting ? 'Excluindo...' : 'Excluir'}
               </button>

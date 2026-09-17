@@ -99,21 +99,10 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
       <button
         type="button"
         onClick={() => setIsOpen(prev => !prev)}
+        className="btn btn-icon"
         aria-label={`Notificações${naoLidas > 0 ? ` (${naoLidas} não lidas)` : ''}`}
         aria-expanded={isOpen}
-        style={{
-          position: 'relative',
-          width: '40px',
-          height: '40px',
-          borderRadius: 'var(--radius)',
-          border: '1.5px solid var(--color-border)',
-          backgroundColor: 'white',
-          color: '#4b5563',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer'
-        }}
+        style={{ position: 'relative' }}
       >
         <Bell size={18} />
         {naoLidas > 0 && (
@@ -147,14 +136,14 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
           width: '330px',
           maxHeight: '440px',
           overflowY: 'auto',
-          backgroundColor: 'white',
+          backgroundColor: 'var(--color-surface)',
           borderRadius: 'var(--radius)',
           border: '1px solid var(--color-border)',
-          boxShadow: '0 12px 30px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--shadow-lg)',
           zIndex: 1200,
-          padding: '8px'
+          padding: 'var(--spacing-sm)'
         }}>
-          <div style={{ padding: '4px 8px 8px', borderBottom: '1px solid #f3f4f6', fontSize: '0.78rem', fontWeight: 700, color: '#374151' }}>
+          <div style={{ padding: '4px 8px 8px', borderBottom: '1px solid var(--color-hover)', fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-dark)' }}>
             Notificações
           </div>
 
@@ -216,29 +205,27 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
                   </div>
 
                   {pendenteAcao && (
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }} onClick={e => e.stopPropagation()}>
                       <button
                         type="button"
+                        className="btn"
                         disabled={processando === n.id}
                         onClick={() => decidir(n, true)}
                         style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '4px',
-                          padding: '4px 10px', borderRadius: '6px', border: 'none',
-                          backgroundColor: '#16a34a', color: 'white',
-                          fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer'
+                          backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)', color: 'white',
+                          padding: '4px 12px', minHeight: 28, fontSize: '0.72rem', fontWeight: 700
                         }}
                       >
                         <Check size={12} /> Aprovar
                       </button>
                       <button
                         type="button"
+                        className="btn"
                         disabled={processando === n.id}
                         onClick={() => decidir(n, false)}
                         style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '4px',
-                          padding: '4px 10px', borderRadius: '6px', border: 'none',
-                          backgroundColor: '#ef4444', color: 'white',
-                          fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer'
+                          backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)', color: 'white',
+                          padding: '4px 12px', minHeight: 28, fontSize: '0.72rem', fontWeight: 700
                         }}
                       >
                         <X size={12} /> Recusar
