@@ -71,14 +71,15 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          padding: '10px 12px',
+          padding: '8px 16px',
+          minHeight: 40,
           backgroundColor: roleConfig.badgeBg,
-          border: `1.5px solid ${roleConfig.borderColor}`,
-          borderRadius: 'var(--radius)',
+          border: `1px solid ${roleConfig.borderColor}`,
+          borderRadius: '50px',
           cursor: 'pointer',
           textAlign: 'left',
           transition: 'all 0.2s ease',
-          boxShadow: isOpen ? '0 4px 12px rgba(0,0,0,0.08)' : 'none'
+          boxShadow: isOpen ? 'var(--shadow)' : 'none'
         }}
         aria-expanded={isOpen}
         aria-haspopup="true"
