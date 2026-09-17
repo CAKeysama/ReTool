@@ -102,7 +102,11 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
         className="btn btn-icon"
         aria-label={`Notificações${naoLidas > 0 ? ` (${naoLidas} não lidas)` : ''}`}
         aria-expanded={isOpen}
-        style={{ position: 'relative' }}
+        style={{
+          position: 'relative',
+          width: '50px',
+          height: '50px'
+        }}
       >
         <Bell size={18} />
         {naoLidas > 0 && (
