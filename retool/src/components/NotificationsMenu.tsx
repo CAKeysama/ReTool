@@ -4,6 +4,7 @@ import { Bell, Check, CheckCheck, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useReTool } from '../context/ReToolContext';
 import { Notificacao } from '../domain/entities/notificacao';
+import { corDoStatusReutilizacao, normalizarStatusReutilizacao, rotuloCurtoStatusReutilizacao } from '../domain/entities/reutilizacao';
 
 interface NotificationsMenuProps {
   onOpenUsersModal?: () => void;
@@ -20,17 +21,11 @@ function formatarData(iso: string): string {
 /** Status "vivo" da notificação, derivado da entidade referenciada. */
 function statusDaNotificacao(n: Notificacao, reutilizacoes: { id: string; status?: string }[], usuariosAtivos: Map<string, boolean>): { label: string; cor: string; fundo: string } {
   if (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') {
-    if (n.tipo === 'reutilizacao_decidida') {
-      return n.decisao === 'aprovada'
-        ? { label: 'Aprovada', cor: '#15803d', fundo: '#dcfce7' }
-        : { label: 'Rejeitada', cor: '#b91c1c', fundo: '#fee2e2' };
-    }
     const reu = reutilizacoes.find(r => r.id === n.entidadeId);
     if (!reu) return { label: 'Removida', cor: '#6b7280', fundo: '#f3f4f6' };
-    const st = reu.status || 'aprovado';
-    if (st === 'pendente') return { label: 'Pendente', cor: '#b45309', fundo: '#fef3c7' };
-    if (st === 'rejeitado') return { label: 'Rejeitada', cor: '#b91c1c', fundo: '#fee2e2' };
-    return { label: 'Aprovada', cor: '#15803d', fundo: '#dcfce7' };
+    const st = normalizarStatusReutilizacao(reu.status);
+    const cor = corDoStatusReutilizacao(st);
+    return { label: rotuloCurtoStatusReutilizacao(st), cor: cor.texto, fundo: cor.fundo };
   }
 
   if (n.tipo === 'conta_nova') {

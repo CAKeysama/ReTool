@@ -1,13 +1,16 @@
 import { db } from '../datasources/firebase';
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { Reutilizacao } from '../../domain/entities/reutilizacao';
+import { Reutilizacao, normalizarStatusReutilizacao } from '../../domain/entities/reutilizacao';
 import { IReutilizacoesRepository } from '../../domain/repositories/IReutilizacoesRepository';
 
 export class FirestoreReutilizacoesRepository implements IReutilizacoesRepository {
   subscribeAll(callback: (reutilizacoes: Reutilizacao[]) => void): () => void {
     return onSnapshot(collection(db, 'reutilizacoes'), (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reutilizacao)));
+      callback(snapshot.docs.map(d => {
+        const item = { id: d.id, ...d.data() } as Reutilizacao;
+        return { ...item, status: normalizarStatusReutilizacao(item.status) };
+      }));
     });
   }
 

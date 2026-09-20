@@ -157,16 +157,56 @@ service cloud.firestore {
     }
 
     // ------------------- REUTILIZAÇÕES ------------------------------
+    // Máquina de estados aplicada no servidor (espelha
+    // TRANSICOES_REUTILIZACAO em src/domain/entities/reutilizacao.ts).
 
     match /reutilizacoes/{docId} {
+      function stDe() {
+        return resource.data.status;
+      }
+
+      function stPara() {
+        return request.resource.data.status;
+      }
+
+      function transicaoProjetista() {
+        return (
+          (stDe() == 'Em análise (Projetista)'
+            && stPara() in ['Reutilização aprovada', 'Reutilização não aprovada'])
+          || (stDe() == 'Aguardando novo filtro (Projetista)'
+            && stPara() in ['Em análise (Projetista)', 'Liberado para fabricação (novo dispositivo)'])
+        );
+      }
+
+      function transicaoEngenharia() {
+        return (
+          (stDe() == 'Em análise (Engenharia)' && stPara() == 'Em análise (Projetista)')
+          || (stDe() == 'Reutilização aprovada' && stPara() == 'Em andamento - OS')
+          || (stDe() == 'Reutilização não aprovada'
+            && stPara() in ['Em andamento - OS', 'Aguardando novo filtro (Projetista)'])
+        );
+      }
+
       allow get, list: if signedIn();
 
-      allow create: if canSolicitar()
-        // A solicitação deve ser atribuída ao próprio solicitante.
-        && request.resource.data.solicitanteId == request.auth.uid;
+      allow create: if isActiveUser(request.auth.uid)
+        && request.resource.data.solicitanteId == request.auth.uid
+        && (
+          // Engenharia inicia o processo (rascunho do 1º filtro).
+          (
+            userDoc(request.auth.uid).perfil == 'engenharia'
+            && request.resource.data.status == 'Em análise (Engenharia)'
+          )
+          // Administração/Ferramentaria registram histórico diretamente.
+          || userDoc(request.auth.uid).perfil in ['admin', 'projetista']
+        );
 
-      // Aprovação/rejeição/edição ficam com Ferramentaria e Administração.
-      allow update: if canAprovar();
+      allow update: if isActiveUser(request.auth.uid)
+        && (
+          isAdmin()
+          || (userDoc(request.auth.uid).perfil == 'projetista' && transicaoProjetista())
+          || (userDoc(request.auth.uid).perfil == 'engenharia' && transicaoEngenharia())
+        );
 
       allow delete: if canExcluir();
     }

@@ -115,7 +115,28 @@ criada **manualmente uma única vez**:
 > Se as regras já estiverem publicadas, apenas esse bootstrap manual
 > funciona — o auto-provisionamento do app cria contas restritas e inativas.
 
-## 6. Notificações
+## 6. Fluxo de Reutilização (máquina de estados)
+
+Status (`src/domain/entities/reutilizacao.ts`), espelhados nas regras do
+Firestore (`TRANSICOES_REUTILIZACAO` ⇄ `firestore.rules`):
+
+```
+Em análise (Engenharia) ──(Engenharia: Solicitar Análise · 1º filtro)──▶ Em análise (Projetista)
+Em análise (Projetista) ──(Projetista)──▶ Reutilização aprovada | Reutilização não aprovada
+Reutilização não aprovada ──(Engenharia)──▶ Aguardando novo filtro (Projetista) | Em andamento - OS
+Reutilização aprovada ──(Engenharia: Gerar OS)──▶ Em andamento - OS
+Aguardando novo filtro (Projetista) ──(Projetista · 2º filtro)──▶
+      similar encontrado → Em análise (Projetista)
+      sem similar       → Liberado para fabricação (novo dispositivo)
+```
+
+- **Fila do Projetista** (UI): `Em análise (Projetista)` + `Aguardando novo filtro (Projetista)`.
+- **Fila da Engenharia** (UI): `Em análise (Engenharia)` (rascunhos) +
+  `Reutilização aprovada`/`Reutilização não aprovada` (retornos para OS).
+- Registros legados (`pendente/aprovado/rejeitado`) são normalizados na
+  leitura para os novos estados.
+
+## 7. Notificações
 
 Coleção `notifications` (um documento por destinatário, `destinatarioUid`),
 com **ids determinísticos** (`tipo_entidade_destinatario`) que impedem
@@ -136,7 +157,7 @@ duplicatas por construção.
 - Ícone de sino com contador de não lidas no Layout (sidebar e fullscreen);
   clicar marca como lida e navega; botão dedicado também marca como lida.
 
-## 7. Deploy das regras
+## 8. Deploy das regras
 
 ```bash
 cd retool

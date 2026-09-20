@@ -55,7 +55,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
         userProfile?.uid
       );
 
-      announce('Solicitação de reutilização enviada para análise do Projetista!');
+      announce('Solicitação registrada! Envie para a análise do Projetista na Fila da Engenharia.');
       onClose();
     } catch (err: any) {
       setErro(err.message || 'Erro ao enviar solicitação.');

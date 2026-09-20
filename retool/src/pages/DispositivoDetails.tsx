@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
 import { usePermissions } from '../hooks/usePermissions';
+import { corDoStatusReutilizacao, rotuloCurtoStatusReutilizacao } from '../domain/entities/reutilizacao';
 import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink, Send } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { SolicitarReutilizacaoModal } from '../components/SolicitarReutilizacaoModal';
@@ -468,9 +469,8 @@ export function DispositivoDetails() {
                   const normalCellColor = 'var(--color-text-dark)';
                   const fontWeightVal = isMostRecent ? 600 : 400;
 
-                  const statusU = u.status || 'aprovado';
-                  const isPendente = statusU === 'pendente';
-                  const isRejeitado = statusU === 'rejeitado';
+                  const statusU = u.status || 'Reutilização aprovada';
+                  const corStatus = corDoStatusReutilizacao(statusU);
 
                   return (
                     <tr 
@@ -504,10 +504,10 @@ export function DispositivoDetails() {
                           borderRadius: '10px',
                           fontSize: '0.7rem',
                           fontWeight: 700,
-                          backgroundColor: isPendente ? '#fef3c7' : isRejeitado ? '#fee2e2' : '#dcfce7',
-                          color: isPendente ? '#b45309' : isRejeitado ? '#b91c1c' : '#15803d'
-                        }}>
-                          {isPendente ? 'Pendente' : isRejeitado ? 'Rejeitado' : 'Aprovado'}
+                          backgroundColor: corStatus.fundo,
+                          color: corStatus.texto
+                        }} title={statusU}>
+                          {rotuloCurtoStatusReutilizacao(statusU)}
                         </span>
                       </td>
                       <td style={{ padding: '12px 8px', color: cellTextColor, fontWeight: fontWeightVal, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.codigoPeca || 'N/A'}</td>

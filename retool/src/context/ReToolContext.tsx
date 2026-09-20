@@ -4,7 +4,7 @@ import { Categoria, Tipo } from '../domain/entities/categoria';
 import { Familia } from '../domain/entities/familia';
 import { Produto } from '../domain/entities/produto';
 import { Dispositivo } from '../domain/entities/dispositivo';
-import { Reutilizacao } from '../domain/entities/reutilizacao';
+import { Reutilizacao, ReutilizacaoStatus, transicaoReutilizacaoPermitida } from '../domain/entities/reutilizacao';
 
 import { FirestoreDispositivosRepository } from '../data/repositories/FirestoreDispositivosRepository';
 import { FirestoreCategoriasRepository } from '../data/repositories/FirestoreCategoriasRepository';
@@ -49,8 +49,7 @@ interface ReToolContextType {
   deleteProduto: (id: string, silent?: boolean) => Promise<void>;
   addReutilizacao: (data: Omit<Reutilizacao, 'id' | 'dataCriacao'>) => Promise<void>;
   solicitarReutilizacao: (data: Omit<Reutilizacao, 'id' | 'dataCriacao' | 'status'>, solicitanteNome: string, solicitanteId?: string) => Promise<void>;
-  aprovarReutilizacao: (id: string, aprovadorNome: string, aprovadorId?: string) => Promise<void>;
-  rejeitarReutilizacao: (id: string, motivo: string, aprovadorNome: string, aprovadorId?: string) => Promise<void>;
+  transicionarReutilizacao: (id: string, para: ReutilizacaoStatus, opts?: { motivo?: string; numeroOs?: string }) => Promise<void>;
   updateReutilizacao: (id: string, data: Partial<Reutilizacao>) => Promise<void>;
   deleteReutilizacao: (id: string, silent?: boolean) => Promise<void>;
   importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<{ sucesso: number, erros: number }>;
@@ -314,7 +313,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     }
     await reutilizacoesRepo.add({
       ...data,
-      status: data.status || 'aprovado'
+      status: data.status || 'Reutilização aprovada'
     });
     announce('Reutilização adicionada com sucesso');
   };
@@ -329,93 +328,105 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     const solicitanteUid = solicitanteId || userProfile?.uid || 'eng';
-    const novoId = await reutilizacoesRepo.add({
+    await reutilizacoesRepo.add({
       ...data,
-      status: 'pendente',
+      status: 'Em análise (Engenharia)',
       solicitanteNome,
       solicitanteId: solicitanteUid
     });
+    announce('Solicitação registrada. Envie para a análise do Projetista na Fila da Engenharia.');
+  };
 
-    // Notifica os responsáveis pela aprovação (Admin e Projetista), sem duplicatas.
-    const dispositivo = dispositivos.find(d => d.id === data.dispositivoId);
+  const notificarFilaProjetista = async (reu: Reutilizacao, descricao: string) => {
     const aprovadores = users.filter(
-      u => u.ativo && (u.perfil === 'admin' || u.perfil === 'projetista') && u.uid !== solicitanteUid
+      u => u.ativo && (u.perfil === 'admin' || u.perfil === 'projetista') && u.uid !== userProfile?.uid
     );
     for (const aprovador of aprovadores) {
       try {
         await criarNotificacao({
-          id: idNotificacao('reutilizacao_nova', novoId, aprovador.uid),
+          id: idNotificacao('reutilizacao_nova', reu.id, aprovador.uid),
           tipo: 'reutilizacao_nova',
           destinatarioUid: aprovador.uid,
-          remetenteUid: solicitanteUid,
-          titulo: 'Nova solicitação de reutilização',
-          descricao: `${solicitanteNome} solicitou reutilização de ${dispositivo?.nome || 'um dispositivo'}.`,
+          remetenteUid: userProfile?.uid || '',
+          titulo: 'Nova tarefa na Fila do Projetista',
+          descricao,
           dataHora: new Date().toISOString(),
           lida: false,
-          entidadeId: novoId,
-          dispositivoId: data.dispositivoId
+          entidadeId: reu.id,
+          dispositivoId: reu.dispositivoId
         });
       } catch (e) {
-        console.warn('Falha ao notificar aprovador:', e);
+        console.warn('Falha ao notificar Fila do Projetista:', e);
       }
     }
-
-    announce('Solicitação de reutilização enviada com sucesso');
   };
 
-  const notificarDecisaoReutilizacao = async (id: string, decisao: 'aprovada' | 'rejeitada', motivo?: string) => {
-    const reu = reutilizacoes.find(u => u.id === id);
-    if (!reu?.solicitanteId || reu.solicitanteId === userProfile?.uid) return;
+  const notificarSolicitante = async (reu: Reutilizacao, titulo: string, descricao: string) => {
+    if (!reu.solicitanteId || reu.solicitanteId === userProfile?.uid) return;
     try {
       await criarNotificacao({
-      id: idNotificacao('reutilizacao_decidida', id, reu.solicitanteId),
-      tipo: 'reutilizacao_decidida',
-      destinatarioUid: reu.solicitanteId,
-      remetenteUid: userProfile?.uid || '',
-      titulo: decisao === 'aprovada' ? 'Solicitação de reutilização aprovada' : 'Solicitação de reutilização rejeitada',
-      descricao: decisao === 'aprovada'
-        ? `Sua solicitação de reutilização foi aprovada por ${userProfile?.nome || 'a Ferramentaria'}.`
-        : `Sua solicitação de reutilização foi rejeitada. ${motivo ? `Motivo: ${motivo}` : ''}`.trim(),
-      dataHora: new Date().toISOString(),
-      lida: false,
-      entidadeId: id,
-      dispositivoId: reu.dispositivoId,
-      decisao
+        id: idNotificacao('reutilizacao_decidida', `${reu.id}:${titulo}`, reu.solicitanteId),
+        tipo: 'reutilizacao_decidida',
+        destinatarioUid: reu.solicitanteId,
+        remetenteUid: userProfile?.uid || '',
+        titulo,
+        descricao,
+        dataHora: new Date().toISOString(),
+        lida: false,
+        entidadeId: reu.id,
+        dispositivoId: reu.dispositivoId
       });
     } catch (e) {
       console.warn('Falha ao notificar solicitante:', e);
     }
   };
 
-  const aprovarReutilizacao = async (id: string, aprovadorNome: string, aprovadorId?: string) => {
-    if (currentRole !== 'admin' && currentRole !== 'projetista') {
-      announce('Apenas Projetistas ou Administradoras podem aprovar reutilizações.');
-      return;
-    }
-    await reutilizacoesRepo.update(id, {
-      status: 'aprovado',
-      aprovadorNome: aprovadorNome || userProfile?.nome || 'Projetista',
-      aprovadorId: aprovadorId || userProfile?.uid || 'proj',
-      dataAprovacao: new Date().toISOString()
-    });
-    await notificarDecisaoReutilizacao(id, 'aprovada');
-    announce('Solicitação de reutilização aprovada com sucesso');
-  };
+  const transicionarReutilizacao = async (
+    id: string,
+    para: ReutilizacaoStatus,
+    opts?: { motivo?: string; numeroOs?: string }
+  ) => {
+    const reu = reutilizacoes.find(u => u.id === id);
+    if (!reu) return;
+    const de = reu.status || 'Em análise (Projetista)';
 
-  const rejeitarReutilizacao = async (id: string, motivo: string, aprovadorNome: string, aprovadorId?: string) => {
-    if (currentRole !== 'admin' && currentRole !== 'projetista') {
-      announce('Apenas Projetistas ou Administradoras podem rejeitar reutilizações.');
+    if (!transicaoReutilizacaoPermitida(currentRole, de, para)) {
+      announce('Acesso negado: seu perfil não executa essa etapa do fluxo.');
       return;
     }
-    await reutilizacoesRepo.update(id, {
-      status: 'rejeitado',
-      motivoRejeicao: motivo,
-      aprovadorNome: aprovadorNome || userProfile?.nome || 'Projetista',
-      aprovadorId: aprovadorId || userProfile?.uid || 'proj',
-      dataAprovacao: new Date().toISOString()
-    });
-    await notificarDecisaoReutilizacao(id, 'rejeitada', motivo);
-    announce('Solicitação de reutilização rejeitada');
+
+    const dados: Partial<Reutilizacao> = { status: para };
+    const decisaoProjetista =
+      (de === 'Em análise (Projetista)' && (para === 'Reutilização aprovada' || para === 'Reutilização não aprovada')) ||
+      (de === 'Aguardando novo filtro (Projetista)' && (para === 'Em análise (Projetista)' || para === 'Liberado para fabricação (novo dispositivo)'));
+    if (decisaoProjetista) {
+      dados.aprovadorNome = userProfile?.nome || 'Projetista';
+      dados.aprovadorId = userProfile?.uid;
+      dados.dataAprovacao = new Date().toISOString();
+      if (para === 'Reutilização não aprovada' && opts?.motivo) dados.motivoRejeicao = opts.motivo;
+    }
+    if (opts?.numeroOs !== undefined) dados.numeroOs = opts.numeroOs;
+
+    await reutilizacoesRepo.update(id, dados);
+
+    const nomeDisp = dispositivos.find(d => d.id === reu.dispositivoId)?.nome || 'um dispositivo';
+
+    if (para === 'Em análise (Projetista)' && de === 'Em análise (Engenharia)') {
+      await notificarFilaProjetista(reu, `${userProfile?.nome || 'A Engenharia'} solicitou análise de reutilização de ${nomeDisp} (1º filtro).`);
+    } else if (para === 'Em análise (Projetista)' && de === 'Aguardando novo filtro (Projetista)') {
+      await notificarFilaProjetista(reu, `Similar encontrado para ${nomeDisp}: análise de reutilização retomada.`);
+      await notificarSolicitante(reu, 'Similar encontrado', `O Projetista encontrou um similar para ${nomeDisp}; a análise de reutilização foi retomada.`);
+    } else if (para === 'Reutilização aprovada') {
+      await notificarSolicitante(reu, 'Reutilização aprovada', `Sua solicitação de reutilização de ${nomeDisp} foi aprovada. Gere a OS com os códigos da reutilização.`);
+    } else if (para === 'Reutilização não aprovada') {
+      await notificarSolicitante(reu, 'Reutilização não aprovada', `Sua solicitação de reutilização de ${nomeDisp} não foi aprovada.${opts?.motivo ? ` Motivo: ${opts.motivo}` : ''}`);
+    } else if (para === 'Aguardando novo filtro (Projetista)') {
+      await notificarFilaProjetista(reu, `A Engenharia solicitou dispositivo novo para ${nomeDisp} (verificação de similares).`);
+    } else if (para === 'Liberado para fabricação (novo dispositivo)') {
+      await notificarSolicitante(reu, 'Liberado para fabricação', `Nenhum similar encontrado para ${nomeDisp}: novo dispositivo liberado para fabricação.`);
+    }
+
+    announce(`Status atualizado: ${para}`);
   };
 
   const updateReutilizacao = async (id: string, data: Partial<Reutilizacao>) => {
@@ -519,7 +530,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       addFamilia, updateFamilia, deleteFamilia,
       addProduto, updateProduto, deleteProduto,
       addReutilizacao, updateReutilizacao, deleteReutilizacao,
-      solicitarReutilizacao, aprovarReutilizacao, rejeitarReutilizacao,
+      solicitarReutilizacao, transicionarReutilizacao,
       importarDispositivosEmLote, deleteAllData,
       announce, announcement,
       isDispFormOpen, editingDispId, openDispForm, closeDispForm

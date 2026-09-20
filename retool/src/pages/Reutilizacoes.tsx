@@ -1,17 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useReTool } from '../context/ReToolContext';
-import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { FocusableList } from '../components/FocusableList';
 import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
-import { Search, Eye, ListChecks, Check, X, Clock, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, Eye, ListChecks, Check, X, Clock, Factory, FilePlus2, Send, Wrench } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
+import {
+  Reutilizacao,
+  ReutilizacaoStatus,
+  REUTILIZACAO_STATUS,
+  corDoStatusReutilizacao,
+  transicaoReutilizacaoPermitida
+} from '../domain/entities/reutilizacao';
 
 export function Reutilizacoes() {
-  const { reutilizacoes, dispositivos, deleteReutilizacao, aprovarReutilizacao, rejeitarReutilizacao, announce } = useReTool();
-  const { userProfile } = useAuth();
-  const { canAprovar, canExcluir, isProjetista, isEngenharia } = usePermissions();
+  const { reutilizacoes, dispositivos, deleteReutilizacao, transicionarReutilizacao, announce } = useReTool();
+  const { canExcluir, isProjetista, isEngenharia, isAdmin, currentRole } = usePermissions();
   const BULK_THRESHOLD = 20;
   const { progress: bulkProgress, runWithProgress } = useBulkProgress();
   const navigate = useNavigate();
@@ -19,7 +24,7 @@ export function Reutilizacoes() {
   const [destacarId, setDestacarId] = useState('');
   const [filterDispId, setFilterDispId] = useState('');
   const [filterText, setFilterText] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'todos' | 'pendente' | 'aprovado' | 'rejeitado'>('todos');
+  const [filterStatus, setFilterStatus] = useState<'todos' | ReutilizacaoStatus>('todos');
 
   // Bulk state
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -37,13 +42,14 @@ export function Reutilizacoes() {
     }
   }, [location.state]);
 
+  const statusDe = (u: Reutilizacao): ReutilizacaoStatus => u.status || 'Em análise (Projetista)';
+
   const filteredReutilizacoes = useMemo(() => {
     return reutilizacoes.filter(u => {
       const matchPeca = filterDispId === '' || u.dispositivoId === filterDispId;
-      const statusU = u.status || 'aprovado';
-      const matchStatus = filterStatus === 'todos' || statusU === filterStatus;
+      const matchStatus = filterStatus === 'todos' || statusDe(u) === filterStatus;
       const q = filterText.toLowerCase();
-      const matchText = filterText === '' || 
+      const matchText = filterText === '' ||
         (u.descricaoAlteracao?.toLowerCase().includes(q)) ||
         (u.responsavel?.toLowerCase().includes(q)) ||
         (u.solicitanteNome?.toLowerCase().includes(q)) ||
@@ -53,6 +59,16 @@ export function Reutilizacoes() {
       return matchPeca && matchStatus && matchText;
     });
   }, [reutilizacoes, filterDispId, filterText, filterStatus]);
+
+  // ---------------- FILAS DE TRABALHO ----------------
+  const filaProjetista = useMemo(
+    () => reutilizacoes.filter(u => ['Em análise (Projetista)', 'Aguardando novo filtro (Projetista)'].includes(statusDe(u))),
+    [reutilizacoes]
+  );
+  const filaEngenharia = useMemo(
+    () => reutilizacoes.filter(u => ['Em análise (Engenharia)', 'Reutilização aprovada', 'Reutilização não aprovada'].includes(statusDe(u))),
+    [reutilizacoes]
+  );
 
   // Filtered list inside the bulk modal
   const bulkFiltered = useMemo(() => {
@@ -68,7 +84,7 @@ export function Reutilizacoes() {
         disp?.nome?.toLowerCase().includes(q)
       );
     });
-  }, [reutilizacoes, dispositivos, bulkSearch]);
+  }, [reutilizacoes, bulkSearch]);
 
   const bulkItems: BulkItem[] = bulkFiltered.map(u => {
     const disp = dispositivos.find(d => d.id === u.dispositivoId);
@@ -119,14 +135,123 @@ export function Reutilizacoes() {
     }
   };
 
-  const pendentes = reutilizacoes.filter(u => (u.status || 'aprovado') === 'pendente');
+  // ---------------- TRANSIÇÕES (ações por status e perfil) ----------------
+  const gerarOs = (u: Reutilizacao) => {
+    const numero = window.prompt('Número da OS para esta solicitação:', u.numeroOs || '');
+    if (numero === null) return;
+    transicionarReutilizacao(u.id, 'Em andamento - OS', { numeroOs: numero.trim() });
+  };
+
+  const naoAprovar = (u: Reutilizacao) => {
+    const motivo = window.prompt('Informe o motivo da não aprovação:');
+    if (motivo === null) return;
+    transicionarReutilizacao(u.id, 'Reutilização não aprovada', { motivo: motivo || 'Não justificado' });
+  };
+
+  const botoesDeAcao = (u: Reutilizacao) => {
+    const st = statusDe(u);
+    const pode = (para: ReutilizacaoStatus) => transicaoReutilizacaoPermitida(currentRole, st, para);
+    const btn = (
+      label: string,
+      onClick: () => void,
+      cor: 'success' | 'danger' | 'primary' | 'neutro',
+      icon?: React.ReactNode
+    ) => (
+      <button
+        type="button"
+        className="btn"
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        style={cor === 'neutro'
+          ? { padding: '6px 12px', minHeight: 32, fontSize: '0.78rem', fontWeight: 600 }
+          : {
+              padding: '6px 12px', minHeight: 32, fontSize: '0.78rem', fontWeight: 600,
+              backgroundColor: cor === 'success' ? 'var(--color-success)' : cor === 'danger' ? 'var(--color-danger)' : 'var(--color-primary)',
+              borderColor: cor === 'success' ? 'var(--color-success)' : cor === 'danger' ? 'var(--color-danger)' : 'var(--color-primary)',
+              color: 'white'
+            }}
+      >
+        {icon}{label}
+      </button>
+    );
+
+    const acoes: React.ReactNode[] = [];
+
+    if (st === 'Em análise (Engenharia)' && pode('Em análise (Projetista)')) {
+      acoes.push(btn('Solicitar Análise (1º Filtro)', () => transicionarReutilizacao(u.id, 'Em análise (Projetista)'), 'primary', <Send size={14} />));
+    }
+    if (st === 'Em análise (Projetista)') {
+      if (pode('Reutilização aprovada')) acoes.push(btn('Aprovar', () => transicionarReutilizacao(u.id, 'Reutilização aprovada'), 'success', <Check size={14} />));
+      if (pode('Reutilização não aprovada')) acoes.push(btn('Não Aprovar', () => naoAprovar(u), 'danger', <X size={14} />));
+    }
+    if (st === 'Reutilização não aprovada') {
+      if (pode('Aguardando novo filtro (Projetista)')) acoes.push(btn('Solicitar Dispositivo Novo', () => transicionarReutilizacao(u.id, 'Aguardando novo filtro (Projetista)'), 'primary', <Factory size={14} />));
+      if (pode('Em andamento - OS')) acoes.push(btn('Gerar OS', () => gerarOs(u), 'neutro', <FilePlus2 size={14} />));
+    }
+    if (st === 'Reutilização aprovada' && pode('Em andamento - OS')) {
+      acoes.push(btn('Gerar OS', () => gerarOs(u), 'neutro', <FilePlus2 size={14} />));
+    }
+    if (st === 'Aguardando novo filtro (Projetista)') {
+      if (pode('Em análise (Projetista)')) acoes.push(btn('Similar Encontrado', () => transicionarReutilizacao(u.id, 'Em análise (Projetista)'), 'primary', <Wrench size={14} />));
+      if (pode('Liberado para fabricação (novo dispositivo)')) acoes.push(btn('Liberar Fabricação', () => transicionarReutilizacao(u.id, 'Liberado para fabricação (novo dispositivo)'), 'success', <Factory size={14} />));
+    }
+
+    return acoes;
+  };
+
+  const chipDeStatus = (u: Reutilizacao) => {
+    const st = statusDe(u);
+    const cor = corDoStatusReutilizacao(st);
+    return (
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '2px 8px', borderRadius: '10px',
+        fontSize: '0.72rem', fontWeight: 700,
+        backgroundColor: cor.fundo, color: cor.texto
+      }}>
+        {st === 'Em análise (Projetista)' || st === 'Aguardando novo filtro (Projetista)' ? <Clock size={12} /> : null}
+        {st}
+      </span>
+    );
+  };
+
+  const cartaoFila = (u: Reutilizacao) => {
+    const disp = dispositivos.find(p => p.id === u.dispositivoId);
+    return (
+      <div
+        key={u.id}
+        onClick={() => navigate(`/dispositivos/${u.dispositivoId}`)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter') navigate(`/dispositivos/${u.dispositivoId}`); }}
+        style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+          padding: '12px 16px', backgroundColor: 'var(--color-surface)',
+          border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
+          cursor: 'pointer', boxShadow: 'var(--shadow-sm)'
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+            {chipDeStatus(u)}
+            <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{u.descricaoAlteracao || 'Descrição não informada'}</h4>
+          </div>
+          <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+            <strong>Dispositivo:</strong> {disp?.nome || 'Desconhecido'} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} | <strong>Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {botoesDeAcao(u)}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-lg)' }}>
         <div>
           <h2>Histórico & Solicitações de Reutilização</h2>
-          <p style={{ color: 'var(--color-text-body)' }}>Fluxo de solicitação da Engenharia, aprovação pela Ferramentaria e histórico consolidado.</p>
+          <p style={{ color: 'var(--color-text-body)' }}>Fluxo de solicitação da Engenharia, análise da Ferramentaria e histórico consolidado.</p>
         </div>
         {canExcluir && (
           <button
@@ -141,80 +266,74 @@ export function Reutilizacoes() {
         )}
       </div>
 
-      {/* BANNER DE SOLICITAÇÕES PENDENTES PARA PROJETISTA / ADMIN */}
-      {canAprovar && pendentes.length > 0 && (
-        <div style={{
-          backgroundColor: '#fffbeb',
-          border: '1.5px solid #f59e0b',
-          borderRadius: 'var(--radius)',
-          padding: '14px 18px',
-          marginBottom: 'var(--spacing-lg)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Clock size={20} color="#d97706" />
-            <div>
-              <strong style={{ color: '#b45309', fontSize: '0.95rem' }}>
-                {pendentes.length} {pendentes.length === 1 ? 'solicitação pendente' : 'solicitações pendentes'} de reutilização!
-              </strong>
-              <div style={{ color: '#78350f', fontSize: '0.8rem' }}>
-                A Engenharia enviou solicitações aguardando sua análise e aprovação técnica.
-              </div>
+      {/* FILA DO PROJETISTA (1º e 2º filtros) */}
+      {(isProjetista || isAdmin) && (
+        <div style={{ marginBottom: 'var(--spacing-lg)' }}>
+          <h3 style={{ fontSize: '1rem', color: 'var(--color-text-dark)', marginBottom: 'var(--spacing-sm)' }}>
+            Fila do Projetista ({filaProjetista.length})
+          </h3>
+          {filaProjetista.length === 0 ? (
+            <div style={{ padding: '14px 16px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius)', color: '#9ca3af', fontSize: '0.82rem' }}>
+              Nenhuma solicitação aguardando análise ou verificação de similares.
             </div>
-          </div>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setFilterStatus('pendente')}
-            style={{
-              backgroundColor: '#f59e0b',
-              color: 'white',
-              border: 'none',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              padding: '6px 14px'
-            }}
-          >
-            Filtrar Pendentes
-          </button>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {filaProjetista.map(cartaoFila)}
+            </div>
+          )}
         </div>
       )}
 
-      {/* FILTROS */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
-        gap: 'var(--spacing-md)', 
+      {/* FILA DA ENGENHARIA (rascunhos e retornos para OS) */}
+      {(isEngenharia || isAdmin) && (
+        <div style={{ marginBottom: 'var(--spacing-lg)' }}>
+          <h3 style={{ fontSize: '1rem', color: 'var(--color-text-dark)', marginBottom: 'var(--spacing-sm)' }}>
+            Fila da Engenharia ({filaEngenharia.length})
+          </h3>
+          {filaEngenharia.length === 0 ? (
+            <div style={{ padding: '14px 16px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius)', color: '#9ca3af', fontSize: '0.82rem' }}>
+              Nenhuma solicitação em elaboração ou aguardando geração de OS.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {filaEngenharia.map(cartaoFila)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* FILTROS DO HISTÓRICO */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 'var(--spacing-md)',
         marginBottom: 'var(--spacing-lg)',
         padding: 'var(--spacing-md)',
         backgroundColor: 'var(--color-surface)',
         borderRadius: 'var(--radius)',
         border: '1px solid var(--color-border)'
       }}>
-        <input 
-          type="text" 
-          className="input-field" 
-          placeholder="Buscar por descrição, peça, solicitante ou OS..." 
+        <input
+          type="text"
+          className="input-field"
+          placeholder="Buscar por descrição, peça, solicitante ou OS..."
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
         />
 
-        <select 
-          className="input-field" 
+        <select
+          className="input-field"
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value as any)}
         >
           <option value="todos">Todos os Status</option>
-          <option value="pendente">Apenas Pendentes ({pendentes.length})</option>
-          <option value="aprovado">Apenas Aprovados</option>
-          <option value="rejeitado">Apenas Rejeitados</option>
+          {REUTILIZACAO_STATUS.map(st => (
+            <option key={st} value={st}>{st}</option>
+          ))}
         </select>
-        
-        <select 
-          className="input-field" 
+
+        <select
+          className="input-field"
           value={filterDispId}
           onChange={(e) => setFilterDispId(e.target.value)}
         >
@@ -225,7 +344,7 @@ export function Reutilizacoes() {
         </select>
       </div>
 
-      <FocusableList 
+      <FocusableList
         items={filteredReutilizacoes}
         ariaLabel="Lista de histórico de reutilizações"
         onItemAction={(u) => navigate(`/dispositivos/${u.dispositivoId}`)}
@@ -242,106 +361,33 @@ export function Reutilizacoes() {
             }
           }
 
-          const statusU = u.status || 'aprovado';
-          const isPendente = statusU === 'pendente';
-          const isRejeitado = statusU === 'rejeitado';
-
           return (
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '12px',
               ...(u.id === destacarId ? { boxShadow: '0 0 0 2px var(--color-primary)', borderRadius: '8px', padding: '8px' } : {})
             }}>
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '2px 8px',
-                    borderRadius: '10px',
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    backgroundColor: isPendente ? '#fef3c7' : isRejeitado ? '#fee2e2' : '#dcfce7',
-                    color: isPendente ? '#b45309' : isRejeitado ? '#b91c1c' : '#15803d'
-                  }}>
-                    {isPendente && <Clock size={12} />}
-                    {statusU === 'aprovado' && <CheckCircle2 size={12} />}
-                    {isRejeitado && <XCircle size={12} />}
-                    {isPendente ? 'Pendente' : isRejeitado ? 'Rejeitado' : 'Aprovado'}
-                  </span>
-
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                  {chipDeStatus(u)}
                   <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#111827' }}>
                     {u.descricaoAlteracao || 'Descrição não informada'}
                   </h4>
                 </div>
 
                 <div style={{ fontSize: '0.85rem', color: '#6b7280', lineHeight: 1.4 }}>
-                  <strong>Dispositivo:</strong> {disp?.nome || 'Desconhecido'} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} - {u.descricaoPeca || 'N/A'} | <strong>Responsável / Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'} | <strong>Hard Saving:</strong> R$ {u.hardSaving?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'} | <strong>Data:</strong> {displayDate}
+                  <strong>Dispositivo:</strong> {disp?.nome || 'Desconhecido'} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} - {u.descricaoPeca || 'N/A'} | <strong>Responsável / Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'} | <strong>Hard Saving:</strong> R$ {u.hardSaving?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'} | <strong>Data:</strong> {displayDate}{u.numeroOs ? <> | <strong>OS:</strong> {u.numeroOs}</> : null}
                 </div>
 
-                {isRejeitado && u.motivoRejeicao && (
-                  <div style={{ fontSize: '0.78rem', color: '#b91c1c', marginTop: '4px' }}>
-                    <strong>Motivo da rejeição:</strong> {u.motivoRejeicao}
+                {statusDe(u) === 'Reutilização não aprovada' && u.motivoRejeicao && (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--color-danger)', marginTop: '4px' }}>
+                    <strong>Motivo da não aprovação:</strong> {u.motivoRejeicao}
                   </div>
                 )}
               </div>
 
-              {/* AÇÕES: APROVAÇÃO (PROJETISTA / ADMIN) E VISUALIZAÇÃO */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                {canAprovar && isPendente && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        aprovarReutilizacao(u.id, userProfile?.nome || 'Projetista', userProfile?.uid);
-                      }}
-                      style={{
-                        backgroundColor: 'var(--color-success)',
-                        color: 'white',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '6px 12px',
-                        fontSize: '0.8rem',
-                        fontWeight: 600
-                      }}
-                      title="Aprovar reutilização"
-                    >
-                      <Check size={14} /> Aprovar
-                    </button>
-
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const motivo = prompt('Informe o motivo da rejeição:');
-                        if (motivo !== null) {
-                          rejeitarReutilizacao(u.id, motivo || 'Não justificado', userProfile?.nome || 'Projetista', userProfile?.uid);
-                        }
-                      }}
-                      style={{
-                        backgroundColor: 'var(--color-danger)',
-                        color: 'white',
-                        border: 'none',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '6px 12px',
-                        fontSize: '0.8rem',
-                        fontWeight: 600
-                      }}
-                      title="Rejeitar reutilização"
-                    >
-                      <X size={14} /> Rejeitar
-                    </button>
-                  </>
-                )}
-
-                <button 
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {botoesDeAcao(u)}
+                <button
                   className="btn"
                   tabIndex={isFocused ? 0 : -1}
                   aria-label={`Ver dispositivo associado ${disp?.nome}`}
@@ -354,11 +400,11 @@ export function Reutilizacoes() {
                 </button>
               </div>
             </div>
-          )
+          );
         }}
       />
 
-      {/* Modal de Ações em Massa — sem desativar (reutilizações só podem ser excluídas) */}
+      {/* Modal de Ações em Massa — reutilizações só podem ser excluídas */}
       <BulkActionModal
         isOpen={isBulkOpen}
         onClose={closeBulk}

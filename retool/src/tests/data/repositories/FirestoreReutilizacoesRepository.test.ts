@@ -31,7 +31,8 @@ describe('FirestoreReutilizacoesRepository', () => {
     repository.subscribeAll(data => { result = data; });
 
     expect(result).toHaveLength(1);
-    expect(result[0]).toEqual(mockUtil);
+    // Status legado/ausente é normalizado para o estado inicial da fila do Projetista.
+    expect(result[0]).toEqual({ ...mockUtil, status: 'Em análise (Projetista)' });
   });
 
   test('should add a reutilization with a new uuid and dataCriacao', async () => {
