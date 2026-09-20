@@ -184,7 +184,7 @@ todas as ações críticas do sistema.
 | `usuarioPerfil` | Grupo de permissões do autor | `{{ current_user.groups[0] }}` |
 | `acao` / `acaoDescricao` | Token estável + rótulo legível (ex.: "Aprovou Reutilização", "Gerou OS", "Solicitou Novo Filtro") | identificação da operação |
 | `conteudo` / `dadosAnteriores` | Detalhes estruturados em JSON (IDs, motivo, valores alterados) | payload da operação |
-| `dataHora` | Carimbo do próprio servidor (`serverTimestamp`) | `DEFAULT CURRENT_TIMESTAMP` |
+| `dataHora` / `dataHoraServidor` | `dataHora` é ISO (ordena junto com o acervo legado); `dataHoraServidor` é o carimbo nativo do servidor (`serverTimestamp`) e é o exibido na UI | `DEFAULT CURRENT_TIMESTAMP` |
 
 **Acionamento:** cada mutação bem-sucedida (INSERT/UPDATE/DELETE) nos
 repositórios chama `registrarAuditoria(...)` logo após o `await` da escrita —

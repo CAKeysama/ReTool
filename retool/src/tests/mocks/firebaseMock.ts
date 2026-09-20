@@ -7,6 +7,7 @@ export const mockDbState = {
   familias: [] as any[],
   produtos: [] as any[],
   reutilizacoes: [] as any[],
+  audit_logs: [] as any[],
 };
 
 export const resetMockDb = () => {
@@ -16,6 +17,7 @@ export const resetMockDb = () => {
   mockDbState.familias = [];
   mockDbState.produtos = [];
   mockDbState.reutilizacoes = [];
+  mockDbState.audit_logs = [];
 };
 
 // Mock do módulo 'uuid' globalmente para evitar SyntaxError por causa do ESM
@@ -38,6 +40,24 @@ jest.mock('firebase/firestore', () => {
   return {
     getFirestore: jest.fn(() => ({})),
     collection: jest.fn((db: any, name: string) => ({ name })),
+    query: jest.fn((colRef: any, ..._constraints: any[]) => colRef),
+    orderBy: jest.fn((..._args: any[]) => ({ tipo: 'orderBy' })),
+    limit: jest.fn((..._args: any[]) => ({ tipo: 'limit' })),
+    serverTimestamp: jest.fn(() => ({
+      __serverTimestampMock: true,
+      toDate: () => new Date('2026-01-02T03:04:05.000Z')
+    })),
+    Timestamp: class MockTimestamp {
+      seconds: number;
+      nanoseconds: number;
+      constructor(seconds = 0, nanoseconds = 0) {
+        this.seconds = seconds;
+        this.nanoseconds = nanoseconds;
+      }
+      toDate() {
+        return new Date(this.seconds * 1000);
+      }
+    },
     doc: jest.fn((db: any, colName: string, id: string) => ({ colName, id })),
     setDoc: jest.fn(async (docRef: any, data: any) => {
       const col = docRef.colName as keyof typeof mockDbState;

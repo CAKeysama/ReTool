@@ -19,8 +19,10 @@ export type AuditLogAcao =
 
 export interface AuditLog {
   id: string;
-  /** Gerado pelo servidor (Firestore serverTimestamp) e normalizado para ISO na leitura. */
+  /** ISO (compatível com o acervo legado) — campo usado na ordenação. */
   dataHora: string;
+  /** Carimbo nativo do servidor (serverTimestamp), normalizado para ISO na leitura. */
+  dataHoraServidor?: string;
   usuarioUid: string;
   usuarioNome: string;
   usuarioEmail: string;
