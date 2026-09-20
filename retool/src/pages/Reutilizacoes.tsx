@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useReTool } from '../context/ReToolContext';
 import { usePermissions } from '../hooks/usePermissions';
-import { FocusableList } from '../components/FocusableList';
+import { Tabs, EmptyState } from '../components/Tabs';
 import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
-import { Search, Eye, ListChecks, Check, X, Clock, Factory, FilePlus2, Send, Wrench } from 'lucide-react';
+import { Search, ListChecks, ChevronDown, Check, X, Clock, Factory, FilePlus2, Send, Wrench, ExternalLink } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
 import {
@@ -11,8 +11,12 @@ import {
   ReutilizacaoStatus,
   REUTILIZACAO_STATUS,
   corDoStatusReutilizacao,
+  rotuloCurtoStatusReutilizacao,
   transicaoReutilizacaoPermitida
 } from '../domain/entities/reutilizacao';
+
+const FILA_PROJETISTA: ReutilizacaoStatus[] = ['Em análise (Projetista)', 'Aguardando novo filtro (Projetista)'];
+const FILA_ENGENHARIA: ReutilizacaoStatus[] = ['Em análise (Engenharia)', 'Reutilização aprovada', 'Reutilização não aprovada'];
 
 export function Reutilizacoes() {
   const { reutilizacoes, dispositivos, deleteReutilizacao, transicionarReutilizacao, announce } = useReTool();
@@ -21,30 +25,61 @@ export function Reutilizacoes() {
   const { progress: bulkProgress, runWithProgress } = useBulkProgress();
   const navigate = useNavigate();
   const location = useLocation();
+
   const [destacarId, setDestacarId] = useState('');
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Filtros vinculados estritamente à tabela de histórico
   const [filterDispId, setFilterDispId] = useState('');
   const [filterText, setFilterText] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | ReutilizacaoStatus>('todos');
 
-  // Bulk state
+  // Seleção da tabela (Ações em Massa)
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
   const [bulkSearch, setBulkSearch] = useState('');
   const [bulkConfirm, setBulkConfirm] = useState<'disable' | 'delete' | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  // Navegação vinda de uma notificação: filtra o dispositivo e destaca a solicitação.
-  useEffect(() => {
-    const st = location.state as { reutilizacaoId?: string; dispositivoId?: string } | null;
-    if (st?.reutilizacaoId) {
-      setDestacarId(st.reutilizacaoId);
-      if (st.dispositivoId) setFilterDispId(st.dispositivoId);
-    }
-  }, [location.state]);
-
   const statusDe = (u: Reutilizacao): ReutilizacaoStatus => u.status || 'Em análise (Projetista)';
 
-  const filteredReutilizacoes = useMemo(() => {
+  // ---------------- ABAS DISPONÍVEIS POR PERFIL ----------------
+  const filaProjetista = useMemo(
+    () => reutilizacoes.filter(u => FILA_PROJETISTA.includes(statusDe(u))),
+    [reutilizacoes]
+  );
+  const filaEngenharia = useMemo(
+    () => reutilizacoes.filter(u => FILA_ENGENHARIA.includes(statusDe(u))),
+    [reutilizacoes]
+  );
+
+  const tabs = useMemo(() => {
+    const t: { id: string; label: string; count?: number }[] = [];
+    if (isProjetista || isAdmin) t.push({ id: 'filaProjetista', label: 'Fila do Projetista', count: filaProjetista.length });
+    if (isEngenharia || isAdmin) t.push({ id: 'filaEngenharia', label: 'Fila da Engenharia', count: filaEngenharia.length });
+    t.push({ id: 'historico', label: 'Histórico Geral' });
+    return t;
+  }, [isProjetista, isEngenharia, isAdmin, filaProjetista.length, filaEngenharia.length]);
+
+  const tabAtiva = activeTab && tabs.some(t => t.id === activeTab) ? activeTab : tabs[0].id;
+
+  // Navegação vinda de uma notificação: abre a aba certa e destaca o registro.
+  useEffect(() => {
+    const st = location.state as { reutilizacaoId?: string; dispositivoId?: string } | null;
+    if (!st?.reutilizacaoId) return;
+    const alvo = reutilizacoes.find(u => u.id === st.reutilizacaoId);
+    setDestacarId(st.reutilizacaoId);
+    if (!alvo) return;
+    const s = statusDe(alvo);
+    if (FILA_PROJETISTA.includes(s) && (isProjetista || isAdmin)) setActiveTab('filaProjetista');
+    else if (FILA_ENGENHARIA.includes(s) && (isEngenharia || isAdmin)) setActiveTab('filaEngenharia');
+    else setActiveTab('historico');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
+
+  // ---------------- HISTÓRICO (tabela) ----------------
+  const historicoFiltrado = useMemo(() => {
     return reutilizacoes.filter(u => {
       const matchPeca = filterDispId === '' || u.dispositivoId === filterDispId;
       const matchStatus = filterStatus === 'todos' || statusDe(u) === filterStatus;
@@ -60,17 +95,7 @@ export function Reutilizacoes() {
     });
   }, [reutilizacoes, filterDispId, filterText, filterStatus]);
 
-  // ---------------- FILAS DE TRABALHO ----------------
-  const filaProjetista = useMemo(
-    () => reutilizacoes.filter(u => ['Em análise (Projetista)', 'Aguardando novo filtro (Projetista)'].includes(statusDe(u))),
-    [reutilizacoes]
-  );
-  const filaEngenharia = useMemo(
-    () => reutilizacoes.filter(u => ['Em análise (Engenharia)', 'Reutilização aprovada', 'Reutilização não aprovada'].includes(statusDe(u))),
-    [reutilizacoes]
-  );
-
-  // Filtered list inside the bulk modal
+  // ---------------- AÇÕES EM MASSA ----------------
   const bulkFiltered = useMemo(() => {
     if (!bulkSearch.trim()) return reutilizacoes;
     const q = bulkSearch.toLowerCase();
@@ -104,13 +129,12 @@ export function Reutilizacoes() {
     });
   };
 
-  const toggleAll = () => {
-    const allIds = bulkFiltered.map(u => u.id);
-    const allSelected = allIds.length > 0 && allIds.every(id => bulkSelected.has(id));
+  const allVisibleSelected = historicoFiltrado.length > 0 && historicoFiltrado.every(u => bulkSelected.has(u.id));
+  const toggleAllVisible = () => {
     setBulkSelected(prev => {
       const next = new Set(prev);
-      if (allSelected) allIds.forEach(id => next.delete(id));
-      else allIds.forEach(id => next.add(id));
+      if (allVisibleSelected) historicoFiltrado.forEach(u => next.delete(u.id));
+      else historicoFiltrado.forEach(u => next.add(u.id));
       return next;
     });
   };
@@ -135,7 +159,7 @@ export function Reutilizacoes() {
     }
   };
 
-  // ---------------- TRANSIÇÕES (ações por status e perfil) ----------------
+  // ---------------- TRANSIÇÕES (somente nas abas de fila) ----------------
   const gerarOs = (u: Reutilizacao) => {
     const numero = window.prompt('Número da OS para esta solicitação:', u.numeroOs || '');
     if (numero === null) return;
@@ -206,14 +230,25 @@ export function Reutilizacoes() {
         display: 'inline-flex', alignItems: 'center', gap: '4px',
         padding: '2px 8px', borderRadius: '10px',
         fontSize: '0.72rem', fontWeight: 700,
-        backgroundColor: cor.fundo, color: cor.texto
+        backgroundColor: cor.fundo, color: cor.texto, whiteSpace: 'nowrap'
       }}>
         {st === 'Em análise (Projetista)' || st === 'Aguardando novo filtro (Projetista)' ? <Clock size={12} /> : null}
-        {st}
+        {rotuloCurtoStatusReutilizacao(st)}
       </span>
     );
   };
 
+  const formatarData = (u: Reutilizacao) => {
+    const rawDate = u.data || u.dataCriacao || '';
+    if (!rawDate) return 'N/A';
+    if (rawDate.includes('-') && rawDate.length === 10) {
+      const [y, m, d] = rawDate.split('-');
+      return `${d}/${m}/${y}`;
+    }
+    return new Date(rawDate).toLocaleDateString('pt-BR');
+  };
+
+  // ---------------- CARDS DAS FILAS (abas 1 e 2) ----------------
   const cartaoFila = (u: Reutilizacao) => {
     const disp = dispositivos.find(p => p.id === u.dispositivoId);
     return (
@@ -227,7 +262,8 @@ export function Reutilizacoes() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
           padding: '12px 16px', backgroundColor: 'var(--color-surface)',
           border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
-          cursor: 'pointer', boxShadow: 'var(--shadow-sm)'
+          cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
+          ...(u.id === destacarId ? { boxShadow: '0 0 0 2px var(--color-primary)' } : {})
         }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -246,165 +282,211 @@ export function Reutilizacoes() {
     );
   };
 
+  const colunaCount = 9 + (canExcluir ? 1 : 0);
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-lg)' }}>
-        <div>
-          <h2>Histórico & Solicitações de Reutilização</h2>
-          <p style={{ color: 'var(--color-text-body)' }}>Fluxo de solicitação da Engenharia, análise da Ferramentaria e histórico consolidado.</p>
-        </div>
-        {canExcluir && (
-          <button
-            className="btn"
-            onClick={() => setIsBulkOpen(true)}
-            aria-label="Ações em massa"
-            style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}
-          >
-            <ListChecks size={18} />
-            <span className="hide-on-mobile">Ações em Massa</span>
-          </button>
-        )}
+      <div style={{ marginBottom: 'var(--spacing-lg)' }}>
+        <h2>Histórico & Solicitações de Reutilização</h2>
+        <p style={{ color: 'var(--color-text-body)' }}>Fluxo de solicitação da Engenharia, análise da Ferramentaria e histórico consolidado.</p>
       </div>
 
-      {/* FILA DO PROJETISTA (1º e 2º filtros) */}
-      {(isProjetista || isAdmin) && (
-        <div style={{ marginBottom: 'var(--spacing-lg)' }}>
-          <h3 style={{ fontSize: '1rem', color: 'var(--color-text-dark)', marginBottom: 'var(--spacing-sm)' }}>
-            Fila do Projetista ({filaProjetista.length})
-          </h3>
-          {filaProjetista.length === 0 ? (
-            <div style={{ padding: '14px 16px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius)', color: '#9ca3af', fontSize: '0.82rem' }}>
-              Nenhuma solicitação aguardando análise ou verificação de similares.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {filaProjetista.map(cartaoFila)}
-            </div>
-          )}
-        </div>
+      <Tabs tabs={tabs} active={tabAtiva} onChange={setActiveTab} />
+
+      {/* ---------- ABA 1: FILA DO PROJETISTA ---------- */}
+      {tabAtiva === 'filaProjetista' && (
+        filaProjetista.length === 0 ? (
+          <EmptyState message="Sem pendências no momento." />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {filaProjetista.map(cartaoFila)}
+          </div>
+        )
       )}
 
-      {/* FILA DA ENGENHARIA (rascunhos e retornos para OS) */}
-      {(isEngenharia || isAdmin) && (
-        <div style={{ marginBottom: 'var(--spacing-lg)' }}>
-          <h3 style={{ fontSize: '1rem', color: 'var(--color-text-dark)', marginBottom: 'var(--spacing-sm)' }}>
-            Fila da Engenharia ({filaEngenharia.length})
-          </h3>
-          {filaEngenharia.length === 0 ? (
-            <div style={{ padding: '14px 16px', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius)', color: '#9ca3af', fontSize: '0.82rem' }}>
-              Nenhuma solicitação em elaboração ou aguardando geração de OS.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {filaEngenharia.map(cartaoFila)}
-            </div>
-          )}
-        </div>
+      {/* ---------- ABA 2: FILA DA ENGENHARIA ---------- */}
+      {tabAtiva === 'filaEngenharia' && (
+        filaEngenharia.length === 0 ? (
+          <EmptyState message="Sem pendências no momento." />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {filaEngenharia.map(cartaoFila)}
+          </div>
+        )
       )}
 
-      {/* FILTROS DO HISTÓRICO */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 'var(--spacing-md)',
-        marginBottom: 'var(--spacing-lg)',
-        padding: 'var(--spacing-md)',
-        backgroundColor: 'var(--color-surface)',
-        borderRadius: 'var(--radius)',
-        border: '1px solid var(--color-border)'
-      }}>
-        <input
-          type="text"
-          className="input-field"
-          placeholder="Buscar por descrição, peça, solicitante ou OS..."
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-        />
+      {/* ---------- ABA 3: HISTÓRICO GERAL (tabela) ---------- */}
+      {tabAtiva === 'historico' && (
+        <div style={{
+          backgroundColor: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius)',
+          overflow: 'hidden'
+        }}>
+          {/* Toolbar da tabela */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            gap: 'var(--spacing-md)', padding: '12px 16px',
+            borderBottom: '1px solid var(--color-border)', backgroundColor: '#fafafa'
+          }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
+              {historicoFiltrado.length} {historicoFiltrado.length === 1 ? 'registro' : 'registros'}
+              {bulkSelected.size > 0 && <> · <span style={{ color: 'var(--color-primary)' }}>{bulkSelected.size} selecionado(s)</span></>}
+            </div>
+            {canExcluir && (
+              <button
+                className="btn"
+                onClick={() => setIsBulkOpen(true)}
+                style={{ height: '36px', padding: '0 14px', fontSize: '0.82rem' }}
+              >
+                <ListChecks size={16} />
+                Ações em Massa
+              </button>
+            )}
+          </div>
 
-        <select
-          className="input-field"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value as any)}
-        >
-          <option value="todos">Todos os Status</option>
-          {REUTILIZACAO_STATUS.map(st => (
-            <option key={st} value={st}>{st}</option>
-          ))}
-        </select>
+          {/* Filtros vinculados à tabela */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: 'var(--spacing-sm)',
+            padding: '12px 16px',
+            borderBottom: '1px solid var(--color-border)'
+          }}>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Buscar por descrição, peça, solicitante ou OS..."
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+            />
+            <select
+              className="input-field"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+            >
+              <option value="todos">Todos os Status</option>
+              {REUTILIZACAO_STATUS.map(st => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
+            <select
+              className="input-field"
+              value={filterDispId}
+              onChange={(e) => setFilterDispId(e.target.value)}
+            >
+              <option value="">Todos os Dispositivos</option>
+              {dispositivos.map(p => (
+                <option key={p.id} value={p.id}>{p.nome || 'Dispositivo Sem Nome'} ({p.codigo || 'S/C'})</option>
+              ))}
+            </select>
+          </div>
 
-        <select
-          className="input-field"
-          value={filterDispId}
-          onChange={(e) => setFilterDispId(e.target.value)}
-        >
-          <option value="">Todos os Dispositivos</option>
-          {dispositivos.map(p => (
-            <option key={p.id} value={p.id}>{p.nome || 'Dispositivo Sem Nome'} ({p.codigo || 'S/C'})</option>
-          ))}
-        </select>
-      </div>
-
-      <FocusableList
-        items={filteredReutilizacoes}
-        ariaLabel="Lista de histórico de reutilizações"
-        onItemAction={(u) => navigate(`/dispositivos/${u.dispositivoId}`)}
-        renderItem={(u, idx, isFocused) => {
-          const disp = dispositivos.find(p => p.id === u.dispositivoId);
-          const rawDate = u.data || u.dataCriacao || '';
-          let displayDate = 'N/A';
-          if (rawDate) {
-            if (rawDate.includes('-') && rawDate.length === 10) {
-              const [year, month, day] = rawDate.split('-');
-              displayDate = `${day}/${month}/${year}`;
-            } else {
-              displayDate = new Date(rawDate).toLocaleDateString('pt-BR');
-            }
-          }
-
-          return (
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '12px',
-              ...(u.id === destacarId ? { boxShadow: '0 0 0 2px var(--color-primary)', borderRadius: '8px', padding: '8px' } : {})
-            }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
-                  {chipDeStatus(u)}
-                  <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#111827' }}>
-                    {u.descricaoAlteracao || 'Descrição não informada'}
-                  </h4>
-                </div>
-
-                <div style={{ fontSize: '0.85rem', color: '#6b7280', lineHeight: 1.4 }}>
-                  <strong>Dispositivo:</strong> {disp?.nome || 'Desconhecido'} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} - {u.descricaoPeca || 'N/A'} | <strong>Responsável / Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'} | <strong>Hard Saving:</strong> R$ {u.hardSaving?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'} | <strong>Data:</strong> {displayDate}{u.numeroOs ? <> | <strong>OS:</strong> {u.numeroOs}</> : null}
-                </div>
-
-                {statusDe(u) === 'Reutilização não aprovada' && u.motivoRejeicao && (
-                  <div style={{ fontSize: '0.78rem', color: 'var(--color-danger)', marginTop: '4px' }}>
-                    <strong>Motivo da não aprovação:</strong> {u.motivoRejeicao}
-                  </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
+                  {canExcluir && (
+                    <th style={{ padding: '10px 8px', width: '36px' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todos os registros visíveis"
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisible}
+                      />
+                    </th>
+                  )}
+                  <th style={{ padding: '10px 8px', width: '36px' }} aria-label="Expandir detalhes" />
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: '#4b5563' }}>Data</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: '#4b5563' }}>Status</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: '#4b5563' }}>Dispositivo</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: '#4b5563' }}>Peça</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: '#4b5563' }}>Solicitante</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: '#4b5563' }}>Hard Saving</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: '#4b5563' }}>OS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historicoFiltrado.map(u => {
+                  const disp = dispositivos.find(p => p.id === u.dispositivoId);
+                  const aberto = expandedId === u.id;
+                  return (
+                    <React.Fragment key={u.id}>
+                      <tr
+                        onClick={() => setExpandedId(aberto ? null : u.id)}
+                        style={{
+                          borderBottom: '1px solid #f3f4f6',
+                          cursor: 'pointer',
+                          backgroundColor: u.id === destacarId ? 'rgba(228, 13, 44, 0.06)' : aberto ? '#fafafa' : 'transparent'
+                        }}
+                      >
+                        {canExcluir && (
+                          <td style={{ padding: '10px 8px' }} onClick={e => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              aria-label={`Selecionar ${u.descricaoAlteracao || u.id}`}
+                              checked={bulkSelected.has(u.id)}
+                              onChange={() => toggleItem(u.id)}
+                            />
+                          </td>
+                        )}
+                        <td style={{ padding: '10px 8px', color: '#9ca3af' }}>
+                          <ChevronDown size={16} style={{ transform: aberto ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+                        </td>
+                        <td style={{ padding: '10px 8px', whiteSpace: 'nowrap', color: '#374151' }}>{formatarData(u)}</td>
+                        <td style={{ padding: '10px 8px' }}>{chipDeStatus(u)}</td>
+                        <td style={{ padding: '10px 8px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={disp?.nome}>{disp?.nome || 'Desconhecido'}</td>
+                        <td style={{ padding: '10px 8px', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.codigoPeca}>{u.codigoPeca || 'N/A'}</td>
+                        <td style={{ padding: '10px 8px', whiteSpace: 'nowrap' }}>{u.solicitanteNome || u.responsavel || 'N/A'}</td>
+                        <td style={{ padding: '10px 8px', color: 'var(--color-success)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          R$ {u.hardSaving?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
+                        </td>
+                        <td style={{ padding: '10px 8px', whiteSpace: 'nowrap' }}>{u.numeroOs || '—'}</td>
+                      </tr>
+                      {aberto && (
+                        <tr style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: '#fafafa' }}>
+                          <td colSpan={colunaCount} style={{ padding: '12px 16px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.82rem', color: '#4b5563', lineHeight: 1.5 }}>
+                              <div><strong>Descrição da alteração:</strong> {u.descricaoAlteracao || 'N/A'}</div>
+                              <div><strong>Peça:</strong> {u.codigoPeca || 'N/A'} — {u.descricaoPeca || 'N/A'} | <strong>Peso:</strong> {u.pesoPeca?.toLocaleString('pt-BR', { minimumFractionDigits: 3 }) || '0,000'} kg</div>
+                              <div><strong>Responsável:</strong> {u.responsavel || 'N/A'} | <strong>Solicitante:</strong> {u.solicitanteNome || 'N/A'}</div>
+                              {statusDe(u) === 'Reutilização não aprovada' && u.motivoRejeicao && (
+                                <div style={{ color: 'var(--color-danger)' }}><strong>Motivo da não aprovação:</strong> {u.motivoRejeicao}</div>
+                              )}
+                              {u.aprovadorNome && (
+                                <div><strong>Análise:</strong> {u.aprovadorNome}{u.dataAprovacao ? ` em ${new Date(u.dataAprovacao).toLocaleString('pt-BR')}` : ''}</div>
+                              )}
+                              <div>
+                                <button
+                                  type="button"
+                                  className="btn"
+                                  onClick={() => navigate(`/dispositivos/${u.dispositivoId}`)}
+                                  style={{ padding: '4px 12px', minHeight: 28, fontSize: '0.75rem' }}
+                                >
+                                  <ExternalLink size={13} /> Ver Dispositivo
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+                {historicoFiltrado.length === 0 && (
+                  <tr>
+                    <td colSpan={colunaCount} style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
+                      Nenhum registro encontrado para os filtros atuais.
+                    </td>
+                  </tr>
                 )}
-              </div>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {botoesDeAcao(u)}
-                <button
-                  className="btn"
-                  tabIndex={isFocused ? 0 : -1}
-                  aria-label={`Ver dispositivo associado ${disp?.nome}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/dispositivos/${u.dispositivoId}`);
-                  }}
-                >
-                  <Eye size={16} /> <span className="hide-on-mobile">Ver Dispositivo</span>
-                </button>
-              </div>
-            </div>
-          );
-        }}
-      />
-
-      {/* Modal de Ações em Massa — reutilizações só podem ser excluídas */}
+      {/* Modal de Ações em Massa da tabela de histórico */}
       <BulkActionModal
         isOpen={isBulkOpen}
         onClose={closeBulk}
@@ -413,7 +495,16 @@ export function Reutilizacoes() {
         search={bulkSearch}
         onSearchChange={setBulkSearch}
         onToggleItem={toggleItem}
-        onToggleAll={toggleAll}
+        onToggleAll={() => {
+          const allIds = bulkFiltered.map(u => u.id);
+          const allSelected = allIds.length > 0 && allIds.every(id => bulkSelected.has(id));
+          setBulkSelected(prev => {
+            const next = new Set(prev);
+            if (allSelected) allIds.forEach(id => next.delete(id));
+            else allIds.forEach(id => next.add(id));
+            return next;
+          });
+        }}
         confirmAction={bulkConfirm}
         onSetConfirmAction={setBulkConfirm}
         onDelete={handleBulkDelete}
