@@ -3,7 +3,8 @@ import { useReTool } from '../context/ReToolContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { Tabs, EmptyState } from '../components/Tabs';
 import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
-import { Search, ListChecks, ChevronDown, Check, X, Clock, Factory, FilePlus2, Send, Wrench, ExternalLink } from 'lucide-react';
+import { FluxoReutilizacaoModal } from '../components/FluxoReutilizacaoModal';
+import { ListChecks, ChevronDown, Check, X, Clock, Factory, FilePlus2, Send, Wrench, ExternalLink, Info } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
 import {
@@ -29,6 +30,7 @@ export function Reutilizacoes() {
   const [destacarId, setDestacarId] = useState('');
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isFluxoOpen, setIsFluxoOpen] = useState(false);
 
   // Filtros vinculados estritamente à tabela de histórico
   const [filterDispId, setFilterDispId] = useState('');
@@ -286,9 +288,19 @@ export function Reutilizacoes() {
 
   return (
     <div>
-      <div style={{ marginBottom: 'var(--spacing-lg)' }}>
-        <h2>Histórico & Solicitações de Reutilização</h2>
-        <p style={{ color: 'var(--color-text-body)' }}>Fluxo de solicitação da Engenharia, análise da Ferramentaria e histórico consolidado.</p>
+      <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--spacing-md)' }}>
+        <div>
+          <h2>Histórico & Solicitações de Reutilização</h2>
+          <p style={{ color: 'var(--color-text-body)' }}>Fluxo de solicitação da Engenharia, análise da Ferramentaria e histórico consolidado.</p>
+        </div>
+        <button
+          className="btn"
+          onClick={() => setIsFluxoOpen(true)}
+          style={{ flexShrink: 0, height: '36px', padding: '0 14px', fontSize: '0.82rem' }}
+        >
+          <Info size={16} />
+          Como funciona o fluxo
+        </button>
       </div>
 
       <Tabs tabs={tabs} active={tabAtiva} onChange={setActiveTab} />
@@ -512,6 +524,9 @@ export function Reutilizacoes() {
         progress={bulkProgress}
         canDisable={false}
       />
+
+      {/* Modal explicativo do fluxo de aceite */}
+      <FluxoReutilizacaoModal isOpen={isFluxoOpen} onClose={() => setIsFluxoOpen(false)} />
     </div>
   );
 }
