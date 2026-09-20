@@ -12,7 +12,7 @@ import { NotificationsMenu } from './NotificationsMenu';
 
 export function Layout() {
   const { announcement, isDispFormOpen } = useReTool();
-  const { canCadastrar, canEditar, canExcluir } = usePermissions();
+  const { canCadastrar, canEditar, canExcluir, canVerLogs } = usePermissions();
   const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
   useHotkeys();
@@ -41,7 +41,7 @@ export function Layout() {
         {isDispFormOpen && <DispositivoForm />}
         
         <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
-        <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />
+        {canVerLogs && <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />}
 
         {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
         <nav className="bottom-nav" aria-label="Navegação Mobile">
@@ -181,7 +181,7 @@ export function Layout() {
       
       {isDispFormOpen && <DispositivoForm />}
       <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
-      <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />
+      {canVerLogs && <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />}
     </div>
   );
 }

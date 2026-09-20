@@ -114,15 +114,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [notifications, setNotifications] = useState<Notificacao[]>([]);
 
-  // Carrega lista de usuários em tempo real para administração
+  // Carrega lista de usuários em tempo real para administração.
+  // A trilha de auditoria é carregada SOMENTE pelo perfil Admin (leitura exclusiva).
   useEffect(() => {
     const unsubUsers = usersRepo.subscribeAll(setUsers);
-    const unsubLogs = auditRepo.subscribeLogs(setAuditLogs);
+    let unsubLogs: (() => void) | undefined;
+    if (userProfile?.perfil === 'admin') {
+      unsubLogs = auditRepo.subscribeLogs(setAuditLogs);
+    } else {
+      setAuditLogs([]);
+    }
     return () => {
       unsubUsers();
-      unsubLogs();
+      unsubLogs?.();
     };
-  }, []);
+  }, [userProfile?.perfil]);
 
   // Notificações do usuário autenticado, em tempo real
   useEffect(() => {

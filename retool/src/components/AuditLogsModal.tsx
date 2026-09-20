@@ -10,7 +10,11 @@ import {
   XCircle, 
   Search, 
   Calendar, 
-  ShieldAlert 
+  ShieldAlert,
+  PlusCircle,
+  Pencil,
+  Repeat2,
+  Upload
 } from 'lucide-react';
 
 interface AuditLogsModalProps {
@@ -19,11 +23,13 @@ interface AuditLogsModalProps {
 }
 
 export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
-  const { auditLogs } = useAuth();
+  const { auditLogs, currentRole } = useAuth();
   const [filterText, setFilterText] = useState('');
   const [filterAcao, setFilterAcao] = useState<string>('todos');
 
   if (!isOpen) return null;
+  // Bloqueio de visualização: a trilha de auditoria é exclusiva da Administração.
+  if (currentRole !== 'admin') return null;
 
   const filteredLogs = auditLogs.filter(log => {
     const q = filterText.toLowerCase();
@@ -32,6 +38,7 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
       (log.usuarioEmail?.toLowerCase().includes(q)) ||
       (log.entidadeNome?.toLowerCase().includes(q)) ||
       (log.detalhes?.toLowerCase().includes(q)) ||
+      (log.acaoDescricao?.toLowerCase().includes(q)) ||
       (log.tipoEntidade?.toLowerCase().includes(q));
 
     const matchAcao = filterAcao === 'todos' || log.acao === filterAcao;
@@ -40,6 +47,30 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
 
   const getActionBadge = (acao: string) => {
     switch (acao) {
+      case 'criacao':
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700, backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+            <PlusCircle size={12} /> Criação
+          </span>
+        );
+      case 'edicao':
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700, backgroundColor: '#fef3c7', color: '#92400e' }}>
+            <Pencil size={12} /> Edição
+          </span>
+        );
+      case 'transicao':
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700, backgroundColor: '#ccfbf1', color: '#0f766e' }}>
+            <Repeat2 size={12} /> Transição
+          </span>
+        );
+      case 'importacao':
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700, backgroundColor: '#e0e7ff', color: '#3730a3' }}>
+            <Upload size={12} /> Importação
+          </span>
+        );
       case 'exclusao':
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 700, backgroundColor: '#fee2e2', color: '#b91c1c' }}>
@@ -194,10 +225,16 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
             }}
           >
             <option value="todos">Todas as Ações</option>
-            <option value="exclusao">Apenas Exclusões</option>
+            <option value="criacao">Criações</option>
+            <option value="edicao">Edições</option>
+            <option value="exclusao">Exclusões</option>
+            <option value="transicao">Transições de Fluxo</option>
             <option value="aprovacao">Aprovações</option>
             <option value="rejeicao">Rejeições</option>
+            <option value="importacao">Importações</option>
             <option value="alteracao_perfil">Alterações de Acesso</option>
+            <option value="bloqueio_usuario">Bloqueios</option>
+            <option value="desbloqueio_usuario">Desbloqueios</option>
           </select>
         </div>
 
@@ -256,13 +293,29 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
                     </div>
 
                     <div style={{ fontSize: '0.85rem', color: '#111827', fontWeight: 500 }}>
-                      {log.detalhes || `Ação em [${log.tipoEntidade}] ${log.entidadeNome}`}
+                      {log.acaoDescricao || log.detalhes || `Ação em [${log.tipoEntidade}] ${log.entidadeNome}`}
                     </div>
 
                     {log.entidadeId && (
                       <div style={{ fontSize: '0.72rem', color: '#9ca3af' }}>
                         ID do Registro: {log.entidadeId}
                       </div>
+                    )}
+
+                    {(log.conteudo || log.dadosAnteriores) && (
+                      <details style={{ fontSize: '0.75rem' }}>
+                        <summary style={{ cursor: 'pointer', color: '#2563eb', fontWeight: 600, userSelect: 'none' }}>
+                          Ver conteúdo da operação (JSON)
+                        </summary>
+                        <pre style={{
+                          margin: '6px 0 0', padding: '10px 12px',
+                          backgroundColor: '#f3f4f6', border: '1px solid var(--color-border)',
+                          borderRadius: '6px', fontSize: '0.72rem',
+                          whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '220px', overflowY: 'auto'
+                        }}>
+                          {JSON.stringify({ conteudo: log.conteudo, dadosAnteriores: log.dadosAnteriores }, null, 2)}
+                        </pre>
+                      </details>
                     )}
                   </div>
                 );

@@ -97,7 +97,8 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
     canAprovar: false,
     canSolicitar: false,
     canGerenciarUsuarios: false,
-    canVerLogs: true,
+    // Auditoria é exclusiva da Administração; Gerência segue somente leitura nos dados.
+    canVerLogs: false,
   },
 };
 

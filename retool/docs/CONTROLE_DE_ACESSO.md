@@ -30,7 +30,7 @@ Definidos em `src/domain/entities/user.ts` (`ROLES_CONFIG`):
 | **Programadora / Administradora** (`admin`) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Projetista – Ferramentaria** (`projetista`) | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
 | **Engenharia de Processo / Industrial** (`engenharia`) | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ |
-| **Gerência** (`gerencia`) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **Gerência** (`gerencia`) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 A matriz acima é aplicada nos dois lugares ao mesmo tempo:
 - **UI:** `src/hooks/usePermissions.ts` + guards em páginas/modais/rotas.
@@ -86,7 +86,7 @@ A matriz acima é aplicada nos dois lugares ao mesmo tempo:
 | Admin criava usuário e era deslogado no processo | App Firebase secundário para provisionamento |
 | Perfil confiável em `localStorage` (dado antigo/alterável) | Estado sempre derivado do Firestore em tempo real; cache local removido |
 | Storage público para leitura/exclusão | `storage.rules` exige sessão ativa; escrita só para quem pode cadastrar; exclusão só admin |
-| Logs de auditoria podiam ser forjados/apagados | Criação restrita a `admin` com `usuarioUid == request.auth.uid`; update/delete negados para todos |
+| Logs de auditoria podiam ser forjados/apagados | Criação exige `usuarioUid == request.auth.uid` (autoatribuição, sem forjar autoria); leitura exclusiva de `admin`; update/delete negados para todos |
 
 ## 5. Bootstrap da conta Administradora
 
@@ -168,4 +168,33 @@ npx firebase deploy --only firestore:rules,storage
 Após o deploy, valide no console (aba *Rules → Rules Playground*) que:
 - um usuário `gerencia` **não consegue** escrever em `dispositivos`;
 - um usuário qualquer **não consegue** alterar o próprio `perfil`;
-- apenas `admin` escreve em `audit_logs`.
+- apenas `admin` **lê** `audit_logs`; qualquer usuário autenticado escreve
+  apenas registros com `usuarioUid` igual ao próprio uid.
+
+## 9. Trilha de auditoria (Audit Log)
+
+Coleção `audit_logs`: registro imutável (update/delete negados nas regras) de
+todas as ações críticas do sistema.
+
+**Campos** (equivalência com o modelo Retool):
+
+| Campo | Conteúdo | Equivalente Retool |
+| --- | --- | --- |
+| `usuarioNome` / `usuarioEmail` | Quem executou a ação | `{{ current_user.fullName }}` / e-mail |
+| `usuarioPerfil` | Grupo de permissões do autor | `{{ current_user.groups[0] }}` |
+| `acao` / `acaoDescricao` | Token estável + rótulo legível (ex.: "Aprovou Reutilização", "Gerou OS", "Solicitou Novo Filtro") | identificação da operação |
+| `conteudo` / `dadosAnteriores` | Detalhes estruturados em JSON (IDs, motivo, valores alterados) | payload da operação |
+| `dataHora` | Carimbo do próprio servidor (`serverTimestamp`) | `DEFAULT CURRENT_TIMESTAMP` |
+
+**Acionamento:** cada mutação bem-sucedida (INSERT/UPDATE/DELETE) nos
+repositórios chama `registrarAuditoria(...)` logo após o `await` da escrita —
+o equivalente ao Event Handler *On Success* disparando a query `insert_log`
+com parâmetros dinâmicos por contexto (criação/edição de dispositivos,
+categorias, tipos, famílias e produtos; solicitação e todas as transições do
+fluxo de reutilização; importação em lote; limpeza total; gestão de usuários).
+
+**Acesso exclusivo da Administração:**
+- UI: menu, modal e subscrição em tempo real condicionados a `canVerLogs`
+  (`admin`); demais perfis nem recebem os dados em memória.
+- Firestore: `get/list` em `audit_logs` apenas para `isAdmin()`.
+- A tabela abre sempre ordenada do registro mais recente para o mais antigo.

@@ -5,6 +5,7 @@ import { Familia } from '../domain/entities/familia';
 import { Produto } from '../domain/entities/produto';
 import { Dispositivo } from '../domain/entities/dispositivo';
 import { Reutilizacao, ReutilizacaoStatus, transicaoReutilizacaoPermitida } from '../domain/entities/reutilizacao';
+import { AuditLog } from '../domain/entities/auditLog';
 
 import { FirestoreDispositivosRepository } from '../data/repositories/FirestoreDispositivosRepository';
 import { FirestoreCategoriasRepository } from '../data/repositories/FirestoreCategoriasRepository';
@@ -132,24 +133,47 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  const logAuditExclusao = async (tipoEntidade: any, id: string, nome?: string, dadosAnteriores?: any) => {
+  // "Event Handler" central de auditoria: acionado no sucesso de cada mutação.
+  // A falha no registro nunca derruba a operação principal.
+  const registrarAuditoria = async (
+    acao: AuditLog['acao'],
+    tipoEntidade: AuditLog['tipoEntidade'],
+    entidadeId: string,
+    entidadeNome: string,
+    acaoDescricao: string,
+    conteudo?: Record<string, any>,
+    dadosAnteriores?: Record<string, any>
+  ) => {
     try {
       await auditRepo.registrarLog({
-        dataHora: new Date().toISOString(),
         usuarioUid: userProfile?.uid || 'sistema',
-        usuarioNome: userProfile?.nome || 'Administradora',
+        usuarioNome: userProfile?.nome || 'Desconhecido',
         usuarioEmail: userProfile?.email || '',
         usuarioPerfil: currentRole,
-        acao: 'exclusao',
+        acao,
+        acaoDescricao,
         tipoEntidade,
-        entidadeId: id,
-        entidadeNome: nome || id,
-        detalhes: `Exclusão de ${tipoEntidade}: ${nome || id}`,
+        entidadeId,
+        entidadeNome,
+        detalhes: acaoDescricao,
+        conteudo,
         dadosAnteriores
       });
     } catch (e) {
-      console.warn('Erro ao registrar log de auditoria da exclusão:', e);
+      console.warn('Erro ao registrar log de auditoria:', e);
     }
+  };
+
+  const logAuditExclusao = async (tipoEntidade: any, id: string, nome?: string, dadosAnteriores?: any) => {
+    await registrarAuditoria(
+      'exclusao',
+      tipoEntidade,
+      id,
+      nome || id,
+      `Exclusão de ${tipoEntidade}: ${nome || id}`,
+      dadosAnteriores,
+      dadosAnteriores
+    );
   };
 
   const addDispositivo = async (data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }) => {
@@ -157,7 +181,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: seu perfil não possui permissão para cadastrar dispositivos.');
       return;
     }
-    await dispositivosRepo.add(data);
+    const novoId = await dispositivosRepo.add(data);
+    await registrarAuditoria('criacao', 'dispositivo', novoId, data.nome, 'Cadastrou dispositivo', { ...data });
     announce('Dispositivo adicionado com sucesso');
   };
 
@@ -166,7 +191,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       if (!silent) announce('Acesso negado: seu perfil não possui permissão para editar dispositivos.');
       return;
     }
+    const atual = dispositivos.find(d => d.id === id);
     await dispositivosRepo.update(id, data);
+    await registrarAuditoria('edicao', 'dispositivo', id, atual?.nome || id, 'Editou dispositivo', { valoresAlterados: data }, atual);
     if (!silent) announce('Dispositivo atualizado com sucesso');
   };
 
@@ -193,6 +220,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return '';
     }
     const id = await categoriasRepo.addCategoria(data);
+    await registrarAuditoria('criacao', 'categoria', id, data.nome, 'Cadastrou categoria', { ...data });
     announce('Categoria adicionada com sucesso');
     return id;
   };
@@ -202,7 +230,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       if (!silent) announce('Acesso negado: seu perfil não possui permissão para editar categorias.');
       return;
     }
+    const atual = categorias.find(c => c.id === id);
     await categoriasRepo.updateCategoria(id, data);
+    await registrarAuditoria('edicao', 'categoria', id, atual?.nome || id, 'Editou categoria', { valoresAlterados: data }, atual);
     if (!silent) announce('Categoria atualizada com sucesso');
   };
 
@@ -222,7 +252,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: seu perfil não possui permissão para cadastrar tipos.');
       return;
     }
-    await categoriasRepo.addTipo(data);
+    const novoId = await categoriasRepo.addTipo(data);
+    await registrarAuditoria('criacao', 'tipo', novoId, data.nome, 'Cadastrou tipo', { ...data });
     announce('Tipo adicionado com sucesso');
   };
 
@@ -231,7 +262,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: seu perfil não possui permissão para editar tipos.');
       return;
     }
+    const atual = tipos.find(t => t.id === id);
     await categoriasRepo.updateTipo(id, data);
+    await registrarAuditoria('edicao', 'tipo', id, atual?.nome || id, 'Editou tipo', { valoresAlterados: data }, atual);
     announce('Tipo atualizado com sucesso');
   };
 
@@ -252,6 +285,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return '';
     }
     const id = await familiasRepo.add(data);
+    await registrarAuditoria('criacao', 'familia', id, data.nome, 'Cadastrou família', { ...data });
     announce('Família adicionada com sucesso');
     return id;
   };
@@ -261,7 +295,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       if (!silent) announce('Acesso negado: seu perfil não possui permissão para editar famílias.');
       return;
     }
+    const atual = familias.find(f => f.id === id);
     await familiasRepo.update(id, data);
+    await registrarAuditoria('edicao', 'familia', id, atual?.nome || id, 'Editou família', { valoresAlterados: data }, atual);
     if (!silent) announce('Família atualizada com sucesso');
   };
 
@@ -282,6 +318,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return '';
     }
     const id = await produtosRepo.add(data);
+    await registrarAuditoria('criacao', 'produto', id, data.nome, 'Cadastrou produto', { ...data });
     announce('Produto adicionado com sucesso');
     return id;
   };
@@ -291,7 +328,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       if (!silent) announce('Acesso negado: seu perfil não possui permissão para editar produtos.');
       return;
     }
+    const atual = produtos.find(p => p.id === id);
     await produtosRepo.update(id, data);
+    await registrarAuditoria('edicao', 'produto', id, atual?.nome || id, 'Editou produto', { valoresAlterados: data }, atual);
     if (!silent) announce('Produto atualizado com sucesso');
   };
 
@@ -311,10 +350,12 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: Engenharia deve utilizar a opção Solicitar Reutilização.');
       return;
     }
-    await reutilizacoesRepo.add({
+    const novoId = await reutilizacoesRepo.add({
       ...data,
       status: data.status || 'Reutilização aprovada'
     });
+    const dispNome = dispositivos.find(d => d.id === data.dispositivoId)?.nome || data.dispositivoId;
+    await registrarAuditoria('criacao', 'reutilizacao', novoId, dispNome, 'Cadastrou reutilização', { dispositivoId: data.dispositivoId, codigoPeca: data.codigoPeca, hardSaving: data.hardSaving });
     announce('Reutilização adicionada com sucesso');
   };
 
@@ -328,12 +369,14 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     const solicitanteUid = solicitanteId || userProfile?.uid || 'eng';
-    await reutilizacoesRepo.add({
+    const novoId = await reutilizacoesRepo.add({
       ...data,
       status: 'Em análise (Engenharia)',
       solicitanteNome,
       solicitanteId: solicitanteUid
     });
+    const dispNome = dispositivos.find(d => d.id === data.dispositivoId)?.nome || data.dispositivoId;
+    await registrarAuditoria('criacao', 'reutilizacao', novoId, dispNome, 'Solicitou reutilização', { dispositivoId: data.dispositivoId, codigoPeca: data.codigoPeca, descricaoAlteracao: data.descricaoAlteracao, hardSaving: data.hardSaving });
     announce('Solicitação registrada. Envie para a análise do Projetista na Fila da Engenharia.');
   };
 
@@ -411,6 +454,30 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
 
     const nomeDisp = dispositivos.find(d => d.id === reu.dispositivoId)?.nome || 'um dispositivo';
 
+    // Auditoria da mudança de estado (ação legível conforme a transição executada)
+    const descricaoTransicao = (() => {
+      if (de === 'Em análise (Engenharia)' && para === 'Em análise (Projetista)') return 'Solicitou análise do Projetista (1º filtro)';
+      if (para === 'Reutilização aprovada') return 'Aprovou Reutilização';
+      if (para === 'Reutilização não aprovada') return 'Reprovou Reutilização';
+      if (de === 'Reutilização aprovada' && para === 'Em andamento - OS') return 'Gerou OS';
+      if (de === 'Reutilização não aprovada' && para === 'Em andamento - OS') return 'Gerou OS (após não aprovação)';
+      if (para === 'Aguardando novo filtro (Projetista)') return 'Solicitou Novo Filtro (dispositivo novo)';
+      if (de === 'Aguardando novo filtro (Projetista)' && para === 'Em análise (Projetista)') return 'Marcou similar encontrado (análise retomada)';
+      if (para === 'Liberado para fabricação (novo dispositivo)') return 'Liberou fabricação de novo dispositivo';
+      return `Alterou status de "${de}" para "${para}"`;
+    })();
+    await registrarAuditoria(
+      para === 'Reutilização aprovada' ? 'aprovacao'
+        : para === 'Reutilização não aprovada' ? 'rejeicao'
+        : 'transicao',
+      'reutilizacao',
+      id,
+      nomeDisp,
+      descricaoTransicao,
+      { statusDe: de, statusPara: para, dispositivoId: reu.dispositivoId, motivo: opts?.motivo, numeroOs: opts?.numeroOs },
+      { status: de }
+    );
+
     if (para === 'Em análise (Projetista)' && de === 'Em análise (Engenharia)') {
       await notificarFilaProjetista(reu, `${userProfile?.nome || 'A Engenharia'} solicitou análise de reutilização de ${nomeDisp} (1º filtro).`);
     } else if (para === 'Em análise (Projetista)' && de === 'Aguardando novo filtro (Projetista)') {
@@ -434,7 +501,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: seu perfil não possui permissão para editar reutilizações.');
       return;
     }
+    const atual = reutilizacoes.find(u => u.id === id);
     await reutilizacoesRepo.update(id, data);
+    await registrarAuditoria('edicao', 'reutilizacao', id, atual?.descricaoAlteracao || id, 'Editou reutilização', { valoresAlterados: data }, atual);
     announce('Reutilização atualizada com sucesso');
   };
 
@@ -468,6 +537,14 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         categorias,
         familias,
         produtos
+      );
+      await registrarAuditoria(
+        'importacao',
+        'dispositivo',
+        'importacao-lote',
+        'Importação em lote',
+        `Importação em lote: ${result.sucesso} registro(s) inserido(s)/atualizado(s), ${result.erros} erro(s)`,
+        { enviados: novosDispositivos.length, sucesso: result.sucesso, erros: result.erros }
       );
       announce(`Importação concluída! ${result.sucesso} registros inseridos ou atualizados.`);
       return result;
@@ -513,7 +590,15 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       if (opCount > 0) {
         await batch.commit();
       }
-      
+
+      await registrarAuditoria(
+        'exclusao',
+        'dispositivo',
+        'limpeza-total',
+        'Base de dados',
+        'Exclusão em massa: todos os dados do sistema foram removidos',
+        { dispositivos: dispositivos.length, categorias: categorias.length, tipos: tipos.length, familias: familias.length, produtos: produtos.length, reutilizacoes: reutilizacoes.length }
+      );
       announce('Banco de dados completamente limpo com sucesso.');
     } catch (error) {
       console.error('Erro ao limpar banco de dados:', error);

@@ -111,12 +111,12 @@ service cloud.firestore {
     // -------------------- LOGS DE AUDITORIA -------------------------
 
     match /audit_logs/{logId} {
-      allow get, list: if signedIn()
-        && isActiveUser(request.auth.uid)
-        && userDoc(request.auth.uid).perfil in ['admin', 'gerencia'];
+      // Trilha de auditoria é visível apenas para a Administração.
+      allow get, list: if isAdmin();
 
-      allow create: if isAdmin()
-        // Impede atribuir a autoria da ação a outro usuário.
+      // Qualquer usuário autenticado registra as próprias ações,
+      // mas nunca pode atribuir a autoria a outro usuário.
+      allow create: if signedIn()
         && request.resource.data.usuarioUid == request.auth.uid;
 
       // Logs são imutáveis e indeléveis: nem a administração remove

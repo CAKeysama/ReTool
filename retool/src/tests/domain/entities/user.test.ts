@@ -54,7 +54,7 @@ describe('RBAC - Permissões por Perfil de Usuário', () => {
     expect(gerencia.canExcluir).toBe(false);
     expect(gerencia.canAprovar).toBe(false);
     expect(gerencia.canSolicitar).toBe(false);
-    expect(gerencia.canVerLogs).toBe(true);     // Consulta histórico e movimentações
+    expect(gerencia.canVerLogs).toBe(false);    // Auditoria é exclusiva da Administração
   });
 
   it('deve refletir exatamente a matriz oficial da imagem de Controle de Acesso', () => {
@@ -74,14 +74,14 @@ describe('RBAC - Permissões por Perfil de Usuário', () => {
     });
   });
 
-  it('deve reservar gestão de usuários e auditoria completa apenas para Administração/Gerência', () => {
+  it('deve reservar gestão de usuários e auditoria completa apenas para Administração', () => {
     expect(ROLES_CONFIG.admin.canGerenciarUsuarios).toBe(true);
     expect(ROLES_CONFIG.projetista.canGerenciarUsuarios).toBe(false);
     expect(ROLES_CONFIG.engenharia.canGerenciarUsuarios).toBe(false);
     expect(ROLES_CONFIG.gerencia.canGerenciarUsuarios).toBe(false);
 
     expect(ROLES_CONFIG.admin.canVerLogs).toBe(true);
-    expect(ROLES_CONFIG.gerencia.canVerLogs).toBe(true);   // Histórico e movimentações
+    expect(ROLES_CONFIG.gerencia.canVerLogs).toBe(false);  // Auditoria é exclusiva da Administração
     expect(ROLES_CONFIG.projetista.canVerLogs).toBe(false);
     expect(ROLES_CONFIG.engenharia.canVerLogs).toBe(false);
   });
