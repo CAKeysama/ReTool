@@ -7,8 +7,7 @@ export type ReutilizacaoStatus =
   | 'Reutilização aprovada'
   | 'Reutilização não aprovada'
   | 'Liberado para fabricação (novo dispositivo)'
-  | 'Aguardando novo filtro (Projetista)'
-  | 'Em andamento - OS';
+  | 'Aguardando novo filtro (Projetista)';
 
 export const REUTILIZACAO_STATUS: ReutilizacaoStatus[] = [
   'Em análise (Engenharia)',
@@ -16,16 +15,18 @@ export const REUTILIZACAO_STATUS: ReutilizacaoStatus[] = [
   'Reutilização aprovada',
   'Reutilização não aprovada',
   'Liberado para fabricação (novo dispositivo)',
-  'Aguardando novo filtro (Projetista)',
-  'Em andamento - OS'
+  'Aguardando novo filtro (Projetista)'
 ];
 
-/** Compatibilidade com registros antigos (pendente/aprovado/rejeitado). */
+/** Compatibilidade com registros antigos (pendente/aprovado/rejeitado/Em andamento - OS). */
 export function normalizarStatusReutilizacao(status?: string): ReutilizacaoStatus {
   switch (status) {
     case 'pendente': return 'Em análise (Projetista)';
     case 'aprovado': return 'Reutilização aprovada';
     case 'rejeitado': return 'Reutilização não aprovada';
+    // Estado descontinuado (geração de OS removida): registros existentes
+    // são tratados como aprovados.
+    case 'Em andamento - OS': return 'Reutilização aprovada';
     default:
       return (REUTILIZACAO_STATUS as string[]).includes(status || '')
         ? (status as ReutilizacaoStatus)
@@ -35,7 +36,7 @@ export function normalizarStatusReutilizacao(status?: string): ReutilizacaoStatu
 
 /**
  * Transições permitidas por perfil (espelhadas em firestore.rules):
- * - Engenharia: inicia (1º filtro), gera OS e solicita dispositivo novo.
+ * - Engenharia: inicia (1º filtro) e solicita dispositivo novo.
  * - Projetista: análise técnica (1º filtro) e verificação de similares (2º filtro).
  * - Administração: todas as transições.
  * - Gerência: nenhuma (somente leitura).
@@ -44,8 +45,7 @@ export const TRANSICOES_REUTILIZACAO: Record<UserRole, Partial<Record<Reutilizac
   admin: {
     'Em análise (Engenharia)': ['Em análise (Projetista)'],
     'Em análise (Projetista)': ['Reutilização aprovada', 'Reutilização não aprovada'],
-    'Reutilização aprovada': ['Em andamento - OS'],
-    'Reutilização não aprovada': ['Em andamento - OS', 'Aguardando novo filtro (Projetista)'],
+    'Reutilização não aprovada': ['Aguardando novo filtro (Projetista)'],
     'Aguardando novo filtro (Projetista)': ['Em análise (Projetista)', 'Liberado para fabricação (novo dispositivo)']
   },
   projetista: {
@@ -54,8 +54,7 @@ export const TRANSICOES_REUTILIZACAO: Record<UserRole, Partial<Record<Reutilizac
   },
   engenharia: {
     'Em análise (Engenharia)': ['Em análise (Projetista)'],
-    'Reutilização aprovada': ['Em andamento - OS'],
-    'Reutilização não aprovada': ['Em andamento - OS', 'Aguardando novo filtro (Projetista)']
+    'Reutilização não aprovada': ['Aguardando novo filtro (Projetista)']
   },
   gerencia: {}
 };
@@ -73,7 +72,6 @@ export function rotuloCurtoStatusReutilizacao(status: ReutilizacaoStatus): strin
     case 'Reutilização não aprovada': return 'Não aprovada';
     case 'Liberado para fabricação (novo dispositivo)': return 'Liberado p/ fabricação';
     case 'Aguardando novo filtro (Projetista)': return 'Novo filtro';
-    case 'Em andamento - OS': return 'Em andamento OS';
   }
 }
 
@@ -86,7 +84,6 @@ export function corDoStatusReutilizacao(status: ReutilizacaoStatus): { fundo: st
     case 'Reutilização aprovada':
     case 'Liberado para fabricação (novo dispositivo)': return { fundo: '#dcfce7', texto: 'var(--color-success)' };
     case 'Reutilização não aprovada': return { fundo: '#fee2e2', texto: 'var(--color-danger)' };
-    case 'Em andamento - OS': return { fundo: 'var(--color-box-teal-bg)', texto: 'var(--color-box-teal-text)' };
   }
 }
 

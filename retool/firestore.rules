@@ -181,9 +181,8 @@ service cloud.firestore {
       function transicaoEngenharia() {
         return (
           (stDe() == 'Em análise (Engenharia)' && stPara() == 'Em análise (Projetista)')
-          || (stDe() == 'Reutilização aprovada' && stPara() == 'Em andamento - OS')
           || (stDe() == 'Reutilização não aprovada'
-            && stPara() in ['Em andamento - OS', 'Aguardando novo filtro (Projetista)'])
+            && stPara() == 'Aguardando novo filtro (Projetista)')
         );
       }
 

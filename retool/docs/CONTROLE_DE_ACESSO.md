@@ -123,8 +123,8 @@ Firestore (`TRANSICOES_REUTILIZACAO` ⇄ `firestore.rules`):
 ```
 Em análise (Engenharia) ──(Engenharia: Solicitar Análise · 1º filtro)──▶ Em análise (Projetista)
 Em análise (Projetista) ──(Projetista)──▶ Reutilização aprovada | Reutilização não aprovada
-Reutilização não aprovada ──(Engenharia)──▶ Aguardando novo filtro (Projetista) | Em andamento - OS
-Reutilização aprovada ──(Engenharia: Gerar OS)──▶ Em andamento - OS
+Reutilização não aprovada ──(Engenharia)──▶ Aguardando novo filtro (Projetista)
+Reutilização aprovada ──▶ estado final (solicitante notificado)
 Aguardando novo filtro (Projetista) ──(Projetista · 2º filtro)──▶
       similar encontrado → Em análise (Projetista)
       sem similar       → Liberado para fabricação (novo dispositivo)
@@ -132,7 +132,7 @@ Aguardando novo filtro (Projetista) ──(Projetista · 2º filtro)──▶
 
 - **Fila do Projetista** (UI): `Em análise (Projetista)` + `Aguardando novo filtro (Projetista)`.
 - **Fila da Engenharia** (UI): `Em análise (Engenharia)` (rascunhos) +
-  `Reutilização aprovada`/`Reutilização não aprovada` (retornos para OS).
+  `Reutilização aprovada`/`Reutilização não aprovada` (retornos da análise).
 - Registros legados (`pendente/aprovado/rejeitado`) são normalizados na
   leitura para os novos estados.
 
@@ -182,7 +182,7 @@ todas as ações críticas do sistema.
 | --- | --- | --- |
 | `usuarioNome` / `usuarioEmail` | Quem executou a ação | `{{ current_user.fullName }}` / e-mail |
 | `usuarioPerfil` | Grupo de permissões do autor | `{{ current_user.groups[0] }}` |
-| `acao` / `acaoDescricao` | Token estável + rótulo legível (ex.: "Aprovou Reutilização", "Gerou OS", "Solicitou Novo Filtro") | identificação da operação |
+| `acao` / `acaoDescricao` | Token estável + rótulo legível (ex.: "Aprovou Reutilização", "Reprovou Reutilização", "Solicitou Novo Filtro") | identificação da operação |
 | `conteudo` / `dadosAnteriores` | Detalhes estruturados em JSON (IDs, motivo, valores alterados) | payload da operação |
 | `dataHora` / `dataHoraServidor` | `dataHora` é ISO (ordena junto com o acervo legado); `dataHoraServidor` é o carimbo nativo do servidor (`serverTimestamp`) e é o exibido na UI | `DEFAULT CURRENT_TIMESTAMP` |
 

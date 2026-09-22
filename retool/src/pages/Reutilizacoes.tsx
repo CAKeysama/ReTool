@@ -4,7 +4,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { Tabs, EmptyState } from '../components/Tabs';
 import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
 import { FluxoReutilizacaoModal } from '../components/FluxoReutilizacaoModal';
-import { ListChecks, ChevronDown, Check, X, Clock, Factory, FilePlus2, Send, Wrench, ExternalLink, Info } from 'lucide-react';
+import { ListChecks, ChevronDown, Check, X, Clock, Factory, Send, Wrench, ExternalLink, Info } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
 import {
@@ -162,12 +162,6 @@ export function Reutilizacoes() {
   };
 
   // ---------------- TRANSIÇÕES (somente nas abas de fila) ----------------
-  const gerarOs = (u: Reutilizacao) => {
-    const numero = window.prompt('Número da OS para esta solicitação:', u.numeroOs || '');
-    if (numero === null) return;
-    transicionarReutilizacao(u.id, 'Em andamento - OS', { numeroOs: numero.trim() });
-  };
-
   const naoAprovar = (u: Reutilizacao) => {
     const motivo = window.prompt('Informe o motivo da não aprovação:');
     if (motivo === null) return;
@@ -211,10 +205,6 @@ export function Reutilizacoes() {
     }
     if (st === 'Reutilização não aprovada') {
       if (pode('Aguardando novo filtro (Projetista)')) acoes.push(btn('Solicitar Dispositivo Novo', () => transicionarReutilizacao(u.id, 'Aguardando novo filtro (Projetista)'), 'primary', <Factory size={14} />));
-      if (pode('Em andamento - OS')) acoes.push(btn('Gerar OS', () => gerarOs(u), 'neutro', <FilePlus2 size={14} />));
-    }
-    if (st === 'Reutilização aprovada' && pode('Em andamento - OS')) {
-      acoes.push(btn('Gerar OS', () => gerarOs(u), 'neutro', <FilePlus2 size={14} />));
     }
     if (st === 'Aguardando novo filtro (Projetista)') {
       if (pode('Em análise (Projetista)')) acoes.push(btn('Similar Encontrado', () => transicionarReutilizacao(u.id, 'Em análise (Projetista)'), 'primary', <Wrench size={14} />));

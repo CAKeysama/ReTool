@@ -94,8 +94,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
                 <Chip status="Reutilização aprovada" />
               </div>
               <p style={textoEtapa}>
-                O solicitante é notificado. A Engenharia então <strong>gera a OS</strong> e o registro vai para
-                <strong> &quot;Em andamento - OS&quot;</strong>, onde é executado.
+                O solicitante é notificado e o dispositivo está liberado para reutilização — fluxo encerrado.
               </p>
             </div>
             <div style={{ ...cartao, backgroundColor: '#fef2f2', borderColor: '#fecaca' }}>
@@ -105,8 +104,8 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
                 <Chip status="Reutilização não aprovada" />
               </div>
               <p style={textoEtapa}>
-                O motivo é registrado e o solicitante é notificado. A Engenharia decide entre
-                <strong> gerar a OS mesmo assim</strong> ou <strong>solicitar um dispositivo novo</strong>.
+                O motivo é registrado e o solicitante é notificado. A Engenharia pode
+                <strong> solicitar um dispositivo novo</strong> (2º filtro).
               </p>
             </div>
           </div>
@@ -135,18 +134,6 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
             </div>
           </div>
         </div>
-        <Conector />
-
-        {/* Estado operacional */}
-        <div style={{ ...cartao, backgroundColor: '#f0fdfa' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <h3 style={tituloEtapa}>Execução</h3>
-            <Chip status="Em andamento - OS" />
-          </div>
-          <p style={textoEtapa}>
-            Estado operacional final: a solicitação está vinculada a uma OS e em execução. Não gera notificações.
-          </p>
-        </div>
       </div>
 
       {/* TODOS OS ESTADOS */}
@@ -164,11 +151,10 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
             {[
               { st: 'Em análise (Engenharia)' as ReutilizacaoStatus, desc: 'Rascunho criado pela Engenharia, aguardando envio ao 1º filtro.', quem: 'Engenharia / Admin' },
               { st: 'Em análise (Projetista)' as ReutilizacaoStatus, desc: 'Em avaliação pelo Projetista (1º filtro).', quem: 'Projetista / Admin' },
-              { st: 'Reutilização aprovada' as ReutilizacaoStatus, desc: 'Aprovada no 1º filtro, aguardando geração da OS.', quem: 'Engenharia / Admin' },
-              { st: 'Reutilização não aprovada' as ReutilizacaoStatus, desc: 'Reprovada com motivo; aguarda OS ou solicitação de dispositivo novo.', quem: 'Engenharia / Admin' },
+              { st: 'Reutilização aprovada' as ReutilizacaoStatus, desc: 'Aprovada no 1º filtro — estado final.', quem: '—' },
+              { st: 'Reutilização não aprovada' as ReutilizacaoStatus, desc: 'Reprovada com motivo; pode ser enviado para solicitação de dispositivo novo.', quem: 'Engenharia / Admin' },
               { st: 'Aguardando novo filtro (Projetista)' as ReutilizacaoStatus, desc: 'Dispositivo novo solicitado; Projetista verifica similares (2º filtro).', quem: 'Projetista / Admin' },
-              { st: 'Liberado para fabricação (novo dispositivo)' as ReutilizacaoStatus, desc: 'Novo dispositivo liberado — estado final.', quem: '—' },
-              { st: 'Em andamento - OS' as ReutilizacaoStatus, desc: 'Vinculada a uma OS, em execução — estado final.', quem: '—' }
+              { st: 'Liberado para fabricação (novo dispositivo)' as ReutilizacaoStatus, desc: 'Novo dispositivo liberado — estado final.', quem: '—' }
             ].map(({ st, desc, quem }) => (
               <tr key={st} style={{ borderBottom: '1px solid #f3f4f6' }}>
                 <td style={{ padding: '8px' }}><Chip status={st} /></td>
@@ -184,7 +170,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
       <div style={secao}>
         <h3 style={tituloSecao}>Permissões por perfil</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '8px', fontSize: '0.8rem', color: '#4b5563' }}>
-          <div style={cartao}><strong>Engenharia:</strong> solicita, envia ao 1º filtro, gera OS e solicita dispositivo novo.</div>
+          <div style={cartao}><strong>Engenharia:</strong> solicita, envia ao 1º filtro e solicita dispositivo novo.</div>
           <div style={cartao}><strong>Projetista:</strong> aprova/reprova no 1º filtro e decide similar/liberação no 2º filtro.</div>
           <div style={cartao}><strong>Admin:</strong> todas as transições do fluxo.</div>
           <div style={cartao}><strong>Gerência:</strong> somente leitura (consulta o histórico).</div>

@@ -28,7 +28,7 @@ export interface AuditLog {
   usuarioEmail: string;
   usuarioPerfil: UserRole;
   acao: AuditLogAcao;
-  /** Rótulo humano da ação, ex.: "Aprovou Reutilização", "Gerou OS". */
+  /** Rótulo humano da ação, ex.: "Aprovou Reutilização", "Solicitou Novo Filtro". */
   acaoDescricao?: string;
   tipoEntidade: 'dispositivo' | 'categoria' | 'tipo' | 'familia' | 'produto' | 'reutilizacao' | 'usuario';
   entidadeId: string;

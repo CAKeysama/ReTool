@@ -6,30 +6,28 @@ import {
 } from '../../../domain/entities/reutilizacao';
 
 describe('Fluxo de Reutilização - Máquina de Estados', () => {
-  it('deve possuir exatamente os 7 estados da arquitetura', () => {
+  it('deve possuir exatamente os 6 estados da arquitetura', () => {
     expect(REUTILIZACAO_STATUS).toEqual([
       'Em análise (Engenharia)',
       'Em análise (Projetista)',
       'Reutilização aprovada',
       'Reutilização não aprovada',
       'Liberado para fabricação (novo dispositivo)',
-      'Aguardando novo filtro (Projetista)',
-      'Em andamento - OS'
+      'Aguardando novo filtro (Projetista)'
     ]);
   });
 
-  it('deve normalizar registros legados (pendente/aprovado/rejeitado)', () => {
+  it('deve normalizar registros legados (pendente/aprovado/rejeitado/Em andamento - OS)', () => {
     expect(normalizarStatusReutilizacao('pendente')).toBe('Em análise (Projetista)');
     expect(normalizarStatusReutilizacao('aprovado')).toBe('Reutilização aprovada');
     expect(normalizarStatusReutilizacao('rejeitado')).toBe('Reutilização não aprovada');
     expect(normalizarStatusReutilizacao(undefined)).toBe('Em análise (Projetista)');
-    expect(normalizarStatusReutilizacao('Em andamento - OS')).toBe('Em andamento - OS');
+    // Estado descontinuado (geração de OS removida) é tratado como aprovada.
+    expect(normalizarStatusReutilizacao('Em andamento - OS')).toBe('Reutilização aprovada');
   });
 
-  it('Engenharia: inicia o 1º filtro, gera OS e solicita dispositivo novo', () => {
+  it('Engenharia: inicia o 1º filtro e solicita dispositivo novo', () => {
     expect(transicaoReutilizacaoPermitida('engenharia', 'Em análise (Engenharia)', 'Em análise (Projetista)')).toBe(true);
-    expect(transicaoReutilizacaoPermitida('engenharia', 'Reutilização aprovada', 'Em andamento - OS')).toBe(true);
-    expect(transicaoReutilizacaoPermitida('engenharia', 'Reutilização não aprovada', 'Em andamento - OS')).toBe(true);
     expect(transicaoReutilizacaoPermitida('engenharia', 'Reutilização não aprovada', 'Aguardando novo filtro (Projetista)')).toBe(true);
     // Engenharia não aprova/rejeita nem libera fabricação
     expect(transicaoReutilizacaoPermitida('engenharia', 'Em análise (Projetista)', 'Reutilização aprovada')).toBe(false);
@@ -41,9 +39,8 @@ describe('Fluxo de Reutilização - Máquina de Estados', () => {
     expect(transicaoReutilizacaoPermitida('projetista', 'Em análise (Projetista)', 'Reutilização não aprovada')).toBe(true);
     expect(transicaoReutilizacaoPermitida('projetista', 'Aguardando novo filtro (Projetista)', 'Em análise (Projetista)')).toBe(true);
     expect(transicaoReutilizacaoPermitida('projetista', 'Aguardando novo filtro (Projetista)', 'Liberado para fabricação (novo dispositivo)')).toBe(true);
-    // Projetista não inicia o fluxo nem gera OS
+    // Projetista não inicia o fluxo
     expect(transicaoReutilizacaoPermitida('projetista', 'Em análise (Engenharia)', 'Em análise (Projetista)')).toBe(false);
-    expect(transicaoReutilizacaoPermitida('projetista', 'Reutilização aprovada', 'Em andamento - OS')).toBe(false);
   });
 
   it('Gerência: nenhuma transição (somente leitura)', () => {

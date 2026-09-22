@@ -459,8 +459,6 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       if (de === 'Em análise (Engenharia)' && para === 'Em análise (Projetista)') return 'Solicitou análise do Projetista (1º filtro)';
       if (para === 'Reutilização aprovada') return 'Aprovou Reutilização';
       if (para === 'Reutilização não aprovada') return 'Reprovou Reutilização';
-      if (de === 'Reutilização aprovada' && para === 'Em andamento - OS') return 'Gerou OS';
-      if (de === 'Reutilização não aprovada' && para === 'Em andamento - OS') return 'Gerou OS (após não aprovação)';
       if (para === 'Aguardando novo filtro (Projetista)') return 'Solicitou Novo Filtro (dispositivo novo)';
       if (de === 'Aguardando novo filtro (Projetista)' && para === 'Em análise (Projetista)') return 'Marcou similar encontrado (análise retomada)';
       if (para === 'Liberado para fabricação (novo dispositivo)') return 'Liberou fabricação de novo dispositivo';
@@ -484,7 +482,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       await notificarFilaProjetista(reu, `Similar encontrado para ${nomeDisp}: análise de reutilização retomada.`);
       await notificarSolicitante(reu, 'Similar encontrado', `O Projetista encontrou um similar para ${nomeDisp}; a análise de reutilização foi retomada.`);
     } else if (para === 'Reutilização aprovada') {
-      await notificarSolicitante(reu, 'Reutilização aprovada', `Sua solicitação de reutilização de ${nomeDisp} foi aprovada. Gere a OS com os códigos da reutilização.`);
+      await notificarSolicitante(reu, 'Reutilização aprovada', `Sua solicitação de reutilização de ${nomeDisp} foi aprovada.`);
     } else if (para === 'Reutilização não aprovada') {
       await notificarSolicitante(reu, 'Reutilização não aprovada', `Sua solicitação de reutilização de ${nomeDisp} não foi aprovada.${opts?.motivo ? ` Motivo: ${opts.motivo}` : ''}`);
     } else if (para === 'Aguardando novo filtro (Projetista)') {
