@@ -70,8 +70,8 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
           width: '100%',
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          padding: '8px 16px',
+          gap: '8px',
+          padding: '6px 12px',
           minHeight: 40,
           backgroundColor: roleConfig.badgeBg,
           border: `1px solid ${roleConfig.borderColor}`,
@@ -85,8 +85,8 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
         aria-haspopup="true"
       >
         <div style={{
-          width: '32px',
-          height: '32px',
+          width: '28px',
+          height: '28px',
           borderRadius: '50%',
           backgroundColor: 'white',
           display: 'flex',
@@ -135,8 +135,8 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
         <div style={{
           position: 'absolute',
           top: '100%',
-          left: 'auto',
-          right: 0,
+          left: 0,
+          right: 'auto',
           marginTop: '8px',
           minWidth: '264px',
           backgroundColor: 'white',
