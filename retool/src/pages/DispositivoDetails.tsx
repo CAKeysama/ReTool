@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { corDoStatusReutilizacao, rotuloCurtoStatusReutilizacao } from '../domain/entities/reutilizacao';
-import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink, Send } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink, Send, ChevronDown } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { SolicitarReutilizacaoModal } from '../components/SolicitarReutilizacaoModal';
 import { formatFileSize } from '../utils/fileValidators';
@@ -22,6 +22,7 @@ export function DispositivoDetails() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSolicitarOpen, setIsSolicitarOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [novaReutilizacao, setNovaReutilizacao] = useState({
     data: '',
     codigoPeca: '',
@@ -428,31 +429,25 @@ export function DispositivoDetails() {
           </div>
         ) : (
           <div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem', tableLayout: 'fixed' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.83rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid var(--color-border)' }}>
                   <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '45px', textAlign: 'center' }}>Nº</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '85px', whiteSpace: 'nowrap' }}>Data</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '90px', whiteSpace: 'nowrap' }}>Status</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '100px', whiteSpace: 'nowrap' }}>Código da Peça</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '130px', whiteSpace: 'nowrap' }}>Descrição da Peça</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '90px', whiteSpace: 'nowrap' }}>Produto</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '90px', whiteSpace: 'nowrap' }}>Peso Peça (kg)</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '110px', whiteSpace: 'nowrap' }}>Hard Saving (R$)</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '100px', whiteSpace: 'nowrap' }}>Responsável</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', width: '80px', whiteSpace: 'nowrap' }}>Nº OS</th>
-                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Descrição da Alteração Realizada</th>
-                  {canExcluir && <th style={{ padding: '10px 8px', width: '40px' }}></th>}
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Data</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Status</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Peça</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase', textAlign: 'right' }}>Hard Saving</th>
+                  <th style={{ padding: '10px 8px', fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Responsável</th>
+                  <th style={{ padding: '10px 8px', width: '36px' }} aria-label="Expandir detalhes" />
+                  {canExcluir && <th style={{ padding: '10px 8px', width: '40px' }} aria-label="Excluir" />}
                 </tr>
               </thead>
               <tbody>
                 {sortedReutilizacoes.map((u, idx) => {
                   const itemNumber = sortedReutilizacoes.length - idx;
                   const isMostRecent = idx === 0;
-                  const p = produtos.find(prod => prod.id === u.produtoId);
-                  const displayProduto = p ? p.nome : (u.produtoId || 'N/A');
+                  const aberto = expandedId === u.id;
 
-                  // Formatação de data
                   const rawDate = u.data || u.dataCriacao || '';
                   let displayDate = 'N/A';
                   if (rawDate) {
@@ -464,73 +459,126 @@ export function DispositivoDetails() {
                     }
                   }
 
-                  // Estilos dinâmicos com destaque para o mais recente
-                  const cellTextColor = isMostRecent ? 'var(--color-primary)' : 'var(--color-text-dark)';
-                  const normalCellColor = 'var(--color-text-dark)';
-                  const fontWeightVal = isMostRecent ? 600 : 400;
-
                   const statusU = u.status || 'Reutilização aprovada';
                   const corStatus = corDoStatusReutilizacao(statusU);
+                  const corDestaque = 'var(--color-text-dark)';
 
                   return (
-                    <tr 
-                      key={u.id} 
-                      style={{ 
-                        borderBottom: '1px solid #f3f4f6', 
-                        backgroundColor: isMostRecent ? 'rgba(228, 13, 44, 0.02)' : 'transparent',
-                        borderLeft: isMostRecent ? '4px solid var(--color-primary)' : 'none'
-                      }}
-                    >
-                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                        <div style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '50%',
-                          backgroundColor: isMostRecent ? 'var(--color-primary)' : '#f3f4f6',
-                          color: isMostRecent ? 'white' : '#6b7280',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontWeight: 700,
-                          fontSize: '0.8rem'
-                        }}>
-                          {itemNumber}
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 8px', color: cellTextColor, fontWeight: fontWeightVal, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayDate}</td>
-                      <td style={{ padding: '12px 8px', whiteSpace: 'nowrap' }}>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '10px',
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          backgroundColor: corStatus.fundo,
-                          color: corStatus.texto
-                        }} title={statusU}>
-                          {rotuloCurtoStatusReutilizacao(statusU)}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 8px', color: cellTextColor, fontWeight: fontWeightVal, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.codigoPeca || 'N/A'}</td>
-                      <td style={{ padding: '12px 8px', color: normalCellColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.descricaoPeca}>{u.descricaoPeca || 'N/A'}</td>
-                      <td style={{ padding: '12px 8px', color: cellTextColor, fontWeight: fontWeightVal, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayProduto}</td>
-                      <td style={{ padding: '12px 8px', color: normalCellColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.pesoPeca?.toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) || '0,000'}</td>
-                      <td style={{ padding: '12px 8px', color: 'var(--color-success)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.hardSaving?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}</td>
-                      <td style={{ padding: '12px 8px', color: normalCellColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={u.responsavel}>{u.responsavel || 'N/A'}</td>
-                      <td style={{ padding: '12px 8px', color: normalCellColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.numeroOs || 'N/A'}</td>
-                      <td style={{ padding: '12px 8px', color: '#4A4A4A', lineHeight: 1.4, wordBreak: 'break-word' }}>{u.descricaoAlteracao || 'N/A'}</td>
-                      {canExcluir && (
+                    <React.Fragment key={u.id}>
+                      <tr
+                        onClick={() => setExpandedId(aberto ? null : u.id)}
+                        style={{
+                          borderBottom: '1px solid #f3f4f6',
+                          cursor: 'pointer',
+                          backgroundColor: isMostRecent ? 'rgba(228, 13, 44, 0.03)' : aberto ? '#fafafa' : 'transparent',
+                          borderLeft: isMostRecent ? '4px solid var(--color-primary)' : 'none'
+                        }}
+                        title="Clique para ver os detalhes completos"
+                      >
                         <td style={{ padding: '12px 8px', textAlign: 'center' }}>
-                          <button 
-                            className="btn" 
-                            style={{ border: 'none', padding: 0, color: 'var(--color-danger)', background: 'transparent', boxShadow: 'none', minHeight: 'unset', height: 'auto' }}
-                            onClick={() => confirm('Apagar esta reutilização?') && deleteReutilizacao(u.id)}
-                            title="Excluir reutilização"
-                          >
-                            <Trash size={14} />
-                          </button>
+                          <div style={{
+                            width: '24px',
+                            height: '24px',
+                            margin: '0 auto',
+                            borderRadius: '50%',
+                            backgroundColor: isMostRecent ? 'var(--color-primary)' : '#f3f4f6',
+                            color: isMostRecent ? 'white' : '#6b7280',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: '0.8rem'
+                          }}>
+                            {itemNumber}
+                          </div>
                         </td>
+                        <td style={{ padding: '12px 8px', color: isMostRecent ? 'var(--color-primary)' : 'var(--color-text-dark)', fontWeight: isMostRecent ? 600 : 400, whiteSpace: 'nowrap' }}>{displayDate}</td>
+                        <td style={{ padding: '12px 8px' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            backgroundColor: corStatus.fundo,
+                            color: corStatus.texto,
+                            whiteSpace: 'nowrap'
+                          }} title={statusU}>
+                            {rotuloCurtoStatusReutilizacao(statusU)}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 8px', maxWidth: '220px' }}>
+                          <div style={{ fontWeight: 600, color: corDestaque, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.codigoPeca}>{u.codigoPeca || 'N/A'}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.descricaoPeca}>{u.descricaoPeca || ''}</div>
+                        </td>
+                        <td style={{ padding: '12px 8px', color: 'var(--color-success)', fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                          R$ {(u.hardSaving || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ padding: '12px 8px', color: corDestaque, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.responsavel}>{u.responsavel || u.solicitanteNome || 'N/A'}</td>
+                        <td style={{ padding: '12px 8px', color: '#9ca3af' }}>
+                          <ChevronDown size={16} style={{ transform: aberto ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'block' }} />
+                        </td>
+                        {canExcluir && (
+                          <td style={{ padding: '12px 8px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                            <button
+                              className="btn"
+                              style={{ border: 'none', padding: 0, color: 'var(--color-danger)', background: 'transparent', boxShadow: 'none', minHeight: 'unset', height: 'auto' }}
+                              onClick={() => confirm('Apagar esta reutilização?') && deleteReutilizacao(u.id)}
+                              title="Excluir reutilização"
+                              aria-label="Excluir reutilização"
+                            >
+                              <Trash size={14} />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                      {aberto && (
+                        <tr style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: '#fafafa' }}>
+                          <td colSpan={7 + (canExcluir ? 1 : 0)} style={{ padding: '14px 18px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px 24px', fontSize: '0.8rem', color: '#4b5563' }}>
+                              <div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Descrição da alteração realizada</div>
+                                <div style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{u.descricaoAlteracao || 'N/A'}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Descrição da peça</div>
+                                <div>{u.descricaoPeca || 'N/A'}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Produto</div>
+                                <div>{produtos.find(p => p.id === u.produtoId)?.nome || u.produtoId || 'N/A'}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Peso da peça</div>
+                                <div>{(u.pesoPeca || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Nº OS</div>
+                                <div>{u.numeroOs || '—'}</div>
+                              </div>
+                              {u.solicitanteNome && (
+                                <div>
+                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Solicitante</div>
+                                  <div>{u.solicitanteNome}</div>
+                                </div>
+                              )}
+                              {u.aprovadorNome && (
+                                <div>
+                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Análise</div>
+                                  <div>{u.aprovadorNome}{u.dataAprovacao ? ` em ${new Date(u.dataAprovacao).toLocaleDateString('pt-BR')}` : ''}</div>
+                                </div>
+                              )}
+                              {statusU === 'Reutilização não aprovada' && u.motivoRejeicao && (
+                                <div>
+                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-danger)', textTransform: 'uppercase', marginBottom: '3px' }}>Motivo da não aprovação</div>
+                                  <div style={{ color: 'var(--color-danger)' }}>{u.motivoRejeicao}</div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </tr>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
