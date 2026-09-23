@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Categoria, Tipo } from '../domain/entities/categoria';
 import { Familia } from '../domain/entities/familia';
 import { Produto } from '../domain/entities/produto';
-import { Dispositivo } from '../domain/entities/dispositivo';
+import { Dispositivo, calcularPropagacaoImagens, normalizarNumeroPeca } from '../domain/entities/dispositivo';
 import { Reutilizacao, ReutilizacaoStatus, transicaoReutilizacaoPermitida } from '../domain/entities/reutilizacao';
 import { AuditLog } from '../domain/entities/auditLog';
 
@@ -176,6 +176,38 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
+  // Propagação automática de imagens por Número da Peça: um único upload
+  // alimenta todas as células vazias da mesma linha (nunca sobrescreve
+  // imagens existentes nem toca dispositivos de outras linhas).
+  const propagarImagensPorCodigo = async (
+    origemId: string,
+    codigo: string | undefined,
+    payload: Partial<Dispositivo>,
+    isNew: boolean
+  ) => {
+    const chave = normalizarNumeroPeca(codigo);
+    if (!chave) return;
+    const linha = dispositivos.filter(d => normalizarNumeroPeca(d.codigo) === chave);
+    const patches = calcularPropagacaoImagens(linha, origemId, codigo, payload, isNew);
+    if (patches.length === 0) return;
+
+    for (const p of patches) {
+      await dispositivosRepo.update(p.id, p.patch);
+      const alvo = dispositivos.find(d => d.id === p.id);
+      await registrarAuditoria(
+        'edicao',
+        'dispositivo',
+        p.id,
+        alvo?.nome || alvo?.codigo || p.id,
+        p.origem === 'propagacao'
+          ? 'Imagem propagada automaticamente (mesmo número de peça)'
+          : 'Imagem herdada automaticamente da linha (mesmo número de peça)',
+        { origemId, numeroPeca: codigo, campos: Object.keys(p.patch) }
+      );
+    }
+    announce(`Imagens sincronizadas em ${patches.length} dispositivo(s) da linha ${codigo}.`);
+  };
+
   const addDispositivo = async (data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }) => {
     if (currentRole !== 'admin' && currentRole !== 'projetista') {
       announce('Acesso negado: seu perfil não possui permissão para cadastrar dispositivos.');
@@ -183,6 +215,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     }
     const novoId = await dispositivosRepo.add(data);
     await registrarAuditoria('criacao', 'dispositivo', novoId, data.nome, 'Cadastrou dispositivo', { ...data });
+    await propagarImagensPorCodigo(novoId, data.codigo, data, true);
     announce('Dispositivo adicionado com sucesso');
   };
 
@@ -194,6 +227,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     const atual = dispositivos.find(d => d.id === id);
     await dispositivosRepo.update(id, data);
     await registrarAuditoria('edicao', 'dispositivo', id, atual?.nome || id, 'Editou dispositivo', { valoresAlterados: data }, atual);
+    await propagarImagensPorCodigo(id, data.codigo ?? atual?.codigo, data, false);
     if (!silent) announce('Dispositivo atualizado com sucesso');
   };
 
