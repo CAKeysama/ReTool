@@ -99,24 +99,24 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ 
-            fontSize: '0.8rem', 
-            fontWeight: 700, 
+          <div style={{
+            fontSize: '0.8rem',
+            fontWeight: 700,
             color: roleConfig.badgeText,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis'
           }}>
-            {roleConfig.titulo}
+            {userProfile?.nome || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : 'Convidado')}
           </div>
-          <div style={{ 
-            fontSize: '0.7rem', 
+          <div style={{
+            fontSize: '0.7rem',
             color: '#4b5563',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis'
           }}>
-            {userProfile?.nome || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : 'Convidado')}
+            {roleConfig.tituloCurto}
           </div>
         </div>
 
@@ -135,9 +135,10 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
         <div style={{
           position: 'absolute',
           top: '100%',
-          left: 0,
+          left: 'auto',
           right: 0,
           marginTop: '8px',
+          minWidth: '264px',
           backgroundColor: 'white',
           borderRadius: 'var(--radius)',
           boxShadow: '0 12px 30px rgba(0,0,0,0.15)',
@@ -176,7 +177,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
             margin: '4px 0'
           }}>
             {getRoleIcon(currentRole)}
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: roleConfig.badgeText }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: roleConfig.badgeText, whiteSpace: 'nowrap' }}>
               {roleConfig.titulo}
             </span>
           </div>
@@ -209,7 +210,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
               <Users size={16} color="#7c3aed" />
-              <span>Gerenciar Usuários & Acessos</span>
+              <span style={{ whiteSpace: 'nowrap' }}>Gerenciar Usuários & Acessos</span>
             </button>
           )}
 
@@ -238,7 +239,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
               <FileText size={16} color="#2563eb" />
-              <span>Histórico de Auditoria / Exclusões</span>
+              <span style={{ whiteSpace: 'nowrap' }}>Histórico de Auditoria / Exclusões</span>
             </button>
           )}
 
@@ -269,7 +270,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
               <LogOut size={16} color="#ef4444" />
-              <span>Sair da Conta</span>
+              <span style={{ whiteSpace: 'nowrap' }}>Sair da Conta</span>
             </button>
           ) : (
             <button
@@ -296,7 +297,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
               <LogIn size={16} />
-              <span>Fazer Login com E-mail</span>
+              <span style={{ whiteSpace: 'nowrap' }}>Fazer Login com E-mail</span>
             </button>
           )}
         </div>

@@ -8,13 +8,94 @@ import { useReTool } from '../context/ReToolContext';
 import { useBulkProgress } from '../hooks/useBulkProgress';
 import { usePermissions } from '../hooks/usePermissions';
 
+const estiloBtnLinha: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  minHeight: 'unset',
+  padding: 0,
+  border: 'none',
+  backgroundColor: 'transparent',
+  boxShadow: 'none',
+  color: '#9ca3af'
+};
+
+interface PainelClassificacaoProps {
+  titulo: string;
+  contagem: number;
+  infoAberta: boolean;
+  onInfo: (v: boolean) => void;
+  infoTexto: React.ReactNode;
+  infoAria: string;
+  onBulk?: () => void;
+  onAdd?: () => void;
+  children: React.ReactNode;
+}
+
+function PainelClassificacao({
+  titulo, contagem, infoAberta, onInfo, infoTexto, infoAria, onBulk, onAdd, children
+}: PainelClassificacaoProps) {
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '12px 16px', backgroundColor: '#fafafa',
+        borderBottom: '1px solid var(--color-border)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>{titulo}</h3>
+          <span style={{
+            fontSize: '0.7rem', fontWeight: 700, color: '#6b7280',
+            backgroundColor: '#f3f4f6', border: '1px solid var(--color-border)',
+            padding: '1px 8px', borderRadius: '10px'
+          }}>
+            {contagem}
+          </span>
+          <div
+            style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+            onMouseEnter={() => onInfo(true)}
+            onMouseLeave={() => onInfo(false)}
+          >
+            <button
+              type="button"
+              style={{ background: 'transparent', border: 'none', color: infoAberta ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
+              aria-label={infoAria}
+            >
+              <Info size={15} />
+            </button>
+            {infoAberta && (
+              <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
+                {infoTexto}
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {onBulk && (
+            <button className="btn btn-icon" onClick={onBulk} aria-label={`Ações em massa para ${titulo}`} title="Ações em Massa">
+              <ListChecks size={16} />
+            </button>
+          )}
+          {onAdd && (
+            <button className="btn btn-primary btn-icon" onClick={onAdd} aria-label={`Criar novo registro em ${titulo}`}>
+              <Plus size={18} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div style={{ maxHeight: '440px', overflowY: 'auto', padding: '12px' }} className="custom-scrollbar">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function Categorias() {
   const { canCadastrar, canEditar, canExcluir } = usePermissions();
   const {
     categorias,
     familias,
     produtos,
-    
+
     // Categoria
     isCatModalOpen,
     setIsCatModalOpen,
@@ -202,305 +283,210 @@ export function Categorias() {
     } finally { setProdBulkLoading(false); closeProdBulk(); }
   };
 
+  const badgeInativo = (
+    <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px', flexShrink: 0 }}>Inativo</span>
+  );
+
   return (
     <div>
       <div style={{ marginBottom: 'var(--spacing-xl)' }}>
         <h2 style={{ marginBottom: 'var(--spacing-xs)' }}>Gestão de Classificações</h2>
         <p style={{ color: 'var(--color-text-body)' }}>Gerencie e visualize todas as estruturas de classificação usadas no sistema.</p>
       </div>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-2xl)' }}>
-        
-        {/* Painel Categorias */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Categorias</h3>
-              <div 
-                style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-                onMouseEnter={() => setShowCatInfo(true)}
-                onMouseLeave={() => setShowCatInfo(false)}
-              >
-                <button 
-                  type="button"
-                  style={{ background: 'transparent', border: 'none', color: showCatInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
-                  aria-label="O que são categorias?"
-                >
-                  <Info size={16} />
-                </button>
-                {showCatInfo && (
-                  <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
-                    <strong>Grupos macro</strong> para classificar os dispositivos de forma geral.<br/>
-                    <em>Exemplos: Ferramentas de Corte, EPIs, Gabaritos.</em>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {canExcluir && (
-                <button
-                  className="btn btn-icon"
-                  onClick={() => setIsCatBulkOpen(true)}
-                  aria-label="Ações em massa para categorias"
-                  title="Ações em Massa"
-                >
-                  <ListChecks size={16} />
-                </button>
-              )}
-              {canCadastrar && (
-                <button className="btn btn-primary btn-icon" onClick={() => openCatForm()} aria-label="Criar nova categoria">
-                  <Plus size={18} />
-                </button>
-              )}
-            </div>
-          </div>
 
-          <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
-            <FocusableList 
-              items={categorias}
-              ariaLabel="Lista de categorias."
-              onItemAction={canEditar ? (c) => openCatForm(c.id, c.nome) : undefined}
-              renderItem={(c, idx, isFocused) => (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: c.ativo === false ? 0.6 : 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                    <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{c.nome || 'Sem Nome'}</span>
-                    {c.ativo === false && (
-                      <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                    {canEditar && (
-                      <button
-                        className="btn btn-icon"
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); openCatForm(c.id, c.nome); }}
-                        aria-label={`Editar categoria ${c.nome}`}
-                      >
-                        <Edit size={16} />
-                      </button>
-                    )}
-                    {canEditar && c.ativo === false && (
-                      <button
-                        className="btn btn-icon"
-                        style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); updateCategoria(c.id, { ativo: true }); }}
-                        aria-label={`Ativar categoria ${c.nome}`}
-                      >
-                        <Check size={16} />
-                      </button>
-                    )}
-                    {canExcluir && (
-                      <button
-                        className="btn btn-icon"
-                        style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); setCatConfirmAction(c); }}
-                        aria-label={c.ativo === false ? `Excluir categoria ${c.nome}` : `Excluir ou desativar categoria ${c.nome}`}
-                      >
-                        <Trash size={16} />
-                      </button>
-                    )}
-                  </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-lg)', alignItems: 'start' }}>
+
+        {/* Painel Categorias */}
+        <PainelClassificacao
+          titulo="Categorias"
+          contagem={categorias.length}
+          infoAberta={showCatInfo}
+          onInfo={setShowCatInfo}
+          infoAria="O que são categorias?"
+          infoTexto={<><strong>Grupos macro</strong> para classificar os dispositivos de forma geral.<br /><em>Exemplos: Ferramentas de Corte, EPIs, Gabaritos.</em></>}
+          onBulk={canExcluir ? () => setIsCatBulkOpen(true) : undefined}
+          onAdd={canCadastrar ? () => openCatForm() : undefined}
+        >
+          <FocusableList
+            items={categorias}
+            ariaLabel="Lista de categorias."
+            onItemAction={canEditar ? (c) => openCatForm(c.id, c.nome) : undefined}
+            renderItem={(c, idx, isFocused) => (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '8px', opacity: c.ativo === false ? 0.55 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.nome}>{c.nome || 'Sem Nome'}</span>
+                  {c.ativo === false && badgeInativo}
                 </div>
-              )}
-            />
-          </div>
-        </div>
+                <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                  {canEditar && (
+                    <button
+                      className="btn btn-icon"
+                      style={estiloBtnLinha}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); openCatForm(c.id, c.nome); }}
+                      aria-label={`Editar categoria ${c.nome}`}
+                      title="Editar"
+                    >
+                      <Edit size={14} />
+                    </button>
+                  )}
+                  {canEditar && c.ativo === false && (
+                    <button
+                      className="btn btn-icon"
+                      style={{ ...estiloBtnLinha, color: 'var(--color-success)' }}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); updateCategoria(c.id, { ativo: true }); }}
+                      aria-label={`Ativar categoria ${c.nome}`}
+                      title="Ativar"
+                    >
+                      <Check size={14} />
+                    </button>
+                  )}
+                  {canExcluir && (
+                    <button
+                      className="btn btn-icon"
+                      style={{ ...estiloBtnLinha, color: 'var(--color-danger)' }}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); setCatConfirmAction(c); }}
+                      aria-label={c.ativo === false ? `Excluir categoria ${c.nome}` : `Excluir ou desativar categoria ${c.nome}`}
+                      title="Excluir / desativar"
+                    >
+                      <Trash size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          />
+        </PainelClassificacao>
 
         {/* Painel Famílias */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Famílias de Produto</h3>
-              <div 
-                style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-                onMouseEnter={() => setShowFamInfo(true)}
-                onMouseLeave={() => setShowFamInfo(false)}
-              >
-                <button 
-                  type="button"
-                  style={{ background: 'transparent', border: 'none', color: showFamInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
-                  aria-label="O que são famílias de produto?"
-                >
-                  <Info size={16} />
-                </button>
-                {showFamInfo && (
-                  <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
-                    <strong>Grupo de manufatura</strong> da peça.<br/>
-                    <em>Exemplos: Preparo de Solo, Colheita, Transporte.</em>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {canExcluir && (
-                <button
-                  className="btn btn-icon"
-                  onClick={() => setIsFamBulkOpen(true)}
-                  aria-label="Ações em massa para famílias"
-                  title="Ações em Massa"
-                >
-                  <ListChecks size={16} />
-                </button>
-              )}
-              {canCadastrar && (
-                <button className="btn btn-primary btn-icon" onClick={() => openFamForm()} aria-label="Criar nova família">
-                  <Plus size={18} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
-            <FocusableList 
-              items={familias}
-              ariaLabel="Lista de famílias."
-              onItemAction={canEditar ? (f) => openFamForm(f.id, f.nome) : undefined}
-              renderItem={(f, idx, isFocused) => (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: f.ativo === false ? 0.6 : 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                    <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{f.nome || 'Sem Nome'}</span>
-                    {f.ativo === false && (
-                      <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                    {canEditar && (
-                      <button
-                        className="btn btn-icon"
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); openFamForm(f.id, f.nome); }}
-                        aria-label={`Editar família ${f.nome}`}
-                      >
-                        <Edit size={16} />
-                      </button>
-                    )}
-                    {canEditar && f.ativo === false && (
-                      <button
-                        className="btn btn-icon"
-                        style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); updateFamilia(f.id, { ativo: true }); }}
-                        aria-label={`Ativar família ${f.nome}`}
-                      >
-                        <Check size={16} />
-                      </button>
-                    )}
-                    {canExcluir && (
-                      <button
-                        className="btn btn-icon"
-                        style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); setFamConfirmAction(f); }}
-                        aria-label={f.ativo === false ? `Excluir família ${f.nome}` : `Excluir ou desativar família ${f.nome}`}
-                      >
-                        <Trash size={16} />
-                      </button>
-                    )}
-                  </div>
+        <PainelClassificacao
+          titulo="Famílias de Produto"
+          contagem={familias.length}
+          infoAberta={showFamInfo}
+          onInfo={setShowFamInfo}
+          infoAria="O que são famílias de produto?"
+          infoTexto={<><strong>Grupo de manufatura</strong> da peça.<br /><em>Exemplos: Preparo de Solo, Colheita, Transporte.</em></>}
+          onBulk={canExcluir ? () => setIsFamBulkOpen(true) : undefined}
+          onAdd={canCadastrar ? () => openFamForm() : undefined}
+        >
+          <FocusableList
+            items={familias}
+            ariaLabel="Lista de famílias."
+            onItemAction={canEditar ? (f) => openFamForm(f.id, f.nome) : undefined}
+            renderItem={(f, idx, isFocused) => (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '8px', opacity: f.ativo === false ? 0.55 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.nome}>{f.nome || 'Sem Nome'}</span>
+                  {f.ativo === false && badgeInativo}
                 </div>
-              )}
-            />
-          </div>
-        </div>
+                <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                  {canEditar && (
+                    <button
+                      className="btn btn-icon"
+                      style={estiloBtnLinha}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); openFamForm(f.id, f.nome); }}
+                      aria-label={`Editar família ${f.nome}`}
+                      title="Editar"
+                    >
+                      <Edit size={14} />
+                    </button>
+                  )}
+                  {canEditar && f.ativo === false && (
+                    <button
+                      className="btn btn-icon"
+                      style={{ ...estiloBtnLinha, color: 'var(--color-success)' }}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); updateFamilia(f.id, { ativo: true }); }}
+                      aria-label={`Ativar família ${f.nome}`}
+                      title="Ativar"
+                    >
+                      <Check size={14} />
+                    </button>
+                  )}
+                  {canExcluir && (
+                    <button
+                      className="btn btn-icon"
+                      style={{ ...estiloBtnLinha, color: 'var(--color-danger)' }}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); setFamConfirmAction(f); }}
+                      aria-label={f.ativo === false ? `Excluir família ${f.nome}` : `Excluir ou desativar família ${f.nome}`}
+                      title="Excluir / desativar"
+                    >
+                      <Trash size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          />
+        </PainelClassificacao>
 
         {/* Painel Produtos */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Produtos</h3>
-              <div 
-                style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-                onMouseEnter={() => setShowProdInfo(true)}
-                onMouseLeave={() => setShowProdInfo(false)}
-              >
-                <button 
-                  type="button"
-                  style={{ background: 'transparent', border: 'none', color: showProdInfo ? 'var(--color-primary)' : '#9ca3af', display: 'flex', alignItems: 'center', cursor: 'pointer', padding: 0 }}
-                  aria-label="O que são produtos?"
-                >
-                  <Info size={16} />
-                </button>
-                {showProdInfo && (
-                  <div style={{ position: 'absolute', top: '100%', left: '0', marginTop: '8px', padding: '12px', backgroundColor: '#f9fafb', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', fontSize: '0.85rem', color: 'var(--color-text-dark)', width: '300px', zIndex: 50, boxShadow: 'var(--shadow-lg)', lineHeight: 1.5 }}>
-                    <strong>Nome comercial ou modelo</strong> do produto associado.<br/>
-                    <em>Exemplos: AVOLA 2500, Semeadeira XP.</em>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {canExcluir && (
-                <button
-                  className="btn btn-icon"
-                  onClick={() => setIsProdBulkOpen(true)}
-                  aria-label="Ações em massa para produtos"
-                  title="Ações em Massa"
-                >
-                  <ListChecks size={16} />
-                </button>
-              )}
-              {canCadastrar && (
-                <button className="btn btn-primary btn-icon" onClick={() => openProdForm()} aria-label="Criar novo produto">
-                  <Plus size={18} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
-            <FocusableList 
-              items={produtos}
-              ariaLabel="Lista de produtos."
-              onItemAction={canEditar ? (p) => openProdForm(p.id, p.nome) : undefined}
-              renderItem={(p, idx, isFocused) => (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', opacity: p.ativo === false ? 0.6 : 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                    <span style={{ fontWeight: 500, wordBreak: 'break-word', paddingRight: '8px' }}>{p.nome || 'Sem Nome'}</span>
-                    {p.ativo === false && (
-                      <span className="badge" style={{ backgroundColor: 'var(--gray02)', color: 'var(--gray00)', fontSize: '0.7rem', padding: '1px 6px' }}>Inativo</span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                    {canEditar && (
-                      <button
-                        className="btn btn-icon"
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); openProdForm(p.id, p.nome); }}
-                        aria-label={`Editar produto ${p.nome}`}
-                      >
-                        <Edit size={16} />
-                      </button>
-                    )}
-                    {canEditar && p.ativo === false && (
-                      <button
-                        className="btn btn-icon"
-                        style={{ color: 'var(--color-success)', borderColor: 'var(--color-success)' }}
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); updateProduto(p.id, { ativo: true }); }}
-                        aria-label={`Ativar produto ${p.nome}`}
-                      >
-                        <Check size={16} />
-                      </button>
-                    )}
-                    {canExcluir && (
-                      <button
-                        className="btn btn-icon"
-                        style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                        tabIndex={isFocused ? 0 : -1}
-                        onClick={(e) => { e.stopPropagation(); setProdConfirmAction(p); }}
-                        aria-label={p.ativo === false ? `Excluir produto ${p.nome}` : `Excluir ou desativar produto ${p.nome}`}
-                      >
-                        <Trash size={16} />
-                      </button>
-                    )}
-                  </div>
+        <PainelClassificacao
+          titulo="Produtos"
+          contagem={produtos.length}
+          infoAberta={showProdInfo}
+          onInfo={setShowProdInfo}
+          infoAria="O que são produtos?"
+          infoTexto={<><strong>Nome comercial ou modelo</strong> do produto associado.<br /><em>Exemplos: AVOLA 2500, Semeadeira XP.</em></>}
+          onBulk={canExcluir ? () => setIsProdBulkOpen(true) : undefined}
+          onAdd={canCadastrar ? () => openProdForm() : undefined}
+        >
+          <FocusableList
+            items={produtos}
+            ariaLabel="Lista de produtos."
+            onItemAction={canEditar ? (p) => openProdForm(p.id, p.nome) : undefined}
+            renderItem={(p, idx, isFocused) => (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '8px', opacity: p.ativo === false ? 0.55 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.nome}>{p.nome || 'Sem Nome'}</span>
+                  {p.ativo === false && badgeInativo}
                 </div>
-              )}
-            />
-          </div>
-        </div>
+                <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                  {canEditar && (
+                    <button
+                      className="btn btn-icon"
+                      style={estiloBtnLinha}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); openProdForm(p.id, p.nome); }}
+                      aria-label={`Editar produto ${p.nome}`}
+                      title="Editar"
+                    >
+                      <Edit size={14} />
+                    </button>
+                  )}
+                  {canEditar && p.ativo === false && (
+                    <button
+                      className="btn btn-icon"
+                      style={{ ...estiloBtnLinha, color: 'var(--color-success)' }}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); updateProduto(p.id, { ativo: true }); }}
+                      aria-label={`Ativar produto ${p.nome}`}
+                      title="Ativar"
+                    >
+                      <Check size={14} />
+                    </button>
+                  )}
+                  {canExcluir && (
+                    <button
+                      className="btn btn-icon"
+                      style={{ ...estiloBtnLinha, color: 'var(--color-danger)' }}
+                      tabIndex={isFocused ? 0 : -1}
+                      onClick={(e) => { e.stopPropagation(); setProdConfirmAction(p); }}
+                      aria-label={p.ativo === false ? `Excluir produto ${p.nome}` : `Excluir ou desativar produto ${p.nome}`}
+                      title="Excluir / desativar"
+                    >
+                      <Trash size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          />
+        </PainelClassificacao>
 
       </div>
 
@@ -509,9 +495,9 @@ export function Categorias() {
         <form onSubmit={handleCatSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           <div>
             <label htmlFor="catName" style={{ display: 'block', marginBottom: '4px' }}>Nome da Categoria</label>
-            <input 
+            <input
               id="catName" className="input-field" value={catName} autoFocus
-              onChange={(e) => setCatName(e.target.value)} 
+              onChange={(e) => setCatName(e.target.value)}
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
@@ -530,7 +516,7 @@ export function Categorias() {
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
             <button type="button" className="btn" onClick={() => setCatConfirmAction(null)}>Cancelar</button>
-            <button 
+            <button
               type="button" className="btn" style={catConfirmAction?.ativo === false ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' } : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
               onClick={() => {
                 if (catConfirmAction) {
@@ -541,7 +527,7 @@ export function Categorias() {
             >
               {catConfirmAction?.ativo !== false ? 'Desativar' : 'Ativar'}
             </button>
-            <button 
+            <button
               type="button" className="btn btn-primary" style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
               onClick={() => {
                 if (catConfirmAction) { deleteCategoria(catConfirmAction.id); setCatConfirmAction(null); }
@@ -558,9 +544,9 @@ export function Categorias() {
         <form onSubmit={handleFamSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           <div>
             <label htmlFor="famName" style={{ display: 'block', marginBottom: '4px' }}>Nome da Família</label>
-            <input 
+            <input
               id="famName" className="input-field" value={famName} autoFocus
-              onChange={(e) => setFamName(e.target.value)} 
+              onChange={(e) => setFamName(e.target.value)}
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
@@ -579,7 +565,7 @@ export function Categorias() {
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
             <button type="button" className="btn" onClick={() => setFamConfirmAction(null)}>Cancelar</button>
-            <button 
+            <button
               type="button" className="btn" style={famConfirmAction?.ativo === false ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' } : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
               onClick={() => {
                 if (famConfirmAction) {
@@ -590,7 +576,7 @@ export function Categorias() {
             >
               {famConfirmAction?.ativo !== false ? 'Desativar' : 'Ativar'}
             </button>
-            <button 
+            <button
               type="button" className="btn btn-primary" style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
               onClick={() => {
                 if (famConfirmAction) { deleteFamilia(famConfirmAction.id); setFamConfirmAction(null); }
@@ -607,9 +593,9 @@ export function Categorias() {
         <form onSubmit={handleProdSave} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           <div>
             <label htmlFor="prodName" style={{ display: 'block', marginBottom: '4px' }}>Nome do Produto</label>
-            <input 
+            <input
               id="prodName" className="input-field" value={prodName} autoFocus
-              onChange={(e) => setProdName(e.target.value)} 
+              onChange={(e) => setProdName(e.target.value)}
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
@@ -628,7 +614,7 @@ export function Categorias() {
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', flexWrap: 'wrap' }}>
             <button type="button" className="btn" onClick={() => setProdConfirmAction(null)}>Cancelar</button>
-            <button 
+            <button
               type="button" className="btn" style={prodConfirmAction?.ativo === false ? { color: 'var(--color-success)', borderColor: 'var(--color-success)' } : { color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
               onClick={() => {
                 if (prodConfirmAction) {
@@ -639,7 +625,7 @@ export function Categorias() {
             >
               {prodConfirmAction?.ativo !== false ? 'Desativar' : 'Ativar'}
             </button>
-            <button 
+            <button
               type="button" className="btn btn-primary" style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
               onClick={() => {
                 if (prodConfirmAction) { deleteProduto(prodConfirmAction.id); setProdConfirmAction(null); }

@@ -15,6 +15,8 @@ export interface UserProfile {
 export interface RoleConfig {
   id: UserRole;
   titulo: string;
+  /** Rótulo compacto para pills/áreas estreitas. */
+  tituloCurto: string;
   descricao: string;
   badgeBg: string;
   badgeText: string;
@@ -34,6 +36,7 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   admin: {
     id: 'admin',
     titulo: 'Programadora / Administradora',
+    tituloCurto: 'Administração',
     descricao: 'Responsável pelo sistema: cria e bloqueia usuários, define perfis de acesso, cadastra, edita e exclui registros, aprova solicitações e administra permissões. Todas as exclusões são registradas em histórico/log.',
     badgeBg: '#f3e8ff',
     badgeText: '#6b21a8',
@@ -51,6 +54,7 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   projetista: {
     id: 'projetista',
     titulo: 'Projetista – Ferramentaria',
+    tituloCurto: 'Projetista',
     descricao: 'Atua na análise e aprovação das solicitações: consulta dispositivos e projetos, cadastra e edita informações, aprova solicitações de reutilização e atualiza status e andamento. Não pode excluir registros.',
     badgeBg: '#dcfce7',
     badgeText: '#15803d',
@@ -68,6 +72,7 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   engenharia: {
     id: 'engenharia',
     titulo: 'Engenharia de Processo / Industrial',
+    tituloCurto: 'Engenharia',
     descricao: 'Faz a consulta e solicita reutilização de dispositivos: consulta dispositivos existentes, verifica possibilidade de reutilização, solicita reutilização e acompanha o status da solicitação. Não pode cadastrar, editar ou excluir registros.',
     badgeBg: '#ffedd5',
     badgeText: '#c2410c',
@@ -85,6 +90,7 @@ export const ROLES_CONFIG: Record<UserRole, RoleConfig> = {
   gerencia: {
     id: 'gerencia',
     titulo: 'Gerência',
+    tituloCurto: 'Gerência',
     descricao: 'Acompanha e consulta as informações do sistema: consulta projetos, dispositivos e reutilizações, acompanha indicadores e resultados e visualiza histórico e movimentações. Não pode cadastrar, editar, excluir ou aprovar.',
     badgeBg: '#dbeafe',
     badgeText: '#1e40af',
