@@ -66,7 +66,7 @@ interface ReToolContextType {
 const ReToolContext = createContext<ReToolContextType | undefined>(undefined);
 
 export const ReToolProvider = ({ children }: { children: ReactNode }) => {
-  const { userProfile, currentRole, users, criarNotificacao } = useAuth();
+  const { userProfile, currentRole, users, criarNotificacao, isOperacional, canSolicitar } = useAuth();
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [tipos, setTipos] = useState<Tipo[]>([]);
@@ -114,8 +114,20 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     setEditingDispId(null);
   }, []);
 
-  // Inscrição em tempo real usando os Repositórios do Domínio
+  // Inscrição em tempo real usando os Repositórios do Domínio.
+  // Somente contas operacionais leem os dados (convidados, contas com troca
+  // de senha pendente e sessões encerradas não assinam as coleções) — e a
+  // assinatura é refeita quando a conta passa a operar (ex.: após login).
   useEffect(() => {
+    if (!isOperacional) {
+      setCategorias([]);
+      setTipos([]);
+      setDispositivos([]);
+      setReutilizacoes([]);
+      setFamilias([]);
+      setProdutos([]);
+      return;
+    }
     const unsubCat = categoriasRepo.subscribeCategorias(setCategorias);
     const unsubTipos = categoriasRepo.subscribeTipos(setTipos);
     const unsubDisp = dispositivosRepo.subscribeAll(setDispositivos);
@@ -131,7 +143,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       unsubFam();
       unsubProd();
     };
-  }, []);
+  }, [isOperacional]);
 
   // "Event Handler" central de auditoria: acionado no sucesso de cada mutação.
   // A falha no registro nunca derruba a operação principal.
@@ -398,8 +410,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     solicitanteNome: string,
     solicitanteId?: string
   ) => {
-    if (currentRole === 'gerencia') {
-      announce('Acesso negado: perfil de Gerência possui acesso somente de consulta.');
+    if (!canSolicitar) {
+      announce('Acesso negado: seu perfil possui acesso somente de consulta.');
       return;
     }
     const solicitanteUid = solicitanteId || userProfile?.uid || 'eng';

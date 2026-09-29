@@ -1,23 +1,69 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import {
   User as FirebaseUser,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   getAuth,
+  deleteUser as deleteAuthUser,
+  reauthenticateWithCredential,
+  updatePassword,
+  EmailAuthProvider,
   signOut as firebaseSignOut
 } from 'firebase/auth';
 import { auth, getSecondaryAuthApp } from '../data/datasources/firebase';
-import { UserProfile, UserRole, ROLES_CONFIG, RoleConfig } from '../domain/entities/user';
-import { AuditLog } from '../domain/entities/auditLog';
-import { Notificacao, idNotificacao } from '../domain/entities/notificacao';
+import {
+  UserProfile, UserRole, PerfilUsuario, RoleConfig,
+  ROLES_CONFIG, configDoPerfil, situacaoDoUsuario, podeManterSessao, isContaOperacional,
+  isAdministrador, mensagemAcessoNegado
+} from '../domain/entities/user';
+import { Notificacao } from '../domain/entities/notificacao';
+import { SolicitacaoCargo } from '../domain/entities/solicitacaoCargo';
 import { FirestoreUsersRepository } from '../data/repositories/FirestoreUsersRepository';
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 import { FirestoreNotificationsRepository } from '../data/repositories/FirestoreNotificationsRepository';
+import { FirestoreSolicitacoesCargoRepository } from '../data/repositories/FirestoreSolicitacoesCargoRepository';
+import { SolicitarCadastroUseCase } from '../application/usecases/SolicitarCadastroUseCase';
+import { DecidirCadastroUseCase } from '../application/usecases/DecidirCadastroUseCase';
+import { CriarContaAdministrativaUseCase, ContaAuthCriada, ContaCriada } from '../application/usecases/CriarContaAdministrativaUseCase';
+import { ConcluirTrocaSenhaUseCase } from '../application/usecases/ConcluirTrocaSenhaUseCase';
+import { SolicitarAlteracaoCargoUseCase } from '../application/usecases/SolicitarAlteracaoCargoUseCase';
+import { DecidirSolicitacaoCargoUseCase } from '../application/usecases/DecidirSolicitacaoCargoUseCase';
+import { ErroPermissao, ErroValidacao, autorAuditoria, registrarAuditoriaSemFalhar } from '../application/usecases/acessosComum';
 
 const usersRepo = new FirestoreUsersRepository();
 const auditRepo = new FirestoreAuditLogRepository();
 const notificationsRepo = new FirestoreNotificationsRepository();
+const solicitacoesCargoRepo = new FirestoreSolicitacoesCargoRepository();
+
+/**
+ * Cria a conta de autenticação num app Firebase secundário: a sessão da
+ * administradora não é substituída. O Firebase Auth guarda só o hash da senha.
+ */
+async function criarContaNoAuthSecundario(email: string, senha: string): Promise<ContaAuthCriada> {
+  const secondaryAuth = getAuth(getSecondaryAuthApp());
+  const cred = await createUserWithEmailAndPassword(secondaryAuth, email, senha);
+  return {
+    uid: cred.user.uid,
+    desfazer: () => deleteAuthUser(cred.user),
+    finalizar: () => firebaseSignOut(secondaryAuth)
+  };
+}
+
+/** Reautentica com a senha atual (temporária) e grava a nova no Firebase Auth. */
+async function atualizarSenhaNoAuth(senhaAtual: string, novaSenha: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user?.email) throw new Error('Sua sessão expirou. Entre novamente para trocar a senha.');
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, senhaAtual));
+  await updatePassword(user, novaSenha);
+}
+
+const solicitarCadastroUseCase = new SolicitarCadastroUseCase(usersRepo, auditRepo, notificationsRepo);
+const decidirCadastroUseCase = new DecidirCadastroUseCase(usersRepo, auditRepo, notificationsRepo);
+const criarContaUseCase = new CriarContaAdministrativaUseCase(usersRepo, auditRepo, criarContaNoAuthSecundario);
+const concluirTrocaSenhaUseCase = new ConcluirTrocaSenhaUseCase(usersRepo, auditRepo, atualizarSenhaNoAuth);
+const solicitarCargoUseCase = new SolicitarAlteracaoCargoUseCase(solicitacoesCargoRepo, usersRepo, auditRepo, notificationsRepo);
+const decidirCargoUseCase = new DecidirSolicitacaoCargoUseCase(solicitacoesCargoRepo, usersRepo, auditRepo, notificationsRepo);
 
 /** Traduz códigos do Firebase Auth para mensagens amigáveis. */
 export function traduzirErroAuth(err: unknown): string {
@@ -39,6 +85,10 @@ export function traduzirErroAuth(err: unknown): string {
       return 'Falha de conexão. Verifique sua internet e tente novamente.';
     case 'auth/user-disabled':
       return 'Esta conta foi desativada pela Administradora. Contate o suporte.';
+    case 'auth/requires-recent-login':
+      return 'Por segurança, entre novamente e repita a operação.';
+    case 'permission-denied':
+      return 'Operação recusada pelas regras de segurança do servidor.';
     default:
       return (err as Error)?.message || 'Erro ao processar autenticação.';
   }
@@ -47,33 +97,34 @@ export function traduzirErroAuth(err: unknown): string {
 interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   userProfile: UserProfile | null;
-  currentRole: UserRole;
+  currentRole: PerfilUsuario;
   roleConfig: RoleConfig;
+  /** Conta ativa, aprovada e sem troca de senha pendente. */
+  isOperacional: boolean;
   loading: boolean;
   users: UserProfile[];
-  auditLogs: AuditLog[];
+  estadoUsuarios: EstadoSincronizacao;
+  /** Administração: todas as solicitações de cargo; demais perfis: as próprias. */
+  solicitacoesCargo: SolicitacaoCargo[];
+  estadoSolicitacoesCargo: EstadoSincronizacao;
   login: (email: string, pass: string) => Promise<void>;
-  register: (email: string, pass: string, nome: string, perfilSolicitado?: UserRole) => Promise<void>;
+  /** Autocadastro: sempre Convidado aguardando aprovação (sem escolha de cargo). */
+  register: (email: string, pass: string, nome: string) => Promise<void>;
   logout: () => Promise<void>;
-  /** Aprova (com o tier solicitado) ou recusa uma solicitação de conta. */
-  decidirSolicitacaoConta: (uid: string, aprovar: boolean) => Promise<void>;
+  decidirCadastro: (uid: string, aprovar: boolean, perfil?: UserRole, motivo?: string) => Promise<void>;
+  /** Exclusivo da Administração: cria a conta com senha temporária (retornada uma única vez). */
+  criarContaComSenhaTemporaria: (nome: string, email: string, perfil: UserRole) => Promise<ContaCriada>;
+  concluirTrocaSenha: (senhaAtual: string, novaSenha: string, confirmacao: string) => Promise<void>;
+  solicitarAlteracaoCargo: (perfil: UserRole, justificativa?: string) => Promise<void>;
+  decidirSolicitacaoCargo: (id: string, aprovar: boolean, motivo?: string) => Promise<void>;
   // Notificações do usuário autenticado
   notifications: Notificacao[];
   criarNotificacao: (n: Notificacao) => Promise<void>;
   marcarNotificacaoLida: (id: string, lida: boolean) => Promise<void>;
   marcarNotificacaoResolvida: (id: string, resolvida: boolean) => Promise<void>;
-  /** Exclusivo da Administração: cria conta com o perfil indicado via app
-   *  secundário do Firebase, preservando a sessão da administradora. */
-  createUserByAdmin: (email: string, pass: string, nome: string, perfil: UserRole) => Promise<void>;
   updateUserRole: (uid: string, perfil: UserRole) => Promise<void>;
   toggleUserStatus: (uid: string, ativo: boolean) => Promise<void>;
   deleteUser: (uid: string) => Promise<void>;
-  registrarExclusaoComAuditoria: (
-    tipoEntidade: AuditLog['tipoEntidade'],
-    entidadeId: string,
-    entidadeNome?: string,
-    dadosAnteriores?: Record<string, any>
-  ) => Promise<void>;
   // Atalhos de permissão
   canConsultar: boolean;
   canCadastrar: boolean;
@@ -85,50 +136,79 @@ interface AuthContextType {
   canVerLogs: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export type EstadoSincronizacao = 'carregando' | 'pronto' | 'erro';
 
-/**
- * Criação de conta pública: SEMPRE gera um perfil restrito (Gerência) e
- * inativo, aguardando aprovação da Administração. Jamais aceita um perfil
- * escolhido pelo próprio visitante — e as regras do Firestore também
- * recusam qualquer tentativa direta de escrita diferente disso.
- */
-async function criarPerfilRestrito(user: FirebaseUser, nome: string, perfilSolicitado: UserRole = 'gerencia'): Promise<void> {
-  const profile: UserProfile = {
-    uid: user.uid,
-    email: user.email || '',
-    nome,
-    perfil: 'gerencia',
-    ativo: false,
-    criadoEm: new Date().toISOString(),
-    perfilSolicitado
-  };
-  await usersRepo.setProfile(profile);
-}
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [notifications, setNotifications] = useState<Notificacao[]>([]);
+  const [solicitacoesCargo, setSolicitacoesCargo] = useState<SolicitacaoCargo[]>([]);
+  // Estados de sincronização exibidos nas telas administrativas.
+  const [estadoUsuarios, setEstadoUsuarios] = useState<EstadoSincronizacao>('carregando');
+  const [estadoSolicitacoesCargo, setEstadoSolicitacoesCargo] = useState<EstadoSincronizacao>('carregando');
 
-  // Carrega lista de usuários em tempo real para administração.
-  // A trilha de auditoria é carregada SOMENTE pelo perfil Admin (leitura exclusiva).
+  const unsubProfileRef = useRef<(() => void) | null>(null);
+  // register()/login() conduzem a própria sessão; o listener não interfere.
+  const registrandoRef = useRef(false);
+  const loginEmAndamentoRef = useRef(false);
+
+  const isOperacional = isContaOperacional(userProfile);
+  const isAdmin = isAdministrador(userProfile);
+
+  const encerrarAssinaturaPerfil = useCallback(() => {
+    unsubProfileRef.current?.();
+    unsubProfileRef.current = null;
+  }, []);
+
+  /**
+   * Acompanha o perfil em tempo real: aprovação do convidado, troca de
+   * cargo, bloqueio ou exclusão pela Administração refletem na hora.
+   */
+  const acompanharPerfil = useCallback((uid: string) => {
+    encerrarAssinaturaPerfil();
+    unsubProfileRef.current = usersRepo.subscribeProfile(uid, (atualizado) => {
+      if (!podeManterSessao(atualizado)) {
+        encerrarAssinaturaPerfil();
+        firebaseSignOut(auth).catch(() => undefined);
+        setUserProfile(null);
+        return;
+      }
+      setUserProfile(atualizado);
+    });
+  }, [encerrarAssinaturaPerfil]);
+
+  // Lista de usuários: apenas contas operacionais (convidados não enxergam colegas).
   useEffect(() => {
-    const unsubUsers = usersRepo.subscribeAll(setUsers);
-    let unsubLogs: (() => void) | undefined;
-    if (userProfile?.perfil === 'admin') {
-      unsubLogs = auditRepo.subscribeLogs(setAuditLogs);
-    } else {
-      setAuditLogs([]);
+    if (!isOperacional) {
+      setUsers([]);
+      setEstadoUsuarios('carregando');
+      return;
     }
-    return () => {
-      unsubUsers();
-      unsubLogs?.();
-    };
-  }, [userProfile?.perfil]);
+    setEstadoUsuarios('carregando');
+    return usersRepo.subscribeAll(
+      (lista) => { setUsers(lista); setEstadoUsuarios('pronto'); },
+      () => setEstadoUsuarios('erro')
+    );
+  }, [isOperacional]);
+
+  // Solicitações de cargo: Administração vê todas; os demais, só as próprias.
+  useEffect(() => {
+    if (!isOperacional || !userProfile?.uid) {
+      setSolicitacoesCargo([]);
+      setEstadoSolicitacoesCargo('carregando');
+      return;
+    }
+    setEstadoSolicitacoesCargo('carregando');
+    const aoReceber = (lista: SolicitacaoCargo[]) => { setSolicitacoesCargo(lista); setEstadoSolicitacoesCargo('pronto'); };
+    const aoFalhar = () => setEstadoSolicitacoesCargo('erro');
+    return isAdmin
+      ? solicitacoesCargoRepo.subscribeTodas(aoReceber, aoFalhar)
+      : solicitacoesCargoRepo.subscribeDoUsuario(userProfile.uid, aoReceber, aoFalhar);
+  }, [isOperacional, isAdmin, userProfile?.uid]);
 
   // Notificações do usuário autenticado, em tempo real
   useEffect(() => {
@@ -141,196 +221,136 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Monitora autenticação do Firebase Auth
   useEffect(() => {
-    let unsubProfile: (() => void) | null = null;
-
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
-      if (unsubProfile) {
-        unsubProfile();
-        unsubProfile = null;
-      }
+      encerrarAssinaturaPerfil();
 
-      if (fbUser) {
-        try {
-          let profile = await usersRepo.getProfile(fbUser.uid);
-
-          if (!profile) {
-            // Autenticado sem perfil no Firestore: provisiona conta
-            // restrita (Gerência) e pendente de aprovação. Se as regras do
-            // Firestore recusarem a escrita, encerra a sessão.
-            try {
-              await criarPerfilRestrito(
-                fbUser,
-                fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuário'
-              );
-              profile = await usersRepo.getProfile(fbUser.uid);
-            } catch (e) {
-              console.warn('Não foi possível provisionar perfil para o usuário:', e);
-            }
-          }
-
-          if (!profile || !profile.ativo) {
-            await firebaseSignOut(auth);
-            setUserProfile(null);
-            setLoading(false);
-            return;
-          }
-
-          setUserProfile(profile);
-
-          // Inscrição em tempo real para mudanças no perfil (ex.: alteração
-          // de papel ou bloqueio feitos pela Administração).
-          unsubProfile = usersRepo.subscribeProfile(fbUser.uid, (updatedProfile) => {
-            if (!updatedProfile) {
-              // Perfil removido do sistema (ex.: exclusão pela Administração).
-              firebaseSignOut(auth);
-              setUserProfile(null);
-              return;
-            }
-            if (!updatedProfile.ativo) {
-              firebaseSignOut(auth);
-              setUserProfile(null);
-            } else {
-              setUserProfile(updatedProfile);
-            }
-          });
-        } catch (err) {
-          console.error('Erro ao sincronizar perfil do usuário no Firestore:', err);
-        }
-      } else {
+      if (!fbUser) {
         setUserProfile(null);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+      if (registrandoRef.current) return;
+
+      setLoading(true);
+      try {
+        let profile = await usersRepo.getProfile(fbUser.uid);
+
+        if (!profile) {
+          // Autenticado sem perfil (conta criada fora do app ou cadastro
+          // interrompido): entra como Convidado aguardando aprovação.
+          profile = await solicitarCadastroUseCase.execute({
+            uid: fbUser.uid,
+            email: fbUser.email || '',
+            nome: fbUser.displayName || fbUser.email?.split('@')[0] || 'Usuário'
+          });
+        }
+
+        if (!podeManterSessao(profile)) {
+          // Bloqueado/recusado: login() exibe o motivo e encerra a sessão.
+          if (!loginEmAndamentoRef.current) await firebaseSignOut(auth);
+          setUserProfile(null);
+          return;
+        }
+
+        setUserProfile(profile);
+        acompanharPerfil(fbUser.uid);
+      } catch (err) {
+        console.error('Erro ao sincronizar perfil do usuário no Firestore:', err);
+        await firebaseSignOut(auth).catch(() => undefined);
+        setUserProfile(null);
+      } finally {
+        setLoading(false);
+      }
     });
 
     return () => {
       unsubscribe();
-      if (unsubProfile) unsubProfile();
+      encerrarAssinaturaPerfil();
     };
-  }, []);
+  }, [acompanharPerfil, encerrarAssinaturaPerfil]);
 
   const login = async (email: string, pass: string) => {
-    setLoading(true);
     const normalizedEmail = email.trim().toLowerCase();
-
+    loginEmAndamentoRef.current = true;
     try {
       const cred = await signInWithEmailAndPassword(auth, normalizedEmail, pass);
-      const profile = await usersRepo.getProfile(cred.user.uid);
+      const profile = await usersRepo.getProfile(cred.user.uid).catch(() => null);
 
-      if (!profile) {
-        // Conta no Auth sem perfil (provisionada fora do fluxo da aplicação).
+      if (profile && !podeManterSessao(profile)) {
+        await registrarAuditoriaSemFalhar(auditRepo, {
+          ...autorAuditoria(profile),
+          acao: 'login',
+          resultado: 'negado',
+          acaoDescricao: situacaoDoUsuario(profile) === 'rejeitado'
+            ? 'Acesso recusado: cadastro rejeitado pela Administração'
+            : 'Acesso recusado: conta bloqueada',
+          tipoEntidade: 'sessao',
+          entidadeId: profile.uid,
+          entidadeNome: profile.nome
+        });
         await firebaseSignOut(auth);
-        throw new Error(
-          'Esta conta não possui um perfil vinculado no ReTool. Solicite à Administração a configuração do seu acesso.'
-        );
+        throw new Error(mensagemAcessoNegado(profile));
       }
 
-      if (!profile.ativo) {
-        await firebaseSignOut(auth);
-        setUserProfile(null);
-        throw new Error(
-          profile.perfil === 'gerencia'
-            ? 'Sua conta foi criada e está aguardando aprovação da Administradora.'
-            : 'Este usuário foi desativado pela Administradora. Contate o suporte.'
-        );
-      }
-
-      setUserProfile(profile);
+      const situacao = profile ? situacaoDoUsuario(profile) : 'pendente';
+      await registrarAuditoriaSemFalhar(auditRepo, {
+        usuarioUid: cred.user.uid,
+        usuarioNome: profile?.nome || normalizedEmail,
+        usuarioEmail: normalizedEmail,
+        usuarioPerfil: profile?.perfil || 'convidado',
+        acao: 'login',
+        acaoDescricao: profile?.trocaSenhaObrigatoria
+          ? 'Entrou com senha temporária (troca obrigatória pendente)'
+          : situacao === 'pendente'
+            ? 'Entrou como Convidado (cadastro aguardando aprovação)'
+            : 'Entrou no sistema',
+        tipoEntidade: 'sessao',
+        entidadeId: cred.user.uid,
+        entidadeNome: profile?.nome || normalizedEmail,
+        conteudo: { situacao, trocaSenhaObrigatoria: !!profile?.trocaSenhaObrigatoria }
+      });
     } finally {
-      setLoading(false);
+      loginEmAndamentoRef.current = false;
     }
   };
 
-  const register = async (email: string, pass: string, nome: string, perfilSolicitado: UserRole = 'gerencia') => {
-    setLoading(true);
+  const register = async (email: string, pass: string, nome: string) => {
     const normalizedEmail = email.trim().toLowerCase();
+    if (!nome.trim()) throw new ErroValidacao('Por favor, informe seu nome completo.');
+
+    registrandoRef.current = true;
+    let criado: FirebaseUser | null = null;
     try {
       const cred = await createUserWithEmailAndPassword(auth, normalizedEmail, pass);
-      await criarPerfilRestrito(cred.user, nome.trim(), perfilSolicitado);
-
-      // Tier diferente de Gerência: avisa a Administração para análise.
-      if (perfilSolicitado !== 'gerencia') {
-        const admins = users.filter(u => u.perfil === 'admin' && u.ativo);
-        for (const admin of admins) {
-          try {
-            await notificationsRepo.criar({
-              id: idNotificacao('conta_nova', cred.user.uid, admin.uid),
-              tipo: 'conta_nova',
-              destinatarioUid: admin.uid,
-              remetenteUid: cred.user.uid,
-              titulo: 'Nova solicitação de conta',
-              descricao: `${nome.trim()} solicitou o perfil ${ROLES_CONFIG[perfilSolicitado].titulo}.`,
-              dataHora: new Date().toISOString(),
-              lida: false,
-              entidadeId: cred.user.uid,
-              perfilSolicitado
-            });
-          } catch (e) {
-            console.warn('Falha ao notificar a Administração:', e);
-          }
-        }
-      }
-
-      await auditRepo.registrarLog({
-        dataHora: new Date().toISOString(),
-        usuarioUid: cred.user.uid,
-        usuarioNome: nome.trim(),
-        usuarioEmail: normalizedEmail,
-        usuarioPerfil: 'gerencia',
-        acao: 'alteracao_perfil',
-        tipoEntidade: 'usuario',
-        entidadeId: cred.user.uid,
-        entidadeNome: nome.trim(),
-        detalhes: 'Novo usuário registrado com perfil restrito (Gerência), aguardando aprovação da Administradora.'
-      });
-
-      // Encerra a sessão: contas pendentes não podem circular pela aplicação
-      // nem mesmo com o perfil limitado — o acesso só inicia após aprovação.
-      await firebaseSignOut(auth);
-      setUserProfile(null);
+      criado = cred.user;
+      const profile = await solicitarCadastroUseCase.execute({ uid: cred.user.uid, email: normalizedEmail, nome });
+      // A sessão continua aberta como Convidado: o app exibe a tela de
+      // "aguardando aprovação" e libera o acesso assim que houver decisão.
+      setUserProfile(profile);
+      acompanharPerfil(cred.user.uid);
+    } catch (e) {
+      // Cadastro incompleto não deixa conta de autenticação órfã.
+      if (criado) await deleteAuthUser(criado).catch(() => firebaseSignOut(auth).catch(() => undefined));
+      throw e;
     } finally {
+      registrandoRef.current = false;
       setLoading(false);
     }
-  };
-
-  const createUserByAdmin = async (email: string, pass: string, nome: string, perfil: UserRole) => {
-    const normalizedEmail = email.trim().toLowerCase();
-
-    // App secundário: a conta criada NÃO substitui a sessão da administradora.
-    const secondaryAuth = getAuth(getSecondaryAuthApp());
-    const cred = await createUserWithEmailAndPassword(secondaryAuth, normalizedEmail, pass);
-
-    const newProfile: UserProfile = {
-      uid: cred.user.uid,
-      email: normalizedEmail,
-      nome: nome.trim(),
-      perfil,
-      ativo: true,
-      criadoEm: new Date().toISOString()
-    };
-
-    try {
-      await usersRepo.setProfile(newProfile);
-    } finally {
-      // Encerra apenas a sessão efêmera do app secundário.
-      await firebaseSignOut(secondaryAuth).catch(() => undefined);
-    }
-
-    await auditRepo.registrarLog({
-      dataHora: new Date().toISOString(),
-      usuarioUid: userProfile?.uid || 'desconhecido',
-      usuarioNome: userProfile?.nome || 'Administradora',
-      usuarioEmail: userProfile?.email || '',
-      usuarioPerfil: userProfile?.perfil || 'admin',
-      acao: 'alteracao_perfil',
-      tipoEntidade: 'usuario',
-      entidadeId: cred.user.uid,
-      entidadeNome: nome.trim(),
-      detalhes: `Usuário provisionado pela Administração com perfil ${ROLES_CONFIG[perfil].titulo}`
-    });
   };
 
   const logout = async () => {
+    if (userProfile) {
+      await registrarAuditoriaSemFalhar(auditRepo, {
+        ...autorAuditoria(userProfile),
+        acao: 'logout',
+        acaoDescricao: 'Saiu do sistema',
+        tipoEntidade: 'sessao',
+        entidadeId: userProfile.uid,
+        entidadeNome: userProfile.nome
+      });
+    }
+    encerrarAssinaturaPerfil();
     try {
       await firebaseSignOut(auth);
     } catch (e) {
@@ -340,61 +360,86 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserProfile(null);
   };
 
+  const exigirAdministracao = () => {
+    if (!isAdministrador(userProfile)) throw new ErroPermissao();
+  };
+
+  const decidirCadastro = async (uid: string, aprovar: boolean, perfil?: UserRole, motivo?: string) => {
+    await decidirCadastroUseCase.execute({ admin: userProfile, alvoUid: uid, aprovar, perfil, motivo });
+  };
+
+  const criarContaComSenhaTemporaria = (nome: string, email: string, perfil: UserRole) =>
+    criarContaUseCase.execute({ admin: userProfile, nome, email, perfil });
+
+  const concluirTrocaSenha = async (senhaAtual: string, novaSenha: string, confirmacao: string) => {
+    if (!userProfile) throw new Error('Sua sessão expirou. Entre novamente.');
+    await concluirTrocaSenhaUseCase.execute({ usuario: userProfile, senhaAtual, novaSenha, confirmacao });
+    setUserProfile({ ...userProfile, trocaSenhaObrigatoria: false });
+  };
+
+  const solicitarAlteracaoCargo = async (perfil: UserRole, justificativa?: string) => {
+    await solicitarCargoUseCase.execute({ usuario: userProfile, perfilSolicitado: perfil, justificativa });
+  };
+
+  const decidirSolicitacaoCargo = async (id: string, aprovar: boolean, motivo?: string) => {
+    await decidirCargoUseCase.execute({ admin: userProfile, solicitacaoId: id, aprovar, motivo });
+  };
+
+  const registrarAcaoAdministrativa = (input: Omit<Parameters<typeof auditRepo.registrarLog>[0], 'usuarioUid' | 'usuarioNome' | 'usuarioEmail' | 'usuarioPerfil'>) =>
+    registrarAuditoriaSemFalhar(auditRepo, { ...autorAuditoria(userProfile!), ...input });
+
   const updateUserRole = async (uid: string, perfil: UserRole) => {
-    await usersRepo.updateRole(uid, perfil);
-
-    // Se o usuário atual teve o próprio perfil alterado, atualiza o estado local
-    if (userProfile && userProfile.uid === uid) {
-      setUserProfile({ ...userProfile, perfil });
-    }
-
+    exigirAdministracao();
+    if (uid === userProfile!.uid) throw new ErroPermissao('A Administração não altera o próprio cargo.');
     const targetUser = users.find(u => u.uid === uid);
-    await auditRepo.registrarLog({
-      dataHora: new Date().toISOString(),
-      usuarioUid: userProfile?.uid || 'desconhecido',
-      usuarioNome: userProfile?.nome || 'Administradora',
-      usuarioEmail: userProfile?.email || '',
-      usuarioPerfil: userProfile?.perfil || 'admin',
+    await usersRepo.updateRole(uid, perfil);
+    await registrarAcaoAdministrativa({
       acao: 'alteracao_perfil',
+      acaoDescricao: `Alterou o cargo de ${targetUser?.nome || uid} para ${ROLES_CONFIG[perfil].titulo}`,
       tipoEntidade: 'usuario',
       entidadeId: uid,
       entidadeNome: targetUser?.nome || uid,
-      detalhes: `Perfil de ${targetUser?.nome || uid} alterado para ${ROLES_CONFIG[perfil].titulo}`
+      detalhes: `Perfil de ${targetUser?.nome || uid} alterado para ${ROLES_CONFIG[perfil].titulo}`,
+      conteudo: { perfilNovo: perfil },
+      dadosAnteriores: targetUser ? { perfil: targetUser.perfil } : undefined
     });
   };
 
   const toggleUserStatus = async (uid: string, ativo: boolean) => {
-    await usersRepo.updateStatus(uid, ativo);
+    exigirAdministracao();
+    if (uid === userProfile!.uid) throw new ErroPermissao('A Administração não bloqueia a própria conta.');
     const targetUser = users.find(u => u.uid === uid);
-
-    // Aprovação via modal também resolve as solicitações de conta pendentes.
-    if (ativo && userProfile) {
-      const pendentes = notifications.filter(
-        n => n.tipo === 'conta_nova' && n.entidadeId === uid && n.destinatarioUid === userProfile.uid && !n.resolvida
-      );
-      for (const n of pendentes) {
-        await notificationsRepo.marcarResolvida(n.id, true).catch(() => undefined);
-      }
+    if (targetUser && situacaoDoUsuario(targetUser) === 'pendente') {
+      throw new ErroValidacao('Cadastros pendentes são liberados pela aprovação, com definição de cargo.');
     }
-
-    await auditRepo.registrarLog({
-      dataHora: new Date().toISOString(),
-      usuarioUid: userProfile?.uid || 'desconhecido',
-      usuarioNome: userProfile?.nome || 'Administradora',
-      usuarioEmail: userProfile?.email || '',
-      usuarioPerfil: userProfile?.perfil || 'admin',
+    await usersRepo.updateStatus(uid, ativo);
+    await registrarAcaoAdministrativa({
       acao: ativo ? 'desbloqueio_usuario' : 'bloqueio_usuario',
+      acaoDescricao: ativo ? `Desbloqueou ${targetUser?.nome || uid}` : `Bloqueou ${targetUser?.nome || uid}`,
       tipoEntidade: 'usuario',
       entidadeId: uid,
       entidadeNome: targetUser?.nome || uid,
-      detalhes: ativo ? 'Usuário desbloqueado' : 'Usuário bloqueado no sistema'
+      detalhes: ativo ? 'Usuário desbloqueado' : 'Usuário bloqueado no sistema',
+      dadosAnteriores: targetUser ? { ativo: targetUser.ativo } : undefined
     });
   };
 
   const deleteUser = async (uid: string) => {
+    exigirAdministracao();
+    if (uid === userProfile!.uid) throw new ErroPermissao('A própria conta não pode ser excluída.');
     const targetUser = users.find(u => u.uid === uid);
     await usersRepo.deleteProfile(uid);
-    await registrarExclusaoComAuditoria('usuario', uid, targetUser?.nome || uid);
+    await registrarAcaoAdministrativa({
+      acao: 'exclusao',
+      acaoDescricao: `Excluiu o usuário ${targetUser?.nome || uid}`,
+      tipoEntidade: 'usuario',
+      entidadeId: uid,
+      entidadeNome: targetUser?.nome || uid,
+      detalhes: `Exclusão do registro [USUARIO]: ${targetUser?.nome || uid}`,
+      dadosAnteriores: targetUser
+        ? { nome: targetUser.nome, email: targetUser.email, perfil: targetUser.perfil, ativo: targetUser.ativo }
+        : undefined
+    });
   };
 
   const criarNotificacao = useCallback(async (n: Notificacao) => {
@@ -409,102 +454,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     await notificationsRepo.marcarResolvida(id, resolvida);
   }, []);
 
-  /** Aprova a solicitação de conta (com o tier solicitado) ou a recusa. */
-  const decidirSolicitacaoConta = async (uid: string, aprovar: boolean) => {
-    const alvo = users.find(u => u.uid === uid);
-    if (!alvo) return;
-    const perfilFinal: UserRole = aprovar ? (alvo.perfilSolicitado || alvo.perfil) : alvo.perfil;
-
-    if (aprovar) {
-      await usersRepo.updateRole(uid, perfilFinal);
-      await usersRepo.updateStatus(uid, true);
-    }
-
-    // Comunica a decisão ao solicitante (antes da remoção, na recusa).
-    await notificationsRepo.criar({
-      id: idNotificacao('conta_decidida', uid, uid),
-      tipo: 'conta_decidida',
-      destinatarioUid: uid,
-      remetenteUid: userProfile?.uid || 'admin',
-      titulo: aprovar ? 'Solicitação de conta aprovada' : 'Solicitação de conta recusada',
-      descricao: aprovar
-        ? `Seu acesso foi liberado com o perfil ${ROLES_CONFIG[perfilFinal].titulo}.`
-        : 'Sua solicitação de acesso foi recusada pela Administração.',
-      dataHora: new Date().toISOString(),
-      lida: false,
-      entidadeId: uid,
-      perfilSolicitado: alvo.perfilSolicitado,
-      decisao: aprovar ? 'aprovada' : 'recusada'
-    });
-
-    if (!aprovar) {
-      await usersRepo.deleteProfile(uid);
-    }
-
-    // Resolve as notificações de solicitação pendentes da Administração.
-    const pendentes = notifications.filter(
-      n => n.tipo === 'conta_nova' && n.entidadeId === uid && n.destinatarioUid === userProfile?.uid
-    );
-    for (const n of pendentes) {
-      await notificationsRepo.marcarResolvida(n.id, true);
-    }
-
-    await auditRepo.registrarLog({
-      dataHora: new Date().toISOString(),
-      usuarioUid: userProfile?.uid || 'desconhecido',
-      usuarioNome: userProfile?.nome || 'Administradora',
-      usuarioEmail: userProfile?.email || '',
-      usuarioPerfil: userProfile?.perfil || 'admin',
-      acao: aprovar ? 'desbloqueio_usuario' : 'exclusao',
-      tipoEntidade: 'usuario',
-      entidadeId: uid,
-      entidadeNome: alvo.nome,
-      detalhes: aprovar
-        ? `Solicitação de conta aprovada com perfil ${ROLES_CONFIG[perfilFinal].titulo}`
-        : 'Solicitação de conta recusada; perfil removido do sistema'
-    });
-  };
-
-  const registrarExclusaoComAuditoria = useCallback(async (
-    tipoEntidade: AuditLog['tipoEntidade'],
-    entidadeId: string,
-    entidadeNome?: string,
-    dadosAnteriores?: Record<string, any>
-  ) => {
-    await auditRepo.registrarLog({
-      dataHora: new Date().toISOString(),
-      usuarioUid: userProfile?.uid || 'sistema',
-      usuarioNome: userProfile?.nome || 'Administradora',
-      usuarioEmail: userProfile?.email || '',
-      usuarioPerfil: userProfile?.perfil || 'admin',
-      acao: 'exclusao',
-      tipoEntidade,
-      entidadeId,
-      entidadeNome: entidadeNome || entidadeId,
-      detalhes: `Exclusão do registro [${tipoEntidade.toUpperCase()}]: ${entidadeNome || entidadeId}`,
-      dadosAnteriores
-    });
-  }, [userProfile]);
-
-  // Perfil efetivo em execução (estritamente do usuário autenticado)
-  const currentRole: UserRole = userProfile?.perfil || 'gerencia';
-  const roleConfig = ROLES_CONFIG[currentRole] || ROLES_CONFIG.gerencia;
+  // Perfil efetivo em execução: sem conta operacional, menor privilégio (Convidado).
+  const currentRole: PerfilUsuario = userProfile?.perfil || 'convidado';
+  const roleConfig = isOperacional ? configDoPerfil(currentRole) : configDoPerfil('convidado');
 
   return (
     <AuthContext.Provider
       value={{
         firebaseUser,
         userProfile,
-        currentRole,
+        currentRole: isOperacional ? currentRole : 'convidado',
         roleConfig,
+        isOperacional,
         loading,
         users,
-        auditLogs,
+        estadoUsuarios,
+        solicitacoesCargo,
+        estadoSolicitacoesCargo,
         login,
         register,
         logout,
-        createUserByAdmin,
-        decidirSolicitacaoConta,
+        decidirCadastro,
+        criarContaComSenhaTemporaria,
+        concluirTrocaSenha,
+        solicitarAlteracaoCargo,
+        decidirSolicitacaoCargo,
         updateUserRole,
         toggleUserStatus,
         deleteUser,
@@ -512,7 +486,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         criarNotificacao,
         marcarNotificacaoLida,
         marcarNotificacaoResolvida,
-        registrarExclusaoComAuditoria,
         canConsultar: roleConfig.canConsultar,
         canCadastrar: roleConfig.canCadastrar,
         canEditar: roleConfig.canEditar,
@@ -535,3 +508,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

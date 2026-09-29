@@ -10,6 +10,10 @@ import { Categorias } from './pages/Categorias';
 import { Reutilizacoes } from './pages/Reutilizacoes';
 import { Sobre } from './pages/Sobre';
 import { Login } from './pages/Login';
+import { AguardandoAprovacao } from './pages/AguardandoAprovacao';
+import { TrocaSenhaObrigatoria } from './pages/TrocaSenhaObrigatoria';
+import { Administracao } from './pages/Administracao';
+import { telaDaSessao } from './domain/entities/user';
 
 function ProtectedLayout() {
   const { userProfile, loading } = useAuth();
@@ -46,11 +50,18 @@ function ProtectedLayout() {
     );
   }
 
-  if (!userProfile) {
-    return <Navigate to="/login" replace />;
+  switch (telaDaSessao(userProfile)) {
+    case 'login':
+      return <Navigate to="/login" replace />;
+    // Convidado aguardando aprovação: nenhuma rota do sistema é renderizada.
+    case 'aguardando_aprovacao':
+      return <AguardandoAprovacao />;
+    // Senha temporária: somente a troca de senha está disponível.
+    case 'troca_senha':
+      return <TrocaSenhaObrigatoria />;
+    default:
+      return <Layout />;
   }
-
-  return <Layout />;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
@@ -103,6 +114,14 @@ function App() {
                 } 
               />
               <Route path="reutilizacoes" element={<Reutilizacoes />} />
+              <Route
+                path="administracao/:aba?"
+                element={
+                  <RoleRoute allowedRoles={['admin']}>
+                    <Administracao />
+                  </RoleRoute>
+                }
+              />
             </Route>
             <Route path="*" element={<Navigate to="/dispositivos" replace />} />
           </Routes>

@@ -1,27 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ROLES_CONFIG, UserRole } from '../domain/entities/user';
+import { ROLES_CONFIG, PerfilUsuario, CONVIDADO_CONFIG } from '../domain/entities/user';
+import { podeSolicitarAlteracaoCargo } from '../domain/entities/solicitacaoCargo';
+import { SolicitarAlteracaoCargoModal } from './SolicitarAlteracaoCargoModal';
 import { 
-  ShieldCheck, 
   ChevronDown, 
   Users, 
   FileText, 
   LogOut, 
   LogIn, 
-  CheckCircle2, 
   SlidersHorizontal,
   HardHat,
   Cpu,
-  Building2
+  Building2,
+  UserRound,
+  ArrowUpDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-interface UserNavMenuProps {
-  onOpenUsersModal?: () => void;
-  onOpenLogsModal?: () => void;
-}
-
-export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuProps) {
+export function UserNavMenu() {
   const { 
     userProfile, 
     currentRole, 
@@ -29,10 +26,14 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
     logout, 
     firebaseUser,
     canGerenciarUsuarios,
-    canVerLogs
+    canVerLogs,
+    solicitacoesCargo
   } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [isCargoModalOpen, setIsCargoModalOpen] = useState(false);
+  const podeSolicitarCargo = podeSolicitarAlteracaoCargo(userProfile);
+  const temSolicitacaoPendente = solicitacoesCargo.some(s => s.usuarioUid === userProfile?.uid && s.status === 'pendente');
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -47,7 +48,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const getRoleIcon = (role: UserRole) => {
+  const getRoleIcon = (role: PerfilUsuario) => {
     switch (role) {
       case 'admin':
         return <SlidersHorizontal size={16} color={ROLES_CONFIG.admin.iconColor} />;
@@ -57,6 +58,8 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
         return <Cpu size={16} color={ROLES_CONFIG.engenharia.iconColor} />;
       case 'gerencia':
         return <Building2 size={16} color={ROLES_CONFIG.gerencia.iconColor} />;
+      default:
+        return <UserRound size={16} color={CONVIDADO_CONFIG.iconColor} />;
     }
   };
 
@@ -190,7 +193,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
               type="button"
               onClick={() => {
                 setIsOpen(false);
-                onOpenUsersModal?.();
+                navigate('/administracao');
               }}
               style={{
                 display: 'flex',
@@ -210,7 +213,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
               <Users size={16} color="#7c3aed" />
-              <span style={{ whiteSpace: 'nowrap' }}>Gerenciar Usuários & Acessos</span>
+              <span style={{ whiteSpace: 'nowrap' }}>Administração: usuários e aprovações</span>
             </button>
           )}
 
@@ -219,7 +222,7 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
               type="button"
               onClick={() => {
                 setIsOpen(false);
-                onOpenLogsModal?.();
+                navigate('/administracao/logs');
               }}
               style={{
                 display: 'flex',
@@ -239,7 +242,38 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
               <FileText size={16} color="#2563eb" />
-              <span style={{ whiteSpace: 'nowrap' }}>Histórico de Auditoria / Exclusões</span>
+              <span style={{ whiteSpace: 'nowrap' }}>Histórico de ações (auditoria)</span>
+            </button>
+          )}
+
+          {podeSolicitarCargo && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsOpen(false);
+                setIsCargoModalOpen(true);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: '#374151',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                textAlign: 'left'
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f3f4f6')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <ArrowUpDown size={16} color="#ea580c" />
+              <span style={{ whiteSpace: 'nowrap' }}>
+                {temSolicitacaoPendente ? 'Alteração de cargo (pendente)' : 'Solicitar alteração de cargo'}
+              </span>
             </button>
           )}
 
@@ -302,6 +336,8 @@ export function UserNavMenu({ onOpenUsersModal, onOpenLogsModal }: UserNavMenuPr
           )}
         </div>
       )}
+
+      <SolicitarAlteracaoCargoModal isOpen={isCargoModalOpen} onClose={() => setIsCargoModalOpen(false)} />
     </div>
   );
 }

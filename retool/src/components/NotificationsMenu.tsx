@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, CheckCheck, X } from 'lucide-react';
+import { Bell, CheckCheck, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useReTool } from '../context/ReToolContext';
 import { Notificacao } from '../domain/entities/notificacao';
+import { SituacaoUsuario, situacaoDoUsuario } from '../domain/entities/user';
+import { SolicitacaoCargoStatus } from '../domain/entities/solicitacaoCargo';
 import { corDoStatusReutilizacao, normalizarStatusReutilizacao, rotuloCurtoStatusReutilizacao } from '../domain/entities/reutilizacao';
 
 interface NotificationsMenuProps {
-  onOpenUsersModal?: () => void;
   /** Ancoragem do painel: 'left' (sidebar) abre para a direita; 'right' abre para a esquerda. */
   align?: 'left' | 'right';
 }
@@ -18,8 +19,18 @@ function formatarData(iso: string): string {
   return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+const APROVADA = { label: 'Aprovada', cor: '#15803d', fundo: '#dcfce7' };
+const RECUSADA = { label: 'Recusada', cor: '#b91c1c', fundo: '#fee2e2' };
+const REJEITADA = { ...RECUSADA, label: 'Rejeitada' };
+const PENDENTE = { label: 'Pendente', cor: '#b45309', fundo: '#fef3c7' };
+
 /** Status "vivo" da notificação, derivado da entidade referenciada. */
-function statusDaNotificacao(n: Notificacao, reutilizacoes: { id: string; status?: string }[], usuariosAtivos: Map<string, boolean>): { label: string; cor: string; fundo: string } {
+function statusDaNotificacao(
+  n: Notificacao,
+  reutilizacoes: { id: string; status?: string }[],
+  situacaoUsuarios: Map<string, SituacaoUsuario>,
+  statusSolicitacoes: Map<string, SolicitacaoCargoStatus>
+): { label: string; cor: string; fundo: string } {
   if (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') {
     const reu = reutilizacoes.find(r => r.id === n.entidadeId);
     if (!reu) return { label: 'Removida', cor: '#6b7280', fundo: '#f3f4f6' };
@@ -29,26 +40,28 @@ function statusDaNotificacao(n: Notificacao, reutilizacoes: { id: string; status
   }
 
   if (n.tipo === 'conta_nova') {
-    const ativo = usuariosAtivos.get(n.entidadeId || '');
-    if (ativo === undefined) return { label: 'Recusada', cor: '#b91c1c', fundo: '#fee2e2' };
-    return ativo
-      ? { label: 'Aprovada', cor: '#15803d', fundo: '#dcfce7' }
-      : { label: 'Pendente', cor: '#b45309', fundo: '#fef3c7' };
+    const situacao = situacaoUsuarios.get(n.entidadeId || '');
+    if (situacao === undefined || situacao === 'rejeitado') return RECUSADA;
+    return situacao === 'pendente' ? PENDENTE : APROVADA;
   }
 
-  // conta_decidida
-  return n.decisao === 'aprovada'
-    ? { label: 'Aprovada', cor: '#15803d', fundo: '#dcfce7' }
-    : { label: 'Recusada', cor: '#b91c1c', fundo: '#fee2e2' };
+  if (n.tipo === 'cargo_solicitado') {
+    const status = statusSolicitacoes.get(n.entidadeId || '');
+    if (status === 'pendente') return PENDENTE;
+    return status === 'aprovada' ? APROVADA : REJEITADA;
+  }
+
+  // conta_decidida / cargo_decidido: a decisão vem registrada na própria notificação.
+  if (n.decisao === 'aprovada') return APROVADA;
+  return n.tipo === 'cargo_decidido' ? REJEITADA : RECUSADA;
 }
 
-export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: NotificationsMenuProps) {
-  const { notifications, marcarNotificacaoLida, marcarNotificacaoResolvida, decidirSolicitacaoConta, users, currentRole } = useAuth();
+export function NotificationsMenu({ align = 'right' }: NotificationsMenuProps) {
+  const { notifications, marcarNotificacaoLida, marcarNotificacaoResolvida, users, solicitacoesCargo, canGerenciarUsuarios } = useAuth();
   const { reutilizacoes } = useReTool();
   const navigate = useNavigate();
 
   const [isOpen, setIsOpen] = useState(false);
-  const [processando, setProcessando] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,32 +74,38 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const naoLidas = notifications.filter(n => !n.lida).length;
-  const usuariosAtivos = new Map(users.map(u => [u.uid, u.ativo]));
+  const naoLidas = notifications.filter(n => !n.lida);
+  const situacaoUsuarios = new Map(users.map(u => [u.uid, situacaoDoUsuario(u)]));
+  const statusSolicitacoes = new Map(solicitacoesCargo.map(s => [s.id, s.status]));
 
-  const aoClicar = async (n: Notificacao) => {
-    if (!n.lida) await marcarNotificacaoLida(n.id, true);
+  /** Notificações administrativas que ainda dependem de uma decisão. */
+  const exigeAcao = (n: Notificacao) => canGerenciarUsuarios && (
+    (n.tipo === 'conta_nova' && situacaoUsuarios.get(n.entidadeId || '') === 'pendente')
+    || (n.tipo === 'cargo_solicitado' && statusSolicitacoes.get(n.entidadeId || '') === 'pendente')
+  );
+  const aguardandoAcao = notifications.filter(exigeAcao).length;
+
+  const abrir = async (n: Notificacao) => {
+    if (!n.lida) await marcarNotificacaoLida(n.id, true).catch(() => undefined);
 
     if (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') {
       setIsOpen(false);
       navigate('/reutilizacoes', { state: { reutilizacaoId: n.entidadeId, dispositivoId: n.dispositivoId } });
       return;
     }
-
-    if (n.tipo === 'conta_nova' && currentRole === 'admin') {
+    if (n.tipo === 'conta_nova' && canGerenciarUsuarios) {
       setIsOpen(false);
-      onOpenUsersModal?.();
+      navigate('/administracao/cadastros', { state: { destacarId: n.entidadeId } });
+      return;
+    }
+    if (n.tipo === 'cargo_solicitado' && canGerenciarUsuarios) {
+      setIsOpen(false);
+      navigate('/administracao/cargos', { state: { destacarId: n.entidadeId } });
     }
   };
 
-  const decidir = async (n: Notificacao, aprovar: boolean) => {
-    setProcessando(n.id);
-    try {
-      await decidirSolicitacaoConta(n.entidadeId!, aprovar);
-      if (!n.lida) await marcarNotificacaoLida(n.id, true);
-    } finally {
-      setProcessando(null);
-    }
+  const marcarTodasComoLidas = async () => {
+    await Promise.all(naoLidas.map(n => marcarNotificacaoLida(n.id, true).catch(() => undefined)));
   };
 
   return (
@@ -95,7 +114,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
         type="button"
         onClick={() => setIsOpen(prev => !prev)}
         className="btn btn-icon"
-        aria-label={`Notificações${naoLidas > 0 ? ` (${naoLidas} não lidas)` : ''}`}
+        aria-label={`Notificações${naoLidas.length > 0 ? ` (${naoLidas.length} não lidas)` : ''}`}
         aria-expanded={isOpen}
         style={{
           position: 'relative',
@@ -104,7 +123,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
         }}
       >
         <Bell size={18} />
-        {naoLidas > 0 && (
+        {naoLidas.length > 0 && (
           <span style={{
             position: 'absolute',
             top: '-6px',
@@ -122,7 +141,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
             justifyContent: 'center',
             boxSizing: 'border-box'
           }}>
-            {naoLidas}
+            {naoLidas.length}
           </span>
         )}
       </button>
@@ -133,6 +152,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
           top: 'calc(100% + 8px)',
           ...(align === 'left' ? { left: 0 } : { right: 0 }),
           width: '330px',
+          maxWidth: 'calc(100vw - 32px)',
           maxHeight: '440px',
           overflowY: 'auto',
           backgroundColor: 'var(--color-surface)',
@@ -142,8 +162,24 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
           zIndex: 1200,
           padding: 'var(--spacing-sm)'
         }}>
-          <div style={{ padding: '4px 8px 8px', borderBottom: '1px solid var(--color-hover)', fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-dark)' }}>
-            Notificações
+          <div style={{ padding: '4px 8px 8px', borderBottom: '1px solid var(--color-hover)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '6px 8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-text-dark)' }}>
+              Notificações
+              {aguardandoAcao > 0 && (
+                <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: '10px', backgroundColor: '#fef3c7', color: '#b45309', whiteSpace: 'nowrap' }}>
+                  {aguardandoAcao} aguardando ação
+                </span>
+              )}
+            </div>
+            {naoLidas.length > 0 && (
+              <button
+                type="button"
+                onClick={marcarTodasComoLidas}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-primary)', fontSize: '0.7rem', fontWeight: 700, padding: 0, whiteSpace: 'nowrap' }}
+              >
+                Marcar todas como lidas
+              </button>
+            )}
           </div>
 
           {notifications.length === 0 && (
@@ -153,15 +189,15 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
           )}
 
           {notifications.map(n => {
-            const st = statusDaNotificacao(n, reutilizacoes, usuariosAtivos);
-            const pendenteAcao = n.tipo === 'conta_nova' && currentRole === 'admin' && !n.resolvida && usuariosAtivos.get(n.entidadeId || '') === false;
+            const st = statusDaNotificacao(n, reutilizacoes, situacaoUsuarios, statusSolicitacoes);
+            const pendenteAcao = exigeAcao(n);
             return (
               <div
                 key={n.id}
-                onClick={() => aoClicar(n)}
+                onClick={() => abrir(n)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={e => { if (e.key === 'Enter') aoClicar(n); }}
+                onKeyDown={e => { if (e.key === 'Enter') abrir(n); }}
                 style={{
                   display: 'flex',
                   gap: '10px',
@@ -204,30 +240,17 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
                   </div>
 
                   {pendenteAcao && (
-                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ marginTop: 'var(--spacing-sm)' }}>
                       <button
                         type="button"
                         className="btn"
-                        disabled={processando === n.id}
-                        onClick={() => decidir(n, true)}
+                        onClick={e => { e.stopPropagation(); abrir(n); }}
                         style={{
-                          backgroundColor: 'var(--color-success)', borderColor: 'var(--color-success)', color: 'white',
+                          backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: 'white',
                           padding: '4px 12px', minHeight: 28, fontSize: '0.72rem', fontWeight: 700
                         }}
                       >
-                        <Check size={12} /> Aprovar
-                      </button>
-                      <button
-                        type="button"
-                        className="btn"
-                        disabled={processando === n.id}
-                        onClick={() => decidir(n, false)}
-                        style={{
-                          backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)', color: 'white',
-                          padding: '4px 12px', minHeight: 28, fontSize: '0.72rem', fontWeight: 700
-                        }}
-                      >
-                        <X size={12} /> Recusar
+                        Analisar <ArrowRight size={12} />
                       </button>
                     </div>
                   )}

@@ -4,15 +4,19 @@ rules_version = '2';
 // ReTool — Regras de Segurança do Firestore (RBAC server-side)
 // =====================================================================
 // O controle de acesso é aplicado NO SERVIDOR: nenhum cliente consegue
-// elevar o próprio perfil, editar dados de terceiros ou apagar auditoria
-// burlando a interface — toda escrita é validada aqui contra o perfil
-// persistido na coleção `users`.
+// elevar o próprio perfil, aprovar o próprio cadastro, editar dados de
+// terceiros ou ler/apagar auditoria burlando a interface — toda operação
+// é validada aqui contra o perfil persistido na coleção `users`.
 //
 // Perfis (ver src/domain/entities/user.ts):
 //   admin      -> acesso total + gestão de usuários + auditoria
 //   projetista -> cadastra/edita/aprova, NUNCA exclui
 //   engenharia -> consulta + solicita reutilizações
-//   gerencia   -> somente leitura + consulta de auditoria
+//   gerencia   -> somente leitura
+//   convidado  -> autocadastro aguardando aprovação: nenhum acesso a dados
+//
+// Uma conta só OPERA quando está ativa, aprovada, com cargo operacional e
+// sem troca de senha pendente (senha temporária criada pela Administração).
 // =====================================================================
 
 service cloud.firestore {
@@ -24,26 +28,48 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function userDoc(uid) {
-      return get(/databases/$(database)/documents/users/$(uid)).data;
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
     }
 
-    // Usuário possui perfil ativo no sistema?
+    function userDoc(uid) {
+      return get(userPath(uid)).data;
+    }
+
+    function perfisOperacionais() {
+      return ['admin', 'projetista', 'engenharia', 'gerencia'];
+    }
+
+    function contaOperacional(u) {
+      return u.ativo == true
+        && u.get('perfil', '') in perfisOperacionais()
+        && u.get('statusAprovacao', 'aprovado') == 'aprovado'
+        && u.get('trocaSenhaObrigatoria', false) != true;
+    }
+
+    // Usuário com conta operacional (ativa, aprovada, sem senha temporária).
     function isActiveUser(uid) {
       return signedIn()
-        && exists(/databases/$(database)/documents/users/$(uid))
-        && userDoc(uid).ativo == true;
+        && exists(userPath(uid))
+        && contaOperacional(userDoc(uid));
+    }
+
+    function meuPerfil() {
+      return userDoc(request.auth.uid).perfil;
     }
 
     function isAdmin() {
-      return isActiveUser(request.auth.uid)
-        && userDoc(request.auth.uid).perfil == 'admin';
+      return isActiveUser(request.auth.uid) && meuPerfil() == 'admin';
+    }
+
+    // Leitura dos dados do sistema: qualquer conta operacional.
+    function canConsultar() {
+      return isActiveUser(request.auth.uid);
     }
 
     // Papéis com permissão de escrita nas coleções industriais
     function canCadastrar() {
-      return isActiveUser(request.auth.uid)
-        && userDoc(request.auth.uid).perfil in ['admin', 'projetista'];
+      return isActiveUser(request.auth.uid) && meuPerfil() in ['admin', 'projetista'];
     }
 
     function canEditar() {
@@ -55,57 +81,188 @@ service cloud.firestore {
       return isAdmin();
     }
 
-    function canAprovar() {
-      return isActiveUser(request.auth.uid)
-        && userDoc(request.auth.uid).perfil in ['admin', 'projetista'];
-    }
-
-    function canSolicitar() {
-      return isActiveUser(request.auth.uid)
-        && userDoc(request.auth.uid).perfil in ['admin', 'projetista', 'engenharia'];
+    // Convidado aguardando aprovação (autocadastro).
+    function isConvidadoPendente() {
+      return signedIn()
+        && exists(userPath(request.auth.uid))
+        && userDoc(request.auth.uid).get('statusAprovacao', '') == 'pendente';
     }
 
     // ------------------------- USUÁRIOS -----------------------------
 
     match /users/{userId} {
-      // Qualquer autenticado consulta a lista (necessário p/ UI de gestão
-      // e auditoria; a escrita é estritamente controlada abaixo).
-      allow get, list: if signedIn();
+      function novo() {
+        return request.resource.data;
+      }
 
-      allow create: if signedIn()
-        // a) A Administração provisionando qualquer conta;
-        && (
-          isAdmin()
-          // b) Auto-provisionamento restrito: apenas o próprio documento,
-          //    sempre com perfil limitado e aguardando aprovação.
+      function atual() {
+        return resource.data;
+      }
+
+      function alterados() {
+        return novo().diff(atual()).affectedKeys();
+      }
+
+      // Cadastro ainda sem decisão (inclui o formato legado: Gerência inativa
+      // com `perfilSolicitado`, anterior ao campo `statusAprovacao`).
+      function cadastroPendente() {
+        return atual().get('statusAprovacao', '') == 'pendente'
           || (
-            userId == request.auth.uid
-            && request.resource.data.perfil == 'gerencia'
-            && request.resource.data.ativo == false
-            && request.resource.data.email == request.auth.token.email
-            && request.resource.data.uid == userId
-            && (
-              !('perfilSolicitado' in request.resource.data)
-              || request.resource.data.perfilSolicitado in ['admin', 'projetista', 'engenharia', 'gerencia']
-            )
-          )
-        );
+            !('statusAprovacao' in atual())
+            && atual().ativo == false
+            && 'perfilSolicitado' in atual()
+          );
+      }
 
-      allow update: if isActiveUser(userId) && (
-        // Administração gerencia qualquer conta (perfil, bloqueio, nome);
-        isAdmin()
-        // O próprio usuário pode alterar apenas o nome — jamais o perfil
-        // ou o status (impede auto-escalonamento de privilégios).
+      // Aprovação só a partir de um cadastro pendente: aprovado exige cargo
+      // operacional e conta ativa; rejeitado mantém a conta inativa.
+      function decisaoCadastroValida() {
+        return cadastroPendente()
+          && (
+            (novo().statusAprovacao == 'aprovado' && novo().ativo == true && novo().perfil in perfisOperacionais())
+            || (novo().statusAprovacao == 'rejeitado' && novo().ativo == false)
+          );
+      }
+
+      // O próprio documento é sempre legível (tela de convidado, login);
+      // as contas operacionais consultam a lista (gestão e notificações).
+      allow get: if signedIn() && (userId == request.auth.uid || canConsultar());
+
+      // Convidados só localizam a Administração (destinatária do aviso de cadastro).
+      allow list: if canConsultar()
+        || (isConvidadoPendente() && resource.data.perfil == 'admin');
+
+      allow create: if signedIn() && (
+        // a) Administração provisionando conta: cargo operacional, ativa,
+        //    aprovada e com troca de senha obrigatória no primeiro acesso.
+        (
+          isAdmin()
+          && userId != request.auth.uid
+          && novo().keys().hasOnly(['uid', 'email', 'nome', 'perfil', 'ativo', 'statusAprovacao', 'trocaSenhaObrigatoria', 'criadoEm', 'criadoPorUid'])
+          && novo().uid == userId
+          && novo().perfil in perfisOperacionais()
+          && novo().ativo == true
+          && novo().statusAprovacao == 'aprovado'
+          && novo().trocaSenhaObrigatoria == true
+          && novo().criadoPorUid == request.auth.uid
+        )
+        // b) Autocadastro: SEMPRE Convidado, inativo e aguardando aprovação
+        //    (nenhum cargo pode ser escolhido pelo próprio visitante).
         || (
           userId == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome'])
+          && novo().keys().hasOnly(['uid', 'email', 'nome', 'perfil', 'ativo', 'statusAprovacao', 'criadoEm'])
+          && novo().uid == userId
+          && novo().email == request.auth.token.email
+          && novo().nome is string
+          && novo().nome.size() > 0
+          && novo().nome.size() <= 120
+          && novo().perfil == 'convidado'
+          && novo().ativo == false
+          && novo().statusAprovacao == 'pendente'
         )
       );
 
-      // A Administração pode excluir contas (a ação fica registrada em
-      // auditoria). O bloqueio (ativo=false) segue como opção padrão, pois
-      // preserva o vínculo histórico da conta.
-      allow delete: if isAdmin();
+      allow update: if signedIn() && (
+        // a) Administração: cargo, bloqueio, aprovação/rejeição de cadastro.
+        (
+          isAdmin()
+          && !alterados().hasAny(['uid', 'email', 'criadoEm', 'criadoPorUid'])
+          && novo().perfil in ['admin', 'projetista', 'engenharia', 'gerencia', 'convidado']
+          // Conta ativa precisa estar aprovada e com cargo operacional: impede
+          // "desbloquear" um convidado sem passar pela aprovação.
+          && (novo().ativo != true || (novo().perfil in perfisOperacionais() && novo().get('statusAprovacao', 'aprovado') == 'aprovado'))
+          && (!alterados().hasAny(['statusAprovacao']) || decisaoCadastroValida())
+          // A Administração não altera o próprio cargo/status (evita auto-bloqueio).
+          && (userId != request.auth.uid || !alterados().hasAny(['perfil', 'ativo', 'statusAprovacao']))
+        )
+        // b) Próprio usuário operacional: apenas o nome — jamais o cargo ou o
+        //    status (impede auto-escalonamento de privilégios).
+        || (
+          userId == request.auth.uid
+          && isActiveUser(request.auth.uid)
+          && alterados().hasOnly(['nome'])
+        )
+        // c) Conclusão da troca obrigatória de senha no primeiro acesso.
+        || (
+          userId == request.auth.uid
+          && atual().ativo == true
+          && atual().get('trocaSenhaObrigatoria', false) == true
+          && novo().trocaSenhaObrigatoria == false
+          && alterados().hasOnly(['trocaSenhaObrigatoria', 'senhaAlteradaEm'])
+        )
+      );
+
+      // A Administração pode excluir contas de terceiros (com auditoria).
+      allow delete: if isAdmin() && userId != request.auth.uid;
+    }
+
+    // ---------------- SOLICITAÇÕES DE ALTERAÇÃO DE CARGO -----------------
+    // O usuário só PEDE; a mudança de cargo acontece apenas na aprovação da
+    // Administração, no mesmo lote que fecha a solicitação. A trava
+    // `pendencias_cargo/{uid}` garante uma única solicitação pendente.
+
+    function travaCargoPath(uid) {
+      return /databases/$(database)/documents/pendencias_cargo/$(uid);
+    }
+
+    function solicitacaoCargoPath(id) {
+      return /databases/$(database)/documents/solicitacoes_cargo/$(id);
+    }
+
+    match /solicitacoes_cargo/{solicitacaoId} {
+      function s() {
+        return request.resource.data;
+      }
+
+      allow get, list: if isAdmin()
+        || (signedIn() && resource.data.usuarioUid == request.auth.uid);
+
+      allow create: if isActiveUser(request.auth.uid)
+        && meuPerfil() != 'admin'
+        && s().keys().hasOnly(['id', 'usuarioUid', 'usuarioNome', 'usuarioEmail', 'perfilAtual', 'perfilSolicitado', 'justificativa', 'status', 'dataSolicitacao'])
+        && s().id == solicitacaoId
+        && s().usuarioUid == request.auth.uid
+        && s().perfilAtual == meuPerfil()
+        && s().perfilSolicitado in perfisOperacionais()
+        && s().perfilSolicitado != meuPerfil()
+        && s().status == 'pendente'
+        && (!('justificativa' in s()) || (s().justificativa is string && s().justificativa.size() <= 500))
+        // Trava criada no mesmo lote (e inexistente antes): uma pendente por vez.
+        && !exists(travaCargoPath(request.auth.uid))
+        && getAfter(travaCargoPath(request.auth.uid)).data.solicitacaoId == solicitacaoId;
+
+      allow update: if isAdmin()
+        && resource.data.status == 'pendente'
+        // Ninguém decide a própria solicitação.
+        && resource.data.usuarioUid != request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decididoPorUid', 'decididoPorNome', 'dataDecisao', 'motivoDecisao'])
+        && request.resource.data.status in ['aprovada', 'rejeitada']
+        && request.resource.data.decididoPorUid == request.auth.uid
+        // A trava é liberada no mesmo lote.
+        && !existsAfter(travaCargoPath(resource.data.usuarioUid))
+        // Aprovada => o cargo do usuário passa a ser o solicitado (mesmo lote).
+        && (
+          request.resource.data.status == 'rejeitada'
+          || getAfter(userPath(resource.data.usuarioUid)).data.perfil == resource.data.perfilSolicitado
+        );
+
+      // Histórico preservado.
+      allow delete: if false;
+    }
+
+    match /pendencias_cargo/{uid} {
+      allow get: if isAdmin() || (signedIn() && uid == request.auth.uid);
+
+      allow create: if isActiveUser(request.auth.uid)
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['solicitacaoId', 'criadoEm'])
+        && getAfter(solicitacaoCargoPath(request.resource.data.solicitacaoId)).data.usuarioUid == request.auth.uid;
+
+      allow update: if false;
+
+      // Liberada somente pela decisão da Administração.
+      allow delete: if isAdmin()
+        && getAfter(solicitacaoCargoPath(resource.data.solicitacaoId)).data.status in ['aprovada', 'rejeitada'];
     }
 
     // -------------------- LOGS DE AUDITORIA -------------------------
@@ -114,10 +271,15 @@ service cloud.firestore {
       // Trilha de auditoria é visível apenas para a Administração.
       allow get, list: if isAdmin();
 
-      // Qualquer usuário autenticado registra as próprias ações,
-      // mas nunca pode atribuir a autoria a outro usuário.
+      // Qualquer usuário autenticado registra as próprias ações (inclusive
+      // convidados e acessos negados), mas nunca pode atribuir a autoria a
+      // outro usuário, antedatar o registro ou gravar campos de segredo.
       allow create: if signedIn()
-        && request.resource.data.usuarioUid == request.auth.uid;
+        && request.resource.data.usuarioUid == request.auth.uid
+        && request.resource.data.id == logId
+        && request.resource.data.dataHoraServidor == request.time
+        && request.resource.data.get('resultado', 'sucesso') in ['sucesso', 'falha', 'negado']
+        && !request.resource.data.keys().hasAny(['senha', 'password', 'senhaTemporaria', 'novaSenha', 'token', 'hash', 'senhaHash']);
 
       // Logs são imutáveis e indeléveis: nem a administração remove
       // trilhas de auditoria diretamente no banco.
@@ -126,31 +288,38 @@ service cloud.firestore {
     }
 
     // ---------------- COLEÇÕES INDUSTRIAIS (CRUD) -------------------
-    // dispositivos, categorias, familias, produtos
+    // dispositivos, categorias, tipos, familias, produtos
 
     match /dispositivos/{docId} {
-      allow get, list: if signedIn();
+      allow get, list: if canConsultar();
       allow create: if canCadastrar();
       allow update: if canEditar();
       allow delete: if canExcluir();
     }
 
     match /categorias/{docId} {
-      allow get, list: if signedIn();
+      allow get, list: if canConsultar();
+      allow create: if canCadastrar();
+      allow update: if canEditar();
+      allow delete: if canExcluir();
+    }
+
+    match /tipos/{docId} {
+      allow get, list: if canConsultar();
       allow create: if canCadastrar();
       allow update: if canEditar();
       allow delete: if canExcluir();
     }
 
     match /familias/{docId} {
-      allow get, list: if signedIn();
+      allow get, list: if canConsultar();
       allow create: if canCadastrar();
       allow update: if canEditar();
       allow delete: if canExcluir();
     }
 
     match /produtos/{docId} {
-      allow get, list: if signedIn();
+      allow get, list: if canConsultar();
       allow create: if canCadastrar();
       allow update: if canEditar();
       allow delete: if canExcluir();
@@ -186,25 +355,25 @@ service cloud.firestore {
         );
       }
 
-      allow get, list: if signedIn();
+      allow get, list: if canConsultar();
 
       allow create: if isActiveUser(request.auth.uid)
         && request.resource.data.solicitanteId == request.auth.uid
         && (
           // Engenharia inicia o processo (rascunho do 1º filtro).
           (
-            userDoc(request.auth.uid).perfil == 'engenharia'
+            meuPerfil() == 'engenharia'
             && request.resource.data.status == 'Em análise (Engenharia)'
           )
           // Administração/Ferramentaria registram histórico diretamente.
-          || userDoc(request.auth.uid).perfil in ['admin', 'projetista']
+          || meuPerfil() in ['admin', 'projetista']
         );
 
       allow update: if isActiveUser(request.auth.uid)
         && (
           isAdmin()
-          || (userDoc(request.auth.uid).perfil == 'projetista' && transicaoProjetista())
-          || (userDoc(request.auth.uid).perfil == 'engenharia' && transicaoEngenharia())
+          || (meuPerfil() == 'projetista' && transicaoProjetista())
+          || (meuPerfil() == 'engenharia' && transicaoEngenharia())
         );
 
       allow delete: if canExcluir();
@@ -213,19 +382,19 @@ service cloud.firestore {
     // --------------------- NOTIFICAÇÕES ------------------------------
     // Cada documento pertence a um destinatário (destinatarioUid).
     // O status exibido é derivado em tempo real da entidade referenciada
-    // (reutilização ou usuário), mantendo a notificação sempre atualizada.
+    // (reutilização, usuário ou solicitação de cargo).
 
     match /notifications/{notifId} {
-      function destUid() {
-        return request.resource.data.destinatarioUid;
+      function n() {
+        return request.resource.data;
       }
 
       function destExiste() {
-        return exists(/databases/$(database)/documents/users/$(destUid()));
+        return exists(userPath(n().destinatarioUid));
       }
 
-      function destPerfil() {
-        return userDoc(destUid()).perfil;
+      function destEhAdmin() {
+        return destExiste() && userDoc(n().destinatarioUid).perfil == 'admin';
       }
 
       // Somente o destinatário lê as próprias notificações.
@@ -233,34 +402,38 @@ service cloud.firestore {
         && resource.data.destinatarioUid == request.auth.uid;
 
       allow create: if signedIn()
-        && request.resource.data.remetenteUid == request.auth.uid
+        && n().remetenteUid == request.auth.uid
+        && n().id == notifId
+        && n().lida == false
         && (
-          // Solicitação de conta com tier != Gerência -> Administração.
-          // O remetente é o próprio solicitante (conta recém-criada, inativa),
-          // validado pelo perfilSolicitado gravado no seu próprio documento.
+          // Novo cadastro (Convidado aguardando aprovação) -> Administração.
           (
-            request.resource.data.tipo == 'conta_nova'
-            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-            && userDoc(request.auth.uid).perfil == 'gerencia'
-            && userDoc(request.auth.uid).perfilSolicitado == request.resource.data.perfilSolicitado
-            && destExiste()
-            && destPerfil() == 'admin'
+            n().tipo == 'conta_nova'
+            && n().entidadeId == request.auth.uid
+            && isConvidadoPendente()
+            && userDoc(request.auth.uid).perfil == 'convidado'
+            && destEhAdmin()
           )
-          // Demais fluxos exigem remetente com conta ativa.
+          // Solicitação de alteração de cargo -> Administração.
+          || (
+            n().tipo == 'cargo_solicitado'
+            && isActiveUser(request.auth.uid)
+            && exists(solicitacaoCargoPath(n().entidadeId))
+            && get(solicitacaoCargoPath(n().entidadeId)).data.usuarioUid == request.auth.uid
+            && destEhAdmin()
+          )
+          // Decisões administrativas (cadastro/cargo) -> usuário afetado.
+          || (
+            n().tipo in ['conta_decidida', 'cargo_decidido']
+            && isAdmin()
+            && destExiste()
+          )
+          // Fluxo de reutilização.
           || (
             isActiveUser(request.auth.uid)
             && (
-              // Nova solicitação de reutilização -> quem pode aprová-la.
-              (
-                request.resource.data.tipo == 'reutilizacao_nova'
-                && destExiste()
-                && destPerfil() in ['admin', 'projetista']
-              )
-              // Decisões (reutilização ou conta) -> destinatário existente.
-              || (
-                request.resource.data.tipo in ['reutilizacao_decidida', 'conta_decidida']
-                && destExiste()
-              )
+              (n().tipo == 'reutilizacao_nova' && destExiste() && userDoc(n().destinatarioUid).perfil in ['admin', 'projetista'])
+              || (n().tipo == 'reutilizacao_decidida' && destExiste())
             )
           )
         );

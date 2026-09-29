@@ -3,8 +3,10 @@ import { UserRole } from './user';
 export type NotificacaoTipo =
   | 'reutilizacao_nova'      // nova solicitação de reutilização aguardando análise
   | 'reutilizacao_decidida'  // solicitação de reutilização aprovada/rejeitada
-  | 'conta_nova'             // solicitação de conta com tier diferente de Gerência
-  | 'conta_decidida';        // solicitação de conta aprovada/recusada
+  | 'conta_nova'             // novo cadastro (Convidado) aguardando aprovação -> Administração
+  | 'conta_decidida'         // cadastro aprovado/recusado -> solicitante
+  | 'cargo_solicitado'       // solicitação de alteração de cargo -> Administração
+  | 'cargo_decidido';        // alteração de cargo aprovada/rejeitada -> solicitante
 
 export interface Notificacao {
   id: string;
@@ -16,7 +18,7 @@ export interface Notificacao {
   dataHora: string;
   lida: boolean;
   resolvida?: boolean;
-  /** id da reutilização ou uid do usuário solicitante, conforme o tipo */
+  /** id da reutilização, uid do usuário ou id da solicitação de cargo, conforme o tipo */
   entidadeId?: string;
   /** para navegação direta à tela relacionada */
   dispositivoId?: string;

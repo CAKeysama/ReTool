@@ -1,7 +1,7 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import { getAuth } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
 
 const configFromEnv = (prefix: string) => ({
   apiKey: import.meta.env[`${prefix}_API_KEY`],
@@ -17,12 +17,34 @@ const primaryConfig = configFromEnv('VITE_FIREBASE');
 const fallbackConfig = configFromEnv('VITE_FIREBASE_FALLBACK');
 
 const useFallback = import.meta.env.VITE_USE_FALLBACK_DB === 'true';
-const activeConfig = useFallback ? fallbackConfig : primaryConfig;
+
+// Desenvolvimento local contra os emuladores (`npm run dev:emuladores`):
+// nenhum dado ou conta real é tocado. Projeto "demo-" dispensa credenciais.
+const usarEmuladores = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+const emulatorConfig = {
+  apiKey: 'demo-api-key',
+  authDomain: 'demo-retool.firebaseapp.com',
+  projectId: 'demo-retool',
+  storageBucket: 'demo-retool.appspot.com',
+  appId: 'demo-retool'
+};
+
+const activeConfig = usarEmuladores ? emulatorConfig : useFallback ? fallbackConfig : primaryConfig;
+
+function conectarAuthAoEmulador(instancia: Auth): Auth {
+  if (usarEmuladores) connectAuthEmulator(instancia, 'http://127.0.0.1:9099', { disableWarnings: true });
+  return instancia;
+}
 
 const app = initializeApp(activeConfig);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-export const auth = getAuth(app);
+export const auth = conectarAuthAoEmulador(getAuth(app));
+
+if (usarEmuladores) {
+  connectFirestoreEmulator(db, '127.0.0.1', 8181);
+  connectStorageEmulator(storage, '127.0.0.1', 9199);
+}
 
 // Instância secundária do Firebase App dedicada à criação de contas pela
 // Administração. `createUserWithEmailAndPassword` troca a sessão ativa da
@@ -32,6 +54,7 @@ let secondaryAppInstance: FirebaseApp | null = null;
 export function getSecondaryAuthApp(): FirebaseApp {
   if (!secondaryAppInstance) {
     secondaryAppInstance = initializeApp(activeConfig, 'retool-user-provisioning');
+    conectarAuthAoEmulador(getAuth(secondaryAppInstance));
   }
   return secondaryAppInstance;
 }
