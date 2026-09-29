@@ -2,6 +2,7 @@ import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 const configFromEnv = (prefix: string) => ({
   apiKey: import.meta.env[`${prefix}_API_KEY`],
@@ -40,10 +41,13 @@ const app = initializeApp(activeConfig);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const auth = conectarAuthAoEmulador(getAuth(app));
+// Mesma região declarada em functions/src/index.ts.
+export const functions = getFunctions(app, 'southamerica-east1');
 
 if (usarEmuladores) {
   connectFirestoreEmulator(db, '127.0.0.1', 8181);
   connectStorageEmulator(storage, '127.0.0.1', 9199);
+  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
 
 // Instância secundária do Firebase App dedicada à criação de contas pela

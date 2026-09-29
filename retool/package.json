@@ -6,14 +6,15 @@
   "scripts": {
     "dev": "vite",
     "dev:emuladores": "vite --mode emulador",
-    "emuladores": "firebase emulators:start --only auth,firestore,storage --project demo-retool",
+    "emuladores": "node scripts/emuladores.mjs iniciar",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "npm run build && npx firebase-tools deploy",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "test:rules": "node scripts/testarRegras.mjs"
+    "test:rules": "node scripts/emuladores.mjs regras",
+    "test:funcoes": "node scripts/emuladores.mjs funcoes"
   },
   "dependencies": {
     "firebase": "^12.12.1",

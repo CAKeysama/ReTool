@@ -23,6 +23,7 @@ import { FirestoreUsersRepository } from '../data/repositories/FirestoreUsersRep
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 import { FirestoreNotificationsRepository } from '../data/repositories/FirestoreNotificationsRepository';
 import { FirestoreSolicitacoesCargoRepository } from '../data/repositories/FirestoreSolicitacoesCargoRepository';
+import { FirebaseContasService, traduzirErroFuncao } from '../data/services/FirebaseContasService';
 import { SolicitarCadastroUseCase } from '../application/usecases/SolicitarCadastroUseCase';
 import { DecidirCadastroUseCase } from '../application/usecases/DecidirCadastroUseCase';
 import { CriarContaAdministrativaUseCase, ContaAuthCriada, ContaCriada } from '../application/usecases/CriarContaAdministrativaUseCase';
@@ -35,6 +36,7 @@ const usersRepo = new FirestoreUsersRepository();
 const auditRepo = new FirestoreAuditLogRepository();
 const notificationsRepo = new FirestoreNotificationsRepository();
 const solicitacoesCargoRepo = new FirestoreSolicitacoesCargoRepository();
+const contasService = new FirebaseContasService();
 
 /**
  * Cria a conta de autenticação num app Firebase secundário: a sessão da
@@ -67,6 +69,8 @@ const decidirCargoUseCase = new DecidirSolicitacaoCargoUseCase(solicitacoesCargo
 
 /** Traduz códigos do Firebase Auth para mensagens amigáveis. */
 export function traduzirErroAuth(err: unknown): string {
+  const erroFuncao = traduzirErroFuncao(err);
+  if (erroFuncao) return erroFuncao;
   const code = (err as { code?: string })?.code || '';
   switch (code) {
     case 'auth/invalid-credential':
@@ -115,6 +119,8 @@ interface AuthContextType {
   /** Exclusivo da Administração: cria a conta com senha temporária (retornada uma única vez). */
   criarContaComSenhaTemporaria: (nome: string, email: string, perfil: UserRole) => Promise<ContaCriada>;
   concluirTrocaSenha: (senhaAtual: string, novaSenha: string, confirmacao: string) => Promise<void>;
+  /** Exclusivo da Administração (Cloud Function): nova senha temporária para outra conta, devolvida uma única vez. */
+  redefinirSenhaTemporaria: (uid: string) => Promise<string>;
   solicitarAlteracaoCargo: (perfil: UserRole, justificativa?: string) => Promise<void>;
   decidirSolicitacaoCargo: (id: string, aprovar: boolean, motivo?: string) => Promise<void>;
   // Notificações do usuário autenticado
@@ -377,6 +383,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserProfile({ ...userProfile, trocaSenhaObrigatoria: false });
   };
 
+  const redefinirSenhaTemporaria = async (uid: string) => {
+    // Pré-checagem de UX; a autorização real é refeita na Cloud Function.
+    exigirAdministracao();
+    if (uid === userProfile!.uid) throw new ErroPermissao('A própria senha não é redefinida por aqui.');
+    return contasService.redefinirSenhaTemporaria(uid);
+  };
+
   const solicitarAlteracaoCargo = async (perfil: UserRole, justificativa?: string) => {
     await solicitarCargoUseCase.execute({ usuario: userProfile, perfilSolicitado: perfil, justificativa });
   };
@@ -477,6 +490,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         decidirCadastro,
         criarContaComSenhaTemporaria,
         concluirTrocaSenha,
+        redefinirSenhaTemporaria,
         solicitarAlteracaoCargo,
         decidirSolicitacaoCargo,
         updateUserRole,

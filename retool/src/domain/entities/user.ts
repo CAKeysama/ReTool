@@ -23,6 +23,9 @@ export interface UserProfile {
   /** Conta criada pela Administração com senha temporária: troca obrigatória no 1º acesso. */
   trocaSenhaObrigatoria?: boolean;
   senhaAlteradaEm?: string;
+  /** Última senha temporária gerada pela Administração (Cloud Function). */
+  senhaRedefinidaEm?: string;
+  senhaRedefinidaPorUid?: string;
   criadoPorUid?: string;
   aprovadoPorUid?: string;
   aprovadoEm?: string;

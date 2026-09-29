@@ -10,19 +10,19 @@ import { Aviso, EstadoCarregando, EstadoErro } from '../Feedback';
 import { Pill, SituacaoBadge, SITUACAO_VISUAL } from '../Badges';
 import { estiloBotaoAcao, tabelaAdmin } from './estilos';
 
-interface ContaRecemCriada {
-  nome: string;
+interface SenhaExibida {
+  titulo: string;
   email: string;
-  perfil: UserRole;
   senhaTemporaria: string;
 }
 
 /**
  * Gestão de contas pela Administração: criação com senha temporária
- * gerada pelo sistema, alteração de cargo, bloqueio e exclusão.
+ * gerada pelo sistema, nova senha temporária (Cloud Function), alteração
+ * de cargo, bloqueio e exclusão.
  */
 export function UsuariosPanel() {
-  const { users, estadoUsuarios, userProfile, criarContaComSenhaTemporaria, updateUserRole, toggleUserStatus, deleteUser } = useAuth();
+  const { users, estadoUsuarios, userProfile, criarContaComSenhaTemporaria, redefinirSenhaTemporaria, updateUserRole, toggleUserStatus, deleteUser } = useAuth();
   const navigate = useNavigate();
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -35,8 +35,9 @@ export function UsuariosPanel() {
   // A senha temporária vive apenas neste estado em memória: é exibida uma
   // vez e descartada ao concluir ou ao sair da tela (nunca vai para URL,
   // storage ou auditoria).
-  const [contaCriada, setContaCriada] = useState<ContaRecemCriada | null>(null);
+  const [senhaExibida, setSenhaExibida] = useState<SenhaExibida | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [userToReset, setUserToReset] = useState<UserProfile | null>(null);
 
   const [aviso, setAviso] = useState<{ tipo: 'sucesso' | 'erro'; texto: string } | null>(null);
   const [processandoUid, setProcessandoUid] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export function UsuariosPanel() {
     setAviso(null);
     try {
       const { senhaTemporaria, perfil } = await criarContaComSenhaTemporaria(novoNome, novoEmail, novoPerfil);
-      setContaCriada({ nome: perfil.nome, email: perfil.email, perfil: novoPerfil, senhaTemporaria });
+      setSenhaExibida({ titulo: `Conta criada: ${perfil.nome} (${ROLES_CONFIG[novoPerfil].titulo})`, email: perfil.email, senhaTemporaria });
       setCopiado(false);
       setNovoEmail('');
       setNovoNome('');
@@ -78,9 +79,9 @@ export function UsuariosPanel() {
   };
 
   const copiarSenha = async () => {
-    if (!contaCriada) return;
+    if (!senhaExibida) return;
     try {
-      await navigator.clipboard.writeText(contaCriada.senhaTemporaria);
+      await navigator.clipboard.writeText(senhaExibida.senhaTemporaria);
       setCopiado(true);
     } catch {
       setCopiado(false);
@@ -100,6 +101,23 @@ export function UsuariosPanel() {
     }
   };
 
+  const handleConfirmReset = async () => {
+    if (!userToReset) return;
+    const alvo = userToReset;
+    setProcessandoUid(alvo.uid);
+    setAviso(null);
+    try {
+      const senhaTemporaria = await redefinirSenhaTemporaria(alvo.uid);
+      setSenhaExibida({ titulo: `Nova senha temporária: ${alvo.nome}`, email: alvo.email, senhaTemporaria });
+      setCopiado(false);
+    } catch (err) {
+      setAviso({ tipo: 'erro', texto: traduzirErroAuth(err) });
+    } finally {
+      setProcessandoUid(null);
+      setUserToReset(null);
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!userToDelete) return;
     const alvo = userToDelete;
@@ -112,16 +130,16 @@ export function UsuariosPanel() {
       {aviso && <Aviso tipo={aviso.tipo} onClose={() => setAviso(null)}>{aviso.texto}</Aviso>}
 
       {/* SENHA TEMPORÁRIA — exibida uma única vez */}
-      {contaCriada && (
+      {senhaExibida && (
         <div role="status" style={{
           border: '1px solid #86efac', backgroundColor: '#f0fdf4', borderRadius: 'var(--radius)',
           padding: '14px 16px', marginBottom: 'var(--spacing-md)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#15803d', fontWeight: 700, fontSize: '0.9rem' }}>
-            <KeyRound size={16} /> Conta criada: {contaCriada.nome} ({ROLES_CONFIG[contaCriada.perfil].titulo})
+            <KeyRound size={16} /> {senhaExibida.titulo}
           </div>
           <p style={{ fontSize: '0.8rem', color: '#166534', margin: '6px 0 10px', lineHeight: 1.5 }}>
-            Repasse a senha temporária abaixo a <strong>{contaCriada.email}</strong> por um canal seguro.
+            Repasse a senha temporária abaixo a <strong>{senhaExibida.email}</strong> por um canal seguro.
             Ela <strong>não será exibida novamente</strong> e deverá ser trocada no primeiro acesso.
           </p>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -133,12 +151,12 @@ export function UsuariosPanel() {
                 backgroundColor: 'white', border: '1px dashed #22c55e', color: '#111827', userSelect: 'all'
               }}
             >
-              {contaCriada.senhaTemporaria}
+              {senhaExibida.senhaTemporaria}
             </code>
             <button type="button" className="btn" onClick={copiarSenha} style={estiloBotaoAcao('neutro')}>
               {copiado ? <Check size={14} /> : <Copy size={14} />} {copiado ? 'Copiada' : 'Copiar'}
             </button>
-            <button type="button" className="btn" onClick={() => setContaCriada(null)} style={estiloBotaoAcao('success')}>
+            <button type="button" className="btn" onClick={() => setSenhaExibida(null)} style={estiloBotaoAcao('success')}>
               Concluir
             </button>
           </div>
@@ -308,6 +326,19 @@ export function UsuariosPanel() {
                           {user.ativo ? 'Bloquear acesso' : 'Desbloquear'}
                         </button>
                       )}
+                      {(situacao === 'ativo' || situacao === 'bloqueado') && !propria && (
+                        <button
+                          type="button"
+                          onClick={() => { setAviso(null); setUserToReset(user); }}
+                          disabled={ocupado}
+                          title="Gerar nova senha temporária"
+                          aria-label={`Gerar nova senha temporária para ${user.nome}`}
+                          className="btn btn-icon"
+                          style={{ width: 30, height: 30, minHeight: 30, marginLeft: '6px', borderColor: '#fcd34d', backgroundColor: '#fffbeb', color: '#b45309' }}
+                        >
+                          <KeyRound size={14} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => { setAviso(null); setUserToDelete(user); }}
@@ -338,6 +369,35 @@ export function UsuariosPanel() {
           </table>
         </div>
       </div>
+
+      {/* CONFIRMAÇÃO DE NOVA SENHA TEMPORÁRIA */}
+      {userToReset && (
+        <div
+          className="modal-overlay"
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 10000, display: 'flex', justifyContent: 'center', padding: '20px' }}
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="reset-user-title"
+        >
+          <div style={{ backgroundColor: 'white', borderRadius: 'var(--radius)', maxWidth: '440px', width: '100%', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
+            <h3 id="reset-user-title" style={{ margin: '0 0 12px', fontSize: '1rem', color: '#111827', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <KeyRound size={18} color="#b45309" /> Gerar nova senha temporária
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
+              A senha atual de <strong>{userToReset.nome}</strong> ({userToReset.email}) deixará de valer, as sessões abertas serão
+              encerradas e a troca de senha será obrigatória no próximo acesso.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button type="button" onClick={() => setUserToReset(null)} disabled={processandoUid === userToReset.uid} className="btn" style={{ fontWeight: 600, fontSize: '0.82rem' }}>
+                Cancelar
+              </button>
+              <button type="button" onClick={handleConfirmReset} disabled={processandoUid === userToReset.uid} className="btn btn-primary" style={{ fontWeight: 600, fontSize: '0.82rem' }}>
+                {processandoUid === userToReset.uid ? 'Gerando...' : 'Gerar nova senha'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CONFIRMAÇÃO DE EXCLUSÃO */}
       {userToDelete && (

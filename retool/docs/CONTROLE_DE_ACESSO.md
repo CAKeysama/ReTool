@@ -92,7 +92,24 @@ A matriz é aplicada nos dois lugares ao mesmo tempo:
   dados. Tudo é auditado (`criacao_usuario`, `login`, `troca_senha`) sem
   senhas.
 
-### 3.3 Alteração de cargo (Fluxo B)
+### 3.3 Nova senha temporária para uma conta existente
+- Em **Administração → Usuários**, o botão de chave (🔑) de uma conta aprovada
+  (ativa ou bloqueada) gera uma **nova senha temporária** — útil quando o
+  colaborador esquece a senha.
+- Roda na Cloud Function `redefinirSenhaTemporaria`
+  (`functions/src/index.ts`, região `southamerica-east1`), porque o SDK do
+  navegador não altera a senha de outra pessoa. A função refaz toda a
+  autorização no servidor (Administração operacional; não vale para a própria
+  conta nem para cadastros pendentes/rejeitados), gera a senha com o CSPRNG
+  do Node, aplica no Firebase Auth (só o hash é guardado), **revoga as
+  sessões abertas** e marca `trocaSenhaObrigatoria: true`.
+- A senha volta uma única vez para a administradora, no mesmo cartão da
+  criação de conta. A ação é auditada (`redefinicao_senha`, inclusive
+  tentativas negadas e falhas), sem a senha.
+- Requer o deploy das Functions (plano **Blaze** do Firebase). Sem ele, a tela
+  informa que o serviço está indisponível.
+
+### 3.4 Alteração de cargo (Fluxo B)
 - O usuário **não altera o próprio cargo** (regras recusam `perfil`, `ativo`
   e `statusAprovacao` no próprio documento).
 - Pelo menu do perfil → **Solicitar alteração de cargo** (contas operacionais
@@ -109,7 +126,7 @@ A matriz é aplicada nos dois lugares ao mesmo tempo:
 - O solicitante recebe `cargo_decidido`; tudo é auditado
   (`solicitacao_cargo`, `aprovacao_cargo`, `rejeicao_cargo`).
 
-### 3.4 Bloqueio / desativação
+### 3.5 Bloqueio / desativação
 - `ativo: false` derruba a sessão em tempo real (`subscribeProfile` no
   `AuthContext`) e todas as regras do Firestore/Storage passam a recusar o
   usuário. Cadastros pendentes não podem ser "desbloqueados": só a aprovação,
@@ -117,7 +134,7 @@ A matriz é aplicada nos dois lugares ao mesmo tempo:
 - A Administração não altera o próprio cargo nem se bloqueia (UI + regras),
   evitando auto-bloqueio.
 
-### 3.5 Exclusão de usuários (somente Administração)
+### 3.6 Exclusão de usuários (somente Administração)
 - Em **Administração → Usuários**, com **confirmação obrigatória**; a própria
   conta não pode ser excluída (UI + regras). A exclusão é auditada.
 - O Firebase Auth não permite apagar a conta de autenticação de terceiros pelo
@@ -136,32 +153,32 @@ A matriz é aplicada nos dois lugares ao mesmo tempo:
 | Regra de `update` em `users` exigia o **alvo** ativo (aprovação de pendentes falhava no servidor) | Administração decide cadastros pendentes; transições validadas (`decisaoCadastroValida`) |
 | Aviso de novo cadastro dependia de listar todos os usuários (negado ao visitante) | Convidado pendente consulta apenas `perfil == 'admin'`; notificação validada por tipo/remetente |
 | Admin criava usuário com senha digitada e sem troca obrigatória | Senha temporária gerada por CSPRNG, exibida uma vez, troca obrigatória no 1º acesso |
+| Senha esquecida só podia ser resolvida no Console | Cloud Function `redefinirSenhaTemporaria`, validada no servidor e auditada |
 | Coleção `tipos` sem regra (leitura negada por padrão) | Regras de CRUD equivalentes às de `categorias` |
 | Logs podiam ser forjados/apagados | Autoria própria obrigatória, carimbo do servidor (`request.time`), campos de segredo recusados, leitura só `admin`, update/delete negados |
 
 ## 5. Bootstrap da conta Administradora
 
-Como não há credenciais fixas no código, a primeira conta `admin` é criada
-**manualmente uma única vez**:
+**Nunca** existe administrador com credenciais fixas no código, na tela ou no
+repositório. A primeira conta `admin` é promovida **manualmente, uma única
+vez**, a partir de um cadastro comum — assim a senha é conhecida só pela
+própria pessoa:
 
-1. No [Firebase Console](https://console.firebase.google.com) do projeto
-   (`retool-c25a9`), em **Authentication → Users → Add user**, crie a conta
-   (ex.: `admin@suaempresa.com`) com senha forte.
-2. Copie o **UID** gerado.
-3. Em **Firestore Database**, crie o documento `users/{UID}` com:
+1. Na tela de login do ReTool, use **Cadastre-se aqui** com um e-mail ao qual
+   você tenha acesso e uma senha forte. A conta entra como *Convidado*.
+2. No [Firebase Console](https://console.firebase.google.com), abra o
+   projeto **que o app usa** (veja a seção 8) → **Firestore Database** →
+   coleção `users` → documento com o seu e-mail, e altere:
    ```json
    {
-     "uid": "{UID}",
-     "email": "admin@suaempresa.com",
-     "nome": "Administradora ReTool",
      "perfil": "admin",
      "ativo": true,
-     "statusAprovacao": "aprovado",
-     "criadoEm": "2026-09-16T00:00:00.000Z"
+     "statusAprovacao": "aprovado"
    }
    ```
-4. Pronto: faça login na aplicação com essas credenciais e use
-   **Administração** para criar/aprovar todos os demais usuários.
+3. A tela *Cadastro em análise* libera o sistema automaticamente (ou recarregue
+   a página). A partir daí, use **Administração** para criar/aprovar os demais
+   usuários.
 
 > Contas existentes sem `statusAprovacao` continuam válidas: ativas são tratadas
 > como aprovadas; o formato antigo de cadastro pendente (Gerência inativa com
@@ -211,17 +228,28 @@ duplicatas por construção. Estado de leitura (`lida`) e resolução
   administrativos ainda pendentes, com botão *Analisar*) e *Marcar todas como
   lidas*. O menu **Administração** exibe o total de pendências.
 
-## 8. Deploy das regras e índices
+## 8. Deploy das regras, índices e funções
+
+> ⚠️ **Confira o projeto antes de publicar.** O app usa o banco definido no
+> `.env`: com `VITE_USE_FALLBACK_DB=true` ele fala com o projeto do alias
+> `fallback` (`.firebaserc`), e não com o `default`. As regras precisam ser
+> publicadas **no projeto que o app usa** — senão o banco em uso fica sem as
+> proteções.
 
 ```bash
 cd retool
+npx firebase-tools login
 npm run build
-npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage
+# troque "fallback" por "default" se o .env apontar para o banco principal
+npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage,functions --project fallback
+npx firebase-tools deploy --only hosting
 ```
 
-`firestore.indexes.json` declara os índices compostos usados pelos filtros da
-tela de histórico (ação, usuário, recurso e resultado combinados com a
-ordenação por data). Sem eles, filtros combinados exibem um aviso na tela.
+- `functions` exige o plano **Blaze** do projeto. Sem ele, publique o restante
+  com `--only firestore:rules,firestore:indexes,storage` — só a geração de
+  nova senha temporária para contas existentes fica indisponível.
+- `firestore.indexes.json` declara os índices compostos usados pelos filtros
+  da tela de histórico. Sem eles, filtros combinados exibem um aviso na tela.
 
 ## 9. Trilha de auditoria (Histórico de ações)
 
@@ -242,7 +270,7 @@ todas as ações relevantes do sistema.
 
 **Ações registradas:** login (inclusive acesso recusado), logout, cadastro,
 aprovação/rejeição de usuário, criação de usuário, troca de senha (sucesso e
-falha), solicitação/aprovação/rejeição de cargo, alteração direta de cargo,
+falha), nova senha temporária gerada pela Administração, solicitação/aprovação/rejeição de cargo, alteração direta de cargo,
 bloqueio/desbloqueio, exclusões, todo o CRUD industrial, transições do fluxo
 de reutilização e importações. Tentativas de aprovar/rejeitar cadastros,
 criar contas ou decidir solicitações de cargo sem permissão são registradas
@@ -264,6 +292,7 @@ A rota é protegida (`RoleRoute`) e as regras só permitem leitura a `admin`.
 | --- | --- |
 | `npm test` | Domínio (perfis, situação da conta, auditoria, senha temporária, solicitações), casos de uso dos fluxos A, B e C sobre os repositórios com Firestore em memória, paginação/filtros do histórico |
 | `npm run test:rules` | **Regras do Firestore no emulador oficial** (requer Java 11+): autocadastro, aprovação, alteração de cargo, senha temporária, auditoria e operações administrativas — incluindo tentativas diretas pela API |
+| `npm run test:funcoes` | **Cloud Function de nova senha temporária** executada nos emuladores de Auth, Firestore e Functions: senha antiga invalidada, troca obrigatória, auditoria sem senha e recusas (sem sessão, não-admin, própria conta, pendente, inexistente) |
 
 ## 11. Desenvolvimento local com emuladores
 
@@ -271,7 +300,7 @@ Para testar os fluxos sem tocar em dados ou contas reais:
 
 ```bash
 cd retool
-npm run emuladores                 # terminal 1: auth, firestore e storage locais
+npm run emuladores                 # terminal 1: auth, firestore, functions e storage locais
 node scripts/semearEmulador.mjs    # cria contas demo (admin e engenharia)
 npm run dev:emuladores             # terminal 2: app apontando para os emuladores
 ```

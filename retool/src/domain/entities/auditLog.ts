@@ -24,6 +24,7 @@ export type AuditLogAcao =
   | 'rejeicao_usuario'
   | 'criacao_usuario'
   | 'troca_senha'
+  | 'redefinicao_senha'
   // Fluxo de alteração de cargo
   | 'solicitacao_cargo'
   | 'aprovacao_cargo'
@@ -74,7 +75,7 @@ export interface AuditLog {
 export const ACOES_POR_CATEGORIA: Record<AuditLogCategoria, AuditLogAcao[]> = {
   autenticacao: ['login', 'logout', 'cadastro', 'troca_senha'],
   usuarios: [
-    'aprovacao_usuario', 'rejeicao_usuario', 'criacao_usuario', 'alteracao_perfil',
+    'aprovacao_usuario', 'rejeicao_usuario', 'criacao_usuario', 'redefinicao_senha', 'alteracao_perfil',
     'bloqueio_usuario', 'desbloqueio_usuario', 'solicitacao_cargo', 'aprovacao_cargo', 'rejeicao_cargo'
   ],
   dados: ['criacao', 'edicao', 'exclusao', 'importacao'],
@@ -106,6 +107,7 @@ export const ROTULO_ACAO: Record<AuditLogAcao, string> = {
   rejeicao_usuario: 'Rejeição de usuário',
   criacao_usuario: 'Criação de usuário',
   troca_senha: 'Troca de senha',
+  redefinicao_senha: 'Redefinição de senha',
   solicitacao_cargo: 'Solicitação de cargo',
   aprovacao_cargo: 'Aprovação de cargo',
   rejeicao_cargo: 'Rejeição de cargo',
