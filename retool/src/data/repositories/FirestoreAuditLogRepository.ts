@@ -6,7 +6,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import {
   AuditLog, AuditLogAcao, AuditLogCategoria, AuditLogTipoEntidade,
-  ACOES_POR_CATEGORIA, categoriaDaAcao, sanitizarDadosAuditoria
+  categoriaDaAcao, sanitizarDadosAuditoria
 } from '../../domain/entities/auditLog';
 import { AuditLogInput, IAuditLogRepository } from '../../domain/repositories/IAcessosRepositories';
 
@@ -53,16 +53,84 @@ export interface PaginaAuditoria {
   temMais: boolean;
 }
 
+/**
+ * Campos de igualdade filtráveis na tela de histórico, na ORDEM CANÔNICA em
+ * que entram na consulta e nos índices compostos. É a fonte única da
+ * verdade: `firestore.indexes.json` precisa de um índice para cada
+ * combinação válida destes campos seguida de `dataHora DESC` (verificado em
+ * teste). `categoria` e `acao` nunca aparecem juntos: a ação específica já
+ * determina a categoria.
+ */
+export const CAMPOS_FILTRO_AUDITORIA = ['categoria', 'acao', 'usuarioUid', 'tipoEntidade', 'resultado'] as const;
+export type CampoFiltroAuditoria = typeof CAMPOS_FILTRO_AUDITORIA[number];
+
+/**
+ * Filtros de igualdade de cada campo, conforme os filtros da tela.
+ *
+ * A categoria é filtrada pelo campo `categoria` gravado em todo registro, e
+ * não por `acao in [...]`: o Firestore expande cada `in` em sub-consultas e
+ * multiplica as expansões (10 ações × 2 resultados = 20), estourando o
+ * limite de filtros por consulta. Assim o único `in` é o de resultado
+ * (no máximo 2 sub-consultas). Registros anteriores ao campo `categoria`
+ * seguem acessíveis sem filtro de categoria ou pelo filtro de ação.
+ */
+function filtrosDeIgualdade(f: FiltrosAuditoria): Partial<Record<CampoFiltroAuditoria, QueryConstraint>> {
+  return {
+    ...(f.acao
+      ? { acao: where('acao', '==', f.acao) }
+      : f.categoria ? { categoria: where('categoria', '==', f.categoria) } : {}),
+    ...(f.usuarioUid ? { usuarioUid: where('usuarioUid', '==', f.usuarioUid) } : {}),
+    ...(f.tipoEntidade ? { tipoEntidade: where('tipoEntidade', '==', f.tipoEntidade) } : {}),
+    ...(f.somenteFalhas ? { resultado: where('resultado', 'in', ['falha', 'negado']) } : {}),
+  };
+}
+
+/** Campos de igualdade usados por um conjunto de filtros (ordem canônica). */
+export function camposFiltradosAuditoria(f: FiltrosAuditoria): CampoFiltroAuditoria[] {
+  const usados = filtrosDeIgualdade(f);
+  return CAMPOS_FILTRO_AUDITORIA.filter(c => usados[c]);
+}
+
 function restricoesDosFiltros(f: FiltrosAuditoria): QueryConstraint[] {
-  const r: QueryConstraint[] = [];
-  if (f.acao) r.push(where('acao', '==', f.acao));
-  else if (f.categoria) r.push(where('acao', 'in', ACOES_POR_CATEGORIA[f.categoria]));
-  if (f.usuarioUid) r.push(where('usuarioUid', '==', f.usuarioUid));
-  if (f.tipoEntidade) r.push(where('tipoEntidade', '==', f.tipoEntidade));
-  if (f.somenteFalhas) r.push(where('resultado', 'in', ['falha', 'negado']));
-  if (f.de) r.push(where('dataHora', '>=', f.de));
-  if (f.ate) r.push(where('dataHora', '<=', f.ate));
-  return r;
+  const usados = filtrosDeIgualdade(f);
+  return [
+    ...CAMPOS_FILTRO_AUDITORIA.flatMap(c => (usados[c] ? [usados[c]!] : [])),
+    // O período filtra o mesmo campo da ordenação: cabe em qualquer índice abaixo.
+    ...(f.de ? [where('dataHora', '>=', f.de)] : []),
+    ...(f.ate ? [where('dataHora', '<=', f.ate)] : []),
+  ];
+}
+
+export interface IndiceComposto {
+  collectionGroup: string;
+  queryScope: 'COLLECTION';
+  fields: { fieldPath: string; order: 'ASCENDING' | 'DESCENDING' }[];
+}
+
+/**
+ * Índices compostos exigidos pelas consultas do histórico: um por combinação
+ * não vazia dos campos de igualdade (sem `categoria` e `acao` juntos) +
+ * `dataHora DESC` (ordenação e período). O Firestore só funde índices em
+ * consultas apenas de igualdade; com o filtro de período isso não se aplica,
+ * então cada combinação precisa do seu índice. Sem filtros de igualdade, o
+ * índice automático de campo único de `dataHora` basta.
+ */
+export function indicesNecessariosAuditoria(): IndiceComposto[] {
+  const combinacoes: CampoFiltroAuditoria[][] = [];
+  for (let mascara = 1; mascara < 1 << CAMPOS_FILTRO_AUDITORIA.length; mascara++) {
+    const campos = CAMPOS_FILTRO_AUDITORIA.filter((_, i) => mascara & (1 << i));
+    if (campos.includes('categoria') && campos.includes('acao')) continue;
+    combinacoes.push(campos);
+  }
+  combinacoes.sort((a, b) => a.length - b.length);
+  return combinacoes.map(campos => ({
+    collectionGroup: 'audit_logs',
+    queryScope: 'COLLECTION',
+    fields: [
+      ...campos.map(fieldPath => ({ fieldPath, order: 'ASCENDING' as const })),
+      { fieldPath: 'dataHora', order: 'DESCENDING' as const }
+    ]
+  }));
 }
 
 export class FirestoreAuditLogRepository implements IAuditLogRepository {
@@ -117,10 +185,15 @@ export class FirestoreAuditLogRepository implements IAuditLogRepository {
     });
   }
 
+  /** Projeto Firebase consultado (informado nas mensagens de índice ausente). */
+  get projetoId(): string | undefined {
+    return (db as { app?: { options?: { projectId?: string } } })?.app?.options?.projectId;
+  }
+
   /**
    * Página do histórico completo (paginação por cursor no servidor), do mais
-   * recente para o mais antigo. Filtros combinados exigem os índices
-   * declarados em `firestore.indexes.json`.
+   * recente para o mais antigo. Filtros combinados usam os índices de
+   * `indicesNecessariosAuditoria()`, declarados em `firestore.indexes.json`.
    */
   async listarPagina(filtros: FiltrosAuditoria, tamanho: number, apos?: unknown): Promise<PaginaAuditoria> {
     const restricoes: QueryConstraint[] = [

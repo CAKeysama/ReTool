@@ -173,7 +173,9 @@ export function HistoricoAcoesPanel() {
           padding: '10px 16px', borderBottom: '1px solid var(--color-border)'
         }}>
           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
-            {h.total === null ? 'Contando registros...' : `${h.total} ${h.total === 1 ? 'registro' : 'registros'}`}
+            {h.total !== null
+              ? `${h.total} ${h.total === 1 ? 'registro' : 'registros'}`
+              : h.totalIndisponivel ? 'Total indisponível' : 'Contando registros...'}
             {busca && h.estado === 'pronto' && <span style={{ color: '#6b7280', fontWeight: 500 }}> · {visiveis.length} nesta página após a busca</span>}
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>

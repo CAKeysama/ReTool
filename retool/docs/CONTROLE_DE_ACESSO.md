@@ -248,8 +248,15 @@ npx firebase-tools deploy --only hosting
 - `functions` exige o plano **Blaze** do projeto. Sem ele, publique o restante
   com `--only firestore:rules,firestore:indexes,storage` — só a geração de
   nova senha temporária para contas existentes fica indisponível.
-- `firestore.indexes.json` declara os índices compostos usados pelos filtros
-  da tela de histórico. Sem eles, filtros combinados exibem um aviso na tela.
+- `firestore.indexes.json` declara os **23 índices compostos** do histórico de
+  ações: um para cada combinação dos filtros de igualdade (categoria *ou*
+  ação, usuário, recurso, resultado) seguida de `dataHora DESC`, que atende a
+  ordenação e o período. O Firestore só reaproveita índices em consultas
+  apenas de igualdade, então cada combinação precisa do seu. A lista é gerada
+  por `indicesNecessariosAuditoria()` e um teste falha se o arquivo divergir.
+- Depois do deploy, os índices levam alguns minutos para ficar prontos; até lá
+  a tela informa que estão sendo construídos. Sem o deploy, ela informa o
+  comando e o projeto consultado.
 
 ## 9. Trilha de auditoria (Histórico de ações)
 
@@ -284,6 +291,9 @@ escrita, e as regras recusam campos de segredo no registro.
 (`/administracao/logs`), com paginação por cursor no servidor, total por
 agregação, filtros por categoria, ação, usuário, recurso, falhas e período,
 busca na página, detalhes em JSON e aviso em tempo real de novos registros.
+O filtro de categoria usa o campo `categoria` gravado em cada registro (uma
+igualdade simples, sem expandir a consulta em várias sub-consultas);
+registros anteriores a esse campo aparecem sem filtro ou pelo filtro de ação.
 A rota é protegida (`RoleRoute`) e as regras só permitem leitura a `admin`.
 
 ## 10. Testes
@@ -291,7 +301,7 @@ A rota é protegida (`RoleRoute`) e as regras só permitem leitura a `admin`.
 | Comando | O que cobre |
 | --- | --- |
 | `npm test` | Domínio (perfis, situação da conta, auditoria, senha temporária, solicitações), casos de uso dos fluxos A, B e C sobre os repositórios com Firestore em memória, paginação/filtros do histórico |
-| `npm run test:rules` | **Regras do Firestore no emulador oficial** (requer Java 11+): autocadastro, aprovação, alteração de cargo, senha temporária, auditoria e operações administrativas — incluindo tentativas diretas pela API |
+| `npm run test:rules` | **Regras do Firestore no emulador oficial** (requer Java 11+): autocadastro, aprovação, alteração de cargo, senha temporária, auditoria e operações administrativas — incluindo tentativas diretas pela API. Também executa **todas as 112 combinações de filtros do histórico**, conferindo resultado, ordem, paginação e total |
 | `npm run test:funcoes` | **Cloud Function de nova senha temporária** executada nos emuladores de Auth, Firestore e Functions: senha antiga invalidada, troca obrigatória, auditoria sem senha e recusas (sem sessão, não-admin, própria conta, pendente, inexistente) |
 
 ## 11. Desenvolvimento local com emuladores
