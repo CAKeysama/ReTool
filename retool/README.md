@@ -1,73 +1,46 @@
-# ReTool - Gestão de Ativos e Ferramentas Industriais
+# ReTool - Gestão de Dispositivos e Reutilização Industrial
 
-**ReTool** é uma aplicação web moderna voltada para o chão de fábrica, projetada para solucionar a dispersão, a desorganização e o isolamento de dados sobre dispositivos, maquinários e peças em ambientes de manufatura.
+**ReTool** é uma aplicação web para o chão de fábrica que centraliza o cadastro dos dispositivos da ferramentaria e o fluxo de **reutilização de peças**, com rastreabilidade de todas as operações. Projeto do curso DSM da **Fatec Matão** em parceria com a **Baldan**.
 
 ![ReTool Layout Desktop](./docs/images/ReTool%20Dashboard.png)
 
-## 📌 O Problema
-Em indústrias pesadas, o conhecimento sobre uma máquina ou ferramenta geralmente fica restrito à cabeça dos operadores mais antigos ou perdido em planilhas não padronizadas. Quando algo falha, o tempo de inatividade (Downtime) é estendido pela falta de um histórico claro de manutenções, peças de reposição rápidas ou documentação acessível.
+📚 **Documentação completa: [Wiki do projeto](https://github.com/CAKeysama/ReTool/wiki)**
 
-## 🎯 Nossa Solução
-Centralizar o conhecimento mecânico e elétrico numa plataforma que abraça o princípio da **Suposição de Mundo Aberto (Open World Assumption)**. O ReTool entende que o ambiente fabril é caótico: a ausência de um dado (ex: código do fabricante não legível na peça) não pode impedir que o equipamento seja catalogado. Os dados fluem sem bloqueios pesados.
+## O problema
 
-### Principais Recursos
-- **Gestão Aberta:** Cadastros ultra-flexíveis para Dispositivos (sensores, válvulas, CLPs) onde a falta de campo não trava o operador.
-- **Histórico e Rastreio:** Registro de "Utilizações e Ocorrências" acopladas ao dispositivo, formando uma "Linha do tempo" de quebras, revisões ou modificações.
-- **Eficiência e Acessibilidade:** Uso fabril em chão de fábrica exige rapidez. O sistema é operável **100% pelo teclado** através de atalhos globais, permitindo inserções rápidas com luvas (uso sem mouse).
-- **Importação Inteligente em Lote:** Permite importar planilhas Excel/CSV mapeando e criando classificações (Categorias, Famílias de Produtos e Produtos) de forma automática e **livre de duplicidades** (com algoritmo de prevenção de duplicados insensível à capitalização e espaços extras).
-- **Notificações Fluidas:** Sistema de *Toasts* embutido para dar clareza às interações na interface dinâmica.
-- **Design Industrial Premium:** Construído em variáveis puras CSS acompanhando a paleta oficial Baldan (Vermelho e Cinza Aço).
+Em indústrias pesadas, o conhecimento sobre uma ferramenta costuma ficar com os operadores mais antigos ou em planilhas sem padrão. Sem um histórico claro, decidir se um dispositivo pode ser reaproveitado leva tempo.
 
----
+## A solução
 
-## 🏗️ Arquitetura do Sistema (Clean Architecture)
+Uma plataforma única, que aceita dados incompletos: a falta de um campo não impede o cadastro.
 
-O sistema foi refatorado seguindo os princípios de **Clean Architecture**, dividindo a aplicação em camadas bem definidas e desacopladas:
+- **Dispositivos:** cadastro flexível, imagens e PDFs, busca multidimensional, importação de planilhas (CSV/XLSX) sem duplicar classificações e ações em massa.
+- **Reutilizações:** fluxo entre Engenharia e Projetista com filas por perfil, histórico e *hard saving*.
+- **Controle de acesso:** cargos com permissões validadas no servidor (regras do Firestore); cadastro público como Convidado, sujeito a aprovação; solicitações de alteração de cargo; contas com senha temporária e troca obrigatória no primeiro acesso.
+- **Notificações e auditoria:** avisos em tempo real e Histórico de Ações imutável, com filtros, exclusivo da Administração.
+- **Teclado e acessibilidade:** atalhos globais e navegação por setas nas listas.
 
-1. **Domínio (`src/domain/`)**: Contém as entidades puras de negócio (`Dispositivo`, `Categoria`, etc.) e as interfaces de repositórios (`IDispositivosRepository`, etc.) livres de dependências externas.
-2. **Dados (`src/data/`)**: Contém a infraestrutura de dados (Firebase Datasource) e as implementações concretas dos repositórios (`FirestoreDispositivosRepository`, etc.), isolando o SDK do Firebase da interface.
-3. **Aplicação (`src/application/`)**: Contém casos de uso de orquestração de negócios, como o `ImportarLoteUseCase`.
-4. **Apresentação (`src/presentation/`)**: Contém o framework React, com páginas puras, separação de lógica usando hooks controladores (ex: `useDispositivosController`) e gerenciamento de estados.
+## Tecnologias
 
----
+React 19 · Vite · TypeScript · Firebase (Authentication, Cloud Firestore, Cloud Storage, Cloud Functions e Hosting) · Jest. Detalhes em [Arquitetura](https://github.com/CAKeysama/ReTool/wiki/Arquitetura).
 
-## 🧪 Suíte de Testes Unitários
-
-O projeto possui uma suíte de testes automatizados com **Jest** e **ts-jest**, atingindo **mais de 87% de cobertura geral**:
-
-- **Mocks Controlados**: Banco Firestore simulado em memória em [firebaseMock.ts](./src/tests/mocks/firebaseMock.ts) para testes ultra-rápidos locais.
-- **Cobertura**: Cobertura de 100% nos Casos de Uso e Repositórios auxiliares, e mais de 80% nos fluxos principais de CRUD e importação de planilhas.
+## Início rápido
 
 ```bash
-# Executar todos os testes unitários
-npm run test
-
-# Executar testes gerando relatório detalhado de cobertura
-npm run test:coverage
-```
-
----
-
-## 🚀 Como iniciar o projeto (Ambiente Local)
-
-Este projeto foi construído com **React** e **Vite**.
-
-```bash
-# 1. Entre na pasta do projeto
 cd retool
-
-# 2. Instale todas as dependências (incluindo as de desenvolvimento e testes)
 npm install
-
-# 3. Rode o servidor local
-npm run dev
-
-# 4. Rode a suíte de testes para validar a integridade
-npm run test
+cp .env.example .env   # preencha com a configuração do projeto Firebase
+npm run dev            # http://localhost:5173
 ```
 
-> **Acesso:** Por padrão, a aplicação Vite será exposta na porta http://localhost:5173.
+Para rodar sem tocar em dados reais, use os emuladores (`npm run emuladores` e `npm run dev:emuladores`). Veja [Configuração do Ambiente](https://github.com/CAKeysama/ReTool/wiki/Configuração-do-Ambiente).
 
----
+## Testes
 
-Para detalhes técnicos sobre a engenharia de renderização do Contexto, Hooks de atalhos e a arquitetura semântica, acesse o [DOCUMENTATION.md](./DOCUMENTATION.md).
+```bash
+npm test               # domínio, casos de uso e repositórios (Firestore em memória)
+npm run test:rules     # regras do Firestore e consultas do histórico (emulador; requer Java)
+npm run test:funcoes   # Cloud Function (emuladores; requer Java)
+```
+
+Veja [Testes](https://github.com/CAKeysama/ReTool/wiki/Testes) e [Build e Deploy](https://github.com/CAKeysama/ReTool/wiki/Build-e-Deploy).
