@@ -27,6 +27,42 @@ export function normalizarNumeroPeca(codigo?: string): string {
   return (codigo || '').trim().toLowerCase();
 }
 
+// Caracteres invisíveis comuns em planilhas: zero-width (U+200B–U+200D),
+// BOM/ZWNBSP (U+FEFF), soft hyphen (U+00AD), word joiner (U+2060) e controles C0/C1.
+// eslint-disable-next-line no-control-regex
+const INVISIVEIS = /[​-‍﻿­⁠\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+
+/**
+ * Normaliza um valor de Código ou Dispositivo para compor a chave de unicidade.
+ *
+ * Equivalentes (mesma chave): espaços nas pontas, espaços repetidos/NBSP/tab,
+ * caracteres invisíveis, forma Unicode (NFC) e maiúsculas/minúsculas — mesmo
+ * critério de `normalizarNumeroPeca()` e do "Remover Duplicatas" do Excel.
+ *
+ * Distintos (chaves diferentes): zeros à esquerda ("0041" ≠ "41"), casas
+ * decimais ("1.10" ≠ "1.1"), acentuação ("PEÇA" ≠ "PECA") e qualquer outro
+ * caractere visível. O valor numérico 123 e o texto "123" geram a mesma chave.
+ */
+export function normalizarValorChave(valor: unknown): string {
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .normalize('NFC')
+    .replace(INVISIVEIS, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Identidade lógica de um dispositivo importado: Código + Dispositivo (`nome`).
+ * Mesma combinação = um registro; mesmo Código com Dispositivo diferente =
+ * registros distintos. Serializada como tupla JSON para que nenhum separador
+ * possa colidir ("A|B"+"C" ≠ "A"+"B|C").
+ */
+export function chaveCodigoDispositivo(codigo: unknown, nome: unknown): string {
+  return JSON.stringify([normalizarValorChave(codigo), normalizarValorChave(nome)]);
+}
+
 export interface PatchPropagacaoImagem {
   /** Dispositivo que deve receber a imagem. */
   id: string;

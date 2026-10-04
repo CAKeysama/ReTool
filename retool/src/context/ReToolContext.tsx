@@ -14,6 +14,7 @@ import { FirestoreProdutosRepository } from '../data/repositories/FirestoreProdu
 import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 import { ImportarLoteUseCase } from '../application/usecases/ImportarLoteUseCase';
+import { ResultadoImportacaoLote } from '../domain/repositories/IDispositivosRepository';
 import { idNotificacao } from '../domain/entities/notificacao';
 import { useAuth } from './AuthContext';
 
@@ -53,7 +54,7 @@ interface ReToolContextType {
   transicionarReutilizacao: (id: string, para: ReutilizacaoStatus, opts?: { motivo?: string; numeroOs?: string }) => Promise<void>;
   updateReutilizacao: (id: string, data: Partial<Reutilizacao>) => Promise<void>;
   deleteReutilizacao: (id: string, silent?: boolean) => Promise<void>;
-  importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<{ sucesso: number, erros: number }>;
+  importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<ResultadoImportacaoLote>;
   deleteAllData: () => Promise<void>;
   announce: (message: string, showToast?: boolean) => void;
   announcement: string;
@@ -570,20 +571,26 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         familias,
         produtos
       );
+      const inseridos = result.inseridos ?? result.sucesso;
+      const atualizados = result.atualizados ?? 0;
       await registrarAuditoria(
         'importacao',
         'dispositivo',
         'importacao-lote',
         'Importação em lote',
-        `Importação em lote: ${result.sucesso} registro(s) inserido(s)/atualizado(s), ${result.erros} erro(s)`,
-        { enviados: novosDispositivos.length, sucesso: result.sucesso, erros: result.erros }
+        `Importação em lote: ${inseridos} inserido(s), ${atualizados} atualizado(s), ${result.erros} erro(s) de ${novosDispositivos.length} enviado(s)`,
+        { enviados: novosDispositivos.length, sucesso: result.sucesso, inseridos, atualizados, erros: result.erros }
       );
-      announce(`Importação concluída! ${result.sucesso} registros inseridos ou atualizados.`);
+      if (result.erros > 0) {
+        announce(`Importação parcial: ${result.sucesso} de ${novosDispositivos.length} registros gravados, ${result.erros} com erro. Importe o arquivo novamente para gravar os restantes.`);
+      } else {
+        announce(`Importação concluída! ${inseridos} inseridos e ${atualizados} atualizados (${result.sucesso} de ${novosDispositivos.length}).`);
+      }
       return result;
     } catch (error) {
       console.error('Erro na importação em lote:', error);
       announce('Erro ao processar importação em lote.');
-      return { sucesso: 0, erros: novosDispositivos.length };
+      return { sucesso: 0, erros: novosDispositivos.length, falhas: [error instanceof Error ? error.message : String(error)] };
     }
   };
 

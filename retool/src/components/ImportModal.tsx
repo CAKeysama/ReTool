@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import * as XLSX from 'xlsx';
 import { AccessibleModal } from './AccessibleModal';
 import { useReTool } from '../context/ReToolContext';
 import { Dispositivo } from '../domain/entities/dispositivo';
+import { lerPlanilha, processarPlanilhaDispositivos, ResumoImportacao } from '../application/importacao/planilhaDispositivos';
 import { Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface ImportModalProps {
@@ -18,6 +18,8 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
   const [newFamilias, setNewFamilias] = useState<string[]>([]);
   const [newProdutos, setNewProdutos] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isReading, setIsReading] = useState(false);
+  const [resumo, setResumo] = useState<ResumoImportacao | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [defaultCategoriaId, setDefaultCategoriaId] = useState<string>('');
@@ -25,6 +27,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
   const resetState = () => {
     setFile(null);
     setParsedData([]);
+    setResumo(null);
     setErrorMsg('');
     setNewCategorias([]);
     setNewFamilias([]);
@@ -74,164 +77,36 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
     }
   };
 
-  const processFile = () => {
+  const processFile = async () => {
     if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        
-        const devices: Partial<Dispositivo>[] = [];
-        const missingCategories = new Set<string>();
-        const missingFamilias = new Set<string>();
-        const missingProdutos = new Set<string>();
 
-        workbook.SheetNames.forEach(sheetName => {
-            const sheet = workbook.Sheets[sheetName];
-            const json = XLSX.utils.sheet_to_json(sheet) as any[];
-            if (json.length === 0) return;
-               
-            const getColName = (row: any, ...possibilities: string[]) => {
-                const keys = Object.keys(row);
-                for (const p of possibilities) {
-                    const found = keys.find(k => k.trim().toLowerCase() === p.toLowerCase());
-                    if (found) return found;
-                }
-                return null;
-            };
+    setIsReading(true);
+    try {
+      const conteudo = await file.arrayBuffer();
+      const abas = lerPlanilha(conteudo, file.name);
+      const resultado = processarPlanilhaDispositivos(abas, {
+        categorias,
+        familias,
+        produtos,
+        defaultCategoriaId,
+      });
 
-            json.forEach((row, index) => {
-              try {
-                const getStr = (val: any) => val ? String(val).trim() : '';
-                
-                const colPeso = getColName(row, 'Peso', 'Peso ', 'Peso (Kg)', 'Peso Dispositivo (Kg)');
-                const colFamilia = getColName(row, 'Familia', 'Familia_do_Produto', 'Familia do Produto');
-                const colProduto = getColName(row, 'Produto', 'PRODUTO');
-                // Usuário pediu para trocar Categoria por Tipo de Dispositivo
-                const colCategoria = getColName(row, 'Categoria', 'CATEGORIA', 'Tipo de Dispositivo', 'Tipo Dispositivo', 'Tipo');
-                const colCodigo = getColName(row, 'Código', 'Codigo', 'Código da Peça', 'Codigo da Peca');
-                const colDescricao = getColName(row, 'Descrição', 'Descricao', 'Descrição da Peça', 'Descricao da Peca');
-                const colNome = getColName(row, 'Dispositivo', 'Nº Dispositivo', 'N Dispositivo', 'Nome');
-                const colPalavraChave = getColName(row, 'Palavra chave', 'Palavras chaves', 'Palavras-chave', 'Palavras chave');
-
-                if (!colCodigo && !colNome) return;
-
-                const rawPeso = colPeso ? getStr(row[colPeso]) : '';
-                const pesoConvertido = rawPeso ? parseFloat(rawPeso.replace(',', '.')) : 0;
-
-                const familia = colFamilia ? getStr(row[colFamilia]) : '';
-                const produto = colProduto ? getStr(row[colProduto]) : '';
-                const categoriaNome = colCategoria ? getStr(row[colCategoria]) : '';
-                const codigo = colCodigo ? getStr(row[colCodigo]) : '';
-                const descricao = colDescricao ? getStr(row[colDescricao]).replace(/[\r\n]+/g, ' ') : '';
-                const nome = colNome ? getStr(row[colNome]) : '';
-                const palavrasRaw = colPalavraChave ? getStr(row[colPalavraChave]) : '';
-
-                let catId = defaultCategoriaId; 
-                if (categoriaNome) {
-                  const catExists = categorias.find(c => c.nome?.toLowerCase().trim() === categoriaNome.toLowerCase().trim());
-                  if (catExists) {
-                    catId = catExists.id;
-                  } else {
-                    const existingInMissing = Array.from(missingCategories).find(
-                      name => name.toLowerCase().trim() === categoriaNome.toLowerCase().trim()
-                    );
-                    if (existingInMissing) {
-                      catId = existingInMissing;
-                    } else {
-                      missingCategories.add(categoriaNome);
-                      catId = categoriaNome;
-                    }
-                  }
-                }
-
-                let famId = '';
-                if (familia) {
-                  const famExists = familias.find(f => f.nome?.toLowerCase().trim() === familia.toLowerCase().trim());
-                  if (famExists) {
-                    famId = famExists.id;
-                  } else {
-                    const existingInMissing = Array.from(missingFamilias).find(
-                      name => name.toLowerCase().trim() === familia.toLowerCase().trim()
-                    );
-                    if (existingInMissing) {
-                      famId = existingInMissing;
-                    } else {
-                      missingFamilias.add(familia);
-                      famId = familia;
-                    }
-                  }
-                }
-
-                let prodId = '';
-                if (produto) {
-                  const prodExists = produtos.find(p => p.nome?.toLowerCase().trim() === produto.toLowerCase().trim());
-                  if (prodExists) {
-                    prodId = prodExists.id;
-                  } else {
-                    const existingInMissing = Array.from(missingProdutos).find(
-                      name => name.toLowerCase().trim() === produto.toLowerCase().trim()
-                    );
-                    if (existingInMissing) {
-                      prodId = existingInMissing;
-                    } else {
-                      missingProdutos.add(produto);
-                      prodId = produto;
-                    }
-                  }
-                }
-
-                const palavrasChave = palavrasRaw 
-                  ? palavrasRaw.split(',').map(p => p.trim()).filter(Boolean)
-                  : [];
-
-                if (codigo || nome) {
-                  const existingIdx = devices.findIndex(d => d.codigo === codigo && d.nome === nome);
-                  
-                  const deviceObj = {
-                    familiaId: famId,
-                    produtoId: prodId,
-                    categoriaId: catId,
-                    codigo: codigo,
-                    descricao: descricao,
-                    nome: nome,
-                    peso: isNaN(pesoConvertido) ? '' : String(pesoConvertido),
-                    palavrasChave: palavrasChave,
-                    imagemPeca: '',
-                    imagemDispositivo: ''
-                  };
-
-                  if (existingIdx >= 0) {
-                     devices[existingIdx] = { ...devices[existingIdx], ...deviceObj };
-                  } else {
-                     devices.push(deviceObj);
-                  }
-                }
-              } catch (rowErr) {
-                console.warn(`Erro ao processar linha Tabular ${index + 2} na aba ${sheetName}:`, rowErr);
-              }
-            });
-        });
-
-        const finalDevices = devices.filter(d => d.codigo || d.nome);
-
-        if (finalDevices.length === 0) {
-           setErrorMsg('Nenhum registro válido encontrado. Verifique o formato do arquivo.');
-        } else {
-           setParsedData(finalDevices);
-           setNewCategorias(Array.from(missingCategories));
-           setNewFamilias(Array.from(missingFamilias));
-           setNewProdutos(Array.from(missingProdutos));
-           setErrorMsg('');
-        }
-      } catch (err) {
-        console.error('Erro ao ler planilha:', err);
-        setErrorMsg('Ocorreu um erro ao ler o arquivo. Verifique o formato.');
+      setResumo(resultado.resumo);
+      if (resultado.dispositivos.length === 0) {
+        setErrorMsg('Nenhum registro válido encontrado. Verifique se a planilha tem as colunas Código e Dispositivo.');
+      } else {
+        setParsedData(resultado.dispositivos);
+        setNewCategorias(resultado.novasCategorias);
+        setNewFamilias(resultado.novasFamilias);
+        setNewProdutos(resultado.novosProdutos);
+        setErrorMsg('');
       }
-    };
-    reader.readAsBinaryString(file);
+    } catch (err) {
+      console.error('Erro ao ler planilha:', err);
+      setErrorMsg('Ocorreu um erro ao ler o arquivo. Verifique o formato.');
+    } finally {
+      setIsReading(false);
+    }
   };
 
   const handleConfirm = async () => {
@@ -239,7 +114,16 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
     
     setIsProcessing(true);
     try {
-      await importarDispositivosEmLote(parsedData, newCategorias, newFamilias, newProdutos);
+      const result = await importarDispositivosEmLote(parsedData, newCategorias, newFamilias, newProdutos);
+      if (result.erros > 0) {
+        // Não fecha: o usuário precisa ver que nem tudo foi gravado.
+        setErrorMsg(
+          `Importação parcial: ${result.sucesso} de ${parsedData.length} registros gravados e ${result.erros} com erro. ` +
+          'Clique em "Salvar Importação" novamente para gravar os restantes (os já gravados não serão duplicados).'
+        );
+        return;
+      }
+      resetState();
       onClose();
     } catch (err) {
       setErrorMsg('Falha ao importar registros.');
@@ -313,8 +197,8 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                     ))}
                   </select>
 
-                  <button className="btn" onClick={processFile} disabled={isProcessing} style={{ width: '100%' }}>
-                    Processar Planilha
+                  <button className="btn" onClick={processFile} disabled={isProcessing || isReading} style={{ width: '100%' }}>
+                    {isReading ? 'Processando planilha...' : 'Processar Planilha'}
                   </button>
                 </div>
               )}
@@ -329,17 +213,36 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
           </div>
         )}
 
-        {parsedData.length > 0 && !errorMsg && (
+        {parsedData.length > 0 && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--spacing-md)' }}>
               <CheckCircle2 size={20} color="var(--color-success)" />
-              <span style={{ fontWeight: 600 }}>{parsedData.length} registros válidos encontrados</span>
+              <span style={{ fontWeight: 600 }}>{parsedData.length.toLocaleString('pt-BR')} combinações únicas Código + Dispositivo</span>
               {newCategorias.length > 0 && (
                 <span style={{ fontSize: '0.85rem', color: '#eab308', marginLeft: 'auto' }}>
                   ({newCategorias.length} novas categorias serão criadas)
                 </span>
               )}
             </div>
+
+            {resumo && (
+              <div style={{ fontSize: '0.85rem', color: 'var(--color-text-body)', marginBottom: 'var(--spacing-md)' }}>
+                <div>
+                  {resumo.linhasLidas.toLocaleString('pt-BR')} linhas lidas · {resumo.duplicadasRemovidas.toLocaleString('pt-BR')} repetições da mesma combinação removidas
+                  {resumo.linhasSemChave > 0 && <> · {resumo.linhasSemChave.toLocaleString('pt-BR')} linhas sem Código e Dispositivo ignoradas</>}
+                </div>
+                {resumo.abas.filter(a => !a.ignorada).map(a => (
+                  <div key={a.nome}>
+                    Aba "{a.nome}": {a.linhas.toLocaleString('pt-BR')} linhas · Código = {a.colunaCodigo ? `"${a.colunaCodigo}"` : 'não encontrada'} · Dispositivo = {a.colunaDispositivo ? `"${a.colunaDispositivo}"` : 'não encontrada'}
+                  </div>
+                ))}
+                {resumo.avisos.map((aviso, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', color: '#b45309', fontWeight: 600 }}>
+                    <AlertCircle size={16} /> {aviso}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 'var(--radius)' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
@@ -368,7 +271,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                   {parsedData.length > 10 && (
                     <tr>
                       <td colSpan={4} style={{ padding: '12px', textAlign: 'center', color: 'var(--color-text-body)' }}>
-                        E mais {parsedData.length - 10} registros...
+                        E mais {(parsedData.length - 10).toLocaleString('pt-BR')} registros...
                       </td>
                     </tr>
                   )}
@@ -377,7 +280,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: 'var(--spacing-lg)' }}>
-              <button className="btn" onClick={() => { setParsedData([]); setErrorMsg(''); }} disabled={isProcessing}>
+              <button className="btn" onClick={() => { setParsedData([]); setResumo(null); setErrorMsg(''); }} disabled={isProcessing}>
                 Voltar e Alterar
               </button>
               <button 
@@ -386,7 +289,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                 disabled={isProcessing}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
               >
-                {isProcessing ? 'Importando...' : `Salvar Importação (${parsedData.length})`}
+                {isProcessing ? 'Importando...' : `Salvar Importação (${parsedData.length.toLocaleString('pt-BR')})`}
               </button>
             </div>
           </div>
