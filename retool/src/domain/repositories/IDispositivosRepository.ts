@@ -14,6 +14,21 @@ export interface ResultadoImportacaoLote {
   falhas?: string[];
 }
 
+/** Progresso real de uma importação (contado pelo trabalho já feito). */
+export interface ProgressoImportacao {
+  etapa: 'classificacoes' | 'lendo-existentes' | 'gravando' | 'concluido';
+  feitos: number;
+  total: number;
+  lote?: number;
+  totalLotes?: number;
+}
+
+export interface OpcoesImportacaoLote {
+  onProgresso?: (p: ProgressoImportacao) => void;
+  /** Cancela entre lotes; o que já foi gravado continua gravado (reimportar completa). */
+  sinal?: AbortSignal;
+}
+
 export interface IDispositivosRepository {
   subscribeAll(callback: (dispositivos: Dispositivo[]) => void): () => void;
   add(dispositivo: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }): Promise<string>;
@@ -26,7 +41,8 @@ export interface IDispositivosRepository {
     newProdutosNomes: string[],
     categoriasExistentes: Categoria[],
     familiasExistentes: Familia[],
-    produtosExistentes: Produto[]
+    produtosExistentes: Produto[],
+    opcoes?: OpcoesImportacaoLote
   ): Promise<ResultadoImportacaoLote>;
   /** Exclui documentos em lotes de 500; falhas de lote são devolvidas, não lançadas. */
   excluirEmLote(ids: string[]): Promise<{ excluidos: number; erros: number; falhas: string[] }>;
