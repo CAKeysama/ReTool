@@ -28,4 +28,6 @@ export interface IDispositivosRepository {
     familiasExistentes: Familia[],
     produtosExistentes: Produto[]
   ): Promise<ResultadoImportacaoLote>;
+  /** Exclui documentos em lotes de 500; falhas de lote são devolvidas, não lançadas. */
+  excluirEmLote(ids: string[]): Promise<{ excluidos: number; erros: number; falhas: string[] }>;
 }

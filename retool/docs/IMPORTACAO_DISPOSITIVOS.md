@@ -79,6 +79,28 @@ importadas 18.532 (−1.089). Mecanismos encontrados no fluxo antigo:
 - Falha de gravação no meio do processo interrompia sem informar quantos
   registros foram gravados.
 
+## Limpeza de duplicados deixados por importações antigas
+
+Com a gravação antiga, importar a mesma base de novo fazia vários documentos
+ficarem com a mesma combinação, e a combinação original sumia. Com o arquivo
+oficial (472.976 linhas, 19.621 combinações), uma 2ª importação deixava cerca
+de 18.550–18.600 combinações distintas em 19.621 documentos.
+
+Na tela **Dispositivos**, o botão **Duplicados** (somente Administradora)
+abre `DuplicadosModal`, que usa `planejarLimpezaDuplicados()`:
+
+- agrupa os documentos pela chave Código + Dispositivo e mostra o total de
+  documentos, as combinações distintas e as repetidas;
+- em cada grupo mantém o primeiro documento com vínculos (reutilizações,
+  imagens, anexos, observações) ou, se nenhum tiver, o mais antigo;
+- **nunca apaga** um repetido que tenha vínculos: ele aparece como "revisar";
+- **Baixar lista (.csv)** exporta manter/remover/revisar com os ids;
+- só remove depois de marcar "Revisei a lista". A remoção é feita em lotes
+  de 500 e gera um registro de auditoria com os ids apagados.
+
+Ordem recomendada: rodar a limpeza e depois importar o arquivo de novo (com a
+correção), para recriar as combinações que tinham sido sobrescritas.
+
 ## Como validar novamente
 
 ```bash

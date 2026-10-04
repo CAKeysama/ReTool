@@ -120,3 +120,73 @@ export function calcularPropagacaoImagens(
   return resultados;
 }
 
+
+export interface GrupoDuplicado {
+  chave: string;
+  codigo?: string;
+  nome?: string;
+  /** Documento mantido (o primeiro com vínculos; senão o mais antigo). */
+  manter: Dispositivo;
+  /** Repetidos sem nenhum vínculo: podem ser removidos com segurança. */
+  remover: Dispositivo[];
+  /** Repetidos com vínculos (reutilizações, imagens, anexos, observações): só revisão manual. */
+  revisar: Dispositivo[];
+}
+
+export interface PlanoLimpezaDuplicados {
+  grupos: GrupoDuplicado[];
+  totalDocumentos: number;
+  combinacoesDistintas: number;
+  totalRemover: number;
+  totalRevisar: number;
+}
+
+/**
+ * Planeja a limpeza de documentos que repetem a mesma combinação
+ * Código + Dispositivo (resíduo de importações antigas que casavam só pelo
+ * Código). Não apaga nada: apenas diz o que é seguro remover. Um documento
+ * com qualquer vínculo nunca entra em `remover`.
+ */
+export function planejarLimpezaDuplicados(
+  dispositivos: Dispositivo[],
+  idsComReutilizacao: Set<string>
+): PlanoLimpezaDuplicados {
+  const temVinculo = (d: Dispositivo) =>
+    idsComReutilizacao.has(d.id) ||
+    !!d.imagemPeca || !!d.imagemDispositivo ||
+    (d.anexos?.length ?? 0) > 0 ||
+    !!d.observacoes?.trim();
+
+  const porChave = new Map<string, Dispositivo[]>();
+  for (const d of dispositivos) {
+    const chave = chaveCodigoDispositivo(d.codigo, d.nome);
+    const lista = porChave.get(chave);
+    if (lista) lista.push(d); else porChave.set(chave, [d]);
+  }
+
+  const grupos: GrupoDuplicado[] = [];
+  for (const [chave, lista] of porChave) {
+    if (lista.length < 2) continue;
+    const ordenada = [...lista].sort((a, b) =>
+      (a.dataCriacao || '').localeCompare(b.dataCriacao || '') || a.id.localeCompare(b.id)
+    );
+    const manter = ordenada.find(temVinculo) ?? ordenada[0];
+    const outros = ordenada.filter(d => d !== manter);
+    grupos.push({
+      chave,
+      codigo: manter.codigo,
+      nome: manter.nome,
+      manter,
+      remover: outros.filter(d => !temVinculo(d)),
+      revisar: outros.filter(temVinculo),
+    });
+  }
+
+  return {
+    grupos,
+    totalDocumentos: dispositivos.length,
+    combinacoesDistintas: porChave.size,
+    totalRemover: grupos.reduce((n, g) => n + g.remover.length, 0),
+    totalRevisar: grupos.reduce((n, g) => n + g.revisar.length, 0),
+  };
+}

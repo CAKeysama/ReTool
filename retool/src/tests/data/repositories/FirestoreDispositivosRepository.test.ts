@@ -234,4 +234,12 @@ describe('FirestoreDispositivosRepository', () => {
       }
     });
   });
+
+  test('excluirEmLote remove todos os ids em lotes de 500 (inclusive o último)', async () => {
+    for (let i = 0; i < 1203; i++) mockDbState.dispositivos.push({ id: `d${i}`, codigo: 'A', nome: String(i) });
+    const ids = Array.from({ length: 1201 }, (_, i) => `d${i}`);
+    const result = await repository.excluirEmLote(ids);
+    expect(result).toEqual({ excluidos: 1201, erros: 0, falhas: [] });
+    expect(mockDbState.dispositivos.map(d => d.id)).toEqual(['d1201', 'd1202']);
+  });
 });

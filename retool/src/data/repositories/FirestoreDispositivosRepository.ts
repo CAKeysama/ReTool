@@ -234,4 +234,24 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
 
     return { sucesso: inseridos + atualizados, erros, inseridos, atualizados, falhas };
   }
+
+  async excluirEmLote(ids: string[]): Promise<{ excluidos: number; erros: number; falhas: string[] }> {
+    let excluidos = 0;
+    let erros = 0;
+    const falhas: string[] = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      const lote = ids.slice(i, i + 500);
+      const batch = writeBatch(db);
+      for (const id of lote) batch.delete(doc(db, 'dispositivos', id));
+      try {
+        await batch.commit();
+        excluidos += lote.length;
+      } catch (error) {
+        erros += lote.length;
+        falhas.push(error instanceof Error ? error.message : String(error));
+        console.error('Falha ao excluir lote de dispositivos:', error);
+      }
+    }
+    return { excluidos, erros, falhas };
+  }
 }
