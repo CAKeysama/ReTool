@@ -1,7 +1,7 @@
 import { db } from '../datasources/firebase';
 import {
   collection, doc, query, where, orderBy, limit, startAfter, documentId,
-  getDocs, getDoc, onSnapshot, getCountFromServer,
+  getDocs, getDocsFromServer, getDoc, onSnapshot, getCountFromServer,
   QueryDocumentSnapshot, DocumentData, QueryConstraint
 } from 'firebase/firestore';
 import { Dispositivo } from '../../domain/entities/dispositivo';
@@ -152,11 +152,18 @@ export async function varrerColecao<T>(
   for (;;) {
     if (sinal?.aborted) throw new DOMException('Operação cancelada', 'AbortError');
     const q = query(ref, orderBy(documentId()), ...(cursor ? [startAfter(cursor)] : []), limit(pagina));
-    const snap = await medirConsulta(`${nome}:varredura`, () => getDocs(q), s => s.size);
+    // Do servidor: sem conexão, getDocs devolveria só o que está em cache.
+    const snap = await medirConsulta(`${nome}:varredura`, () => getDocsFromServer(q), s => s.size);
     for (const d of snap.docs) out.push(converter(d));
     onProgresso?.({ lidos: out.length, total });
     if (snap.size < pagina) break;
     cursor = snap.docs[snap.docs.length - 1];
+  }
+  // Varreduras alimentam ações administrativas (reconstruir o índice,
+  // duplicados, apagar tudo): uma leitura incompleta não pode passar por
+  // completa.
+  if (total !== null && out.length < total) {
+    throw new Error(`Leitura incompleta de ${nome}: ${out.length} de ${total}. Verifique a conexão e tente de novo.`);
   }
   return out;
 }

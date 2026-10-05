@@ -272,6 +272,40 @@ describe('FirestoreDispositivosRepository', () => {
       expect(eventos[eventos.length - 1]).toEqual({ etapa: 'concluido', feitos: 1234, total: 1234 });
     });
 
+    test('leitura dos existentes incompleta: lê de novo; se ainda faltar, não grava nada', async () => {
+      const existentes = lista(1200);
+      await repository.importarLote(existentes, [], [], [], [], [], []);
+      expect(mockDbState.dispositivos).toHaveLength(1200);
+
+      const fs = jest.requireMock('firebase/firestore') as { getDocsFromServer: jest.Mock<any> };
+      const original = fs.getDocsFromServer.getMockImplementation()!;
+      // Toda leitura devolve uma página curta (como uma resposta truncada ou o cache sem conexão).
+      fs.getDocsFromServer.mockImplementation(async (q: any) => {
+        const r: any = await original(q);
+        const docs = r.docs.slice(0, 198);
+        return { docs, size: docs.length, empty: docs.length === 0 };
+      });
+      try {
+        await expect(repository.importarLote(lista(1500), [], [], [], [], [], []))
+          .rejects.toThrow(/incompleta \(198 de 1\.200\)/);
+        expect(mockDbState.dispositivos).toHaveLength(1200); // nenhuma duplicata gravada
+
+        // Falha só na primeira tentativa: a segunda leitura completa segue normalmente.
+        let chamadas = 0;
+        fs.getDocsFromServer.mockImplementation(async (q: any) => {
+          const r: any = await original(q);
+          if (chamadas++ > 0) return r;
+          const docs = r.docs.slice(0, 198);
+          return { docs, size: docs.length, empty: docs.length === 0 };
+        });
+        const r = await repository.importarLote(lista(1500), [], [], [], [], [], []);
+        expect(r).toMatchObject({ inseridos: 300, ignoradosSemAlteracao: 1200 });
+        expect(mockDbState.dispositivos).toHaveLength(1500);
+      } finally {
+        fs.getDocsFromServer.mockImplementation(original);
+      }
+    });
+
     test('cancelamento entre lotes: para, informa naoGravados e o já gravado fica', async () => {
       const controle = new AbortController();
       const r = await repository.importarLote(lista(1500), [], [], [], [], [], [], {

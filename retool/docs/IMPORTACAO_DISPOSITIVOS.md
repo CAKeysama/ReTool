@@ -94,8 +94,17 @@ com cota diária de operações do Firestore (~17 mil operações no uso do clie
 - **Leitura dos existentes paginada**: `orderBy(documentId())` + `limit(1000)`
   + `startAfter`, em vez de um `getDocs` da coleção inteira. O custo em
   leituras é o mesmo (1 por documento), mas há progresso, cancelamento e
-  nenhuma resposta gigante. O estado final (`documentosFinais`) é devolvido ao
-  contexto para refazer o catálogo de busca sem reler a coleção.
+  nenhuma resposta gigante. Cada página vem do servidor (`getDocsFromServer`:
+  sem conexão, falha em vez de devolver o cache) e o total lido é conferido
+  com `count()`. Se faltar algo, lê de novo uma vez; se ainda faltar, a
+  importação para **antes de gravar** com "A leitura dos dispositivos
+  existentes veio incompleta". Uma leitura incompleta faria linhas já
+  existentes parecerem novas e serem gravadas em duplicidade; isso aconteceu
+  uma vez nas medições no emulador (10.198 de 15.400 lidos) e o teste
+  `leitura dos existentes incompleta` cobre o caso. O estado final
+  (`documentosFinais`) é devolvido ao contexto para refazer o catálogo de
+  busca sem reler a coleção (só quando algo foi gravado ou o catálogo não
+  bate com o banco).
 - **Planejamento** (`planejarGravacao`, `gravacaoDispositivos.ts`): compara,
   para cada combinação, os campos que seriam gravados com o documento atual
   (vazio = ausente; imagens vazias da planilha não contam nem apagam).
@@ -103,11 +112,11 @@ com cota diária de operações do Firestore (~17 mil operações no uso do clie
 
 ### Custo em operações do Firestore
 
-- **Leituras**: com o catálogo de busca em dia (`entradas === count()`), os
-  existentes vêm do catálogo: 1 leitura da meta, as partes que mudaram desde
-  a última visita (no máximo uma por parte; 18 partes com ~13.400
-  dispositivos) e o `count()` (1 leitura a cada 1.000 documentos). Sem
-  catálogo, ou com catálogo divergente, a leitura é paginada: 1 por documento.
+- **Leituras**: 1 por dispositivo existente, sempre do servidor, mais o
+  `count()` de conferência (1 a cada 1.000 documentos). O catálogo de busca
+  não é usado como fonte: ele pode ser gravado por quem edita e não prova o
+  conteúdo atual de cada documento, e um engano ali vira duplicata ou
+  sobrescrita no banco.
 - **Escritas**: só registros **novos ou alterados** (+ categorias, famílias e
   produtos novos), mais, por lote, uma operação em cada parte do catálogo
   tocada e a meta. Lotes de até 500 operações; o tamanho do lote encolhe para
@@ -116,21 +125,25 @@ com cota diária de operações do Firestore (~17 mil operações no uso do clie
 Medido pela tela, ponta a ponta, no emulador (build de produção, planilha de
 369.600 linhas e 15.400 combinações; banco com 13.400 dispositivos iguais):
 
-| Cenário | Leituras | Escritas | Tempo de gravação |
+| Cenário | Leituras | Escritas | Tempo (ler + gravar) |
 |---|---|---|---|
-| Primeira importação: 13.400 iguais + 2.000 novos | 159 | 2.000 dispositivos + catálogo + 1 auditoria | 33 s |
-| Reimportar o mesmo arquivo (tudo igual) | 51 | 1 (auditoria) | 0,9 s |
+| Primeira importação: 13.400 iguais + 2.000 novos | 13.440 | 2.000 dispositivos + catálogo por lote + reconstrução (~22) + 1 auditoria | 16,7 s |
+| Reimportar o mesmo arquivo (tudo igual), 3 rodadas | 15.435 | 1 (auditoria) | 7,1 a 8,6 s |
 
-O processamento da planilha (no Worker) levou cerca de 7 s em cada rodada.
+O processamento da planilha (no Worker) levou de 9 a 11 s em cada rodada.
 
 Estimativa para o arquivo oficial (19.621 combinações) sobre o banco
 publicado (~13.400):
 
 | Cenário | Antes | Agora |
 |---|---|---|
-| Reimportar sobre banco já igual | 13.400 leituras + 19.621 escritas = **33.021** (estoura a cota) | ~50 leituras + **0** escritas de dispositivos |
-| Banco com 13.400 iguais + 6.221 novos | 33.021 | ~160 leituras + 6.221 escritas + ~13 lotes × (até 19 operações do catálogo) |
-| Catálogo ausente ou divergente | 33.021 | 13.400 leituras + só os novos/alterados (+ reconstrução do catálogo: ~20 escritas) |
+| Reimportar sobre banco já igual | 13.400 leituras + 19.621 escritas = **33.021** (estoura a cota) | ~19.650 leituras (o banco já terá as 19.621) + **0** escritas de dispositivos |
+| Banco com 13.400 iguais + 6.221 novos | 33.021 | ~13.420 leituras + 6.221 escritas + ~13 lotes × (até 19 operações do catálogo) + ~25 da reconstrução ≈ **19.900** |
+
+Na cota de ~17 mil operações por dia, a primeira importação do arquivo
+oficial ainda não cabe num dia só: a leitura dos existentes sozinha consome
+~13.400. Quando a cota acaba, a importação para no lote recusado e o mesmo
+arquivo, importado no dia seguinte, completa sem duplicar (ver abaixo).
 
 ### Cota esgotada (`resource-exhausted`)
 

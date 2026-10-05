@@ -1,6 +1,6 @@
 import { db } from '../datasources/firebase';
 import {
-  collection, doc, writeBatch, getDocs, query, orderBy, limit, startAfter, documentId,
+  collection, doc, writeBatch, getDocsFromServer, getCountFromServer, query, orderBy, limit, startAfter, documentId,
   QueryConstraint,
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,6 +28,36 @@ const mensagemDe = (erro: unknown) => (erro instanceof Error ? erro.message : St
 const chaveNome = (v: string) => v.toLowerCase().trim();
 
 /**
+ * Lê todos os dispositivos e confere com count() no servidor. Uma leitura
+ * que volta incompleta (página curta antes do fim, cache sem conexão)
+ * faria linhas já existentes parecerem novas e serem gravadas em
+ * duplicidade; por isso, se faltar algo, lê de novo uma vez e, se ainda
+ * faltar, interrompe antes de qualquer escrita.
+ */
+async function lerExistentesConferido(
+  sinal: AbortSignal | undefined,
+  avisar: (lidos: number) => void
+): Promise<Map<string, Dispositivo>> {
+  for (let tentativa = 1; ; tentativa++) {
+    const existentes = await lerExistentesPaginado(sinal, avisar);
+    let esperado: number;
+    try {
+      esperado = (await getCountFromServer(collection(db, 'dispositivos'))).data().count;
+    } catch (erro) {
+      if (ehErroDeCota(erro)) throw new InterrupcaoImportacao('cota', erro);
+      throw erro;
+    }
+    if (existentes.size >= esperado) return existentes;
+    if (tentativa >= 2) {
+      throw new Error(
+        `A leitura dos dispositivos existentes veio incompleta (${existentes.size.toLocaleString('pt-BR')} de ${esperado.toLocaleString('pt-BR')}). `
+        + 'Nada foi gravado. Verifique a conexão e importe de novo.'
+      );
+    }
+  }
+}
+
+/**
  * Lê todos os dispositivos em páginas de `TAMANHO_PAGINA_LEITURA`, ordenadas
  * pelo id do documento (orderBy(documentId()) + limit + startAfter), avisando
  * o progresso a cada página. O consumo é o mesmo de um getDocs da coleção
@@ -46,7 +76,8 @@ async function lerExistentesPaginado(
     if (ultimoId !== null) restricoes.push(startAfter(ultimoId));
     let pagina;
     try {
-      pagina = await getDocs(query(collection(db, 'dispositivos'), ...restricoes));
+      // Sempre do servidor: sem conexão, getDocs devolveria só o que está em cache.
+      pagina = await getDocsFromServer(query(collection(db, 'dispositivos'), ...restricoes));
     } catch (erro) {
       if (ehErroDeCota(erro)) throw new InterrupcaoImportacao('cota', erro);
       throw erro;
@@ -166,7 +197,7 @@ export async function importarLoteFirestore(
     try {
       const estimado = opcoes?.totalExistentesEstimado ?? 0;
       progresso({ etapa: 'lendo-existentes', feitos: 0, total: estimado });
-      existentes = await lerExistentesPaginado(sinal, lidos => {
+      existentes = await lerExistentesConferido(sinal, lidos => {
         progresso({ etapa: 'lendo-existentes', feitos: lidos, total: Math.max(estimado, lidos) });
       });
     } catch (erro) {

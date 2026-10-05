@@ -30,8 +30,9 @@ desacelerada 4 vezes (equivale a um notebook corporativo modesto).
 | Próxima página | (tudo em memória) | 168 ms |
 | JavaScript inicial (gzip) | 357 KB | 223 KB, `xlsx` só dentro do Worker |
 | Processar a planilha oficial (472.976 linhas) | 33,3 s com a tela travada | 11,8 s em segundo plano, maior bloqueio da tela 33 ms |
-| Reimportar planilha igual ao banco (369.600 linhas, 15.400 combinações) | 1 leitura por dispositivo + regravava tudo | 51 leituras, 0 dispositivos regravados, 0,9 s |
-| Importar 2.000 novos sobre 13.400 iguais | idem | 159 leituras, 2.000 gravações, 33 s |
+| Reimportar planilha igual ao banco (369.600 linhas, 15.400 combinações) | 1 leitura por dispositivo + regravava tudo | 15.435 leituras, 0 dispositivos regravados, 7 a 9 s |
+| Importar 2.000 novos sobre 13.400 iguais | idem | 13.440 leituras, 2.000 gravações, 16,7 s |
+| Abrir Reutilizações (3.000 registros, acervo normalizado) | 3.000 leituras | 64 leituras |
 
 Os números da importação ponta a ponta estão em
 [IMPORTACAO_DISPOSITIVOS.md](IMPORTACAO_DISPOSITIVOS.md#desempenho-e-custo-arquivos-grandes).

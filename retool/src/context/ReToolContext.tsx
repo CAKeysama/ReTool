@@ -872,7 +872,11 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
           const versoesSomadas = (m: MetaIndice | null) => Object.values(m?.versoes || {}).reduce((a, b) => a + b, 0);
           const tocadoSoPorEsta = !metaInicial || (metaAgora && metaAgora.geracao === metaInicial.geracao
             && versoesSomadas(metaAgora) - versoesSomadas(metaInicial) === (result.documentosGravados ?? 0));
-          if (tocadoSoPorEsta) {
+          // Nada gravado e catálogo do mesmo tamanho do banco: refazer só
+          // mudaria as versões e faria todos os navegadores baixarem o
+          // catálogo de novo.
+          const semMudanca = !result.documentosGravados && metaAgora?.total === result.documentosFinais.length;
+          if (tocadoSoPorEsta && !semMudanca) {
             const { alteradoNoMeio } = await reconstruirIndice(result.documentosFinais, metaAgora);
             if (alteradoNoMeio) console.warn('Índice de busca: houve gravação durante a reconstrução; atualize o índice para incluí-la.');
           }

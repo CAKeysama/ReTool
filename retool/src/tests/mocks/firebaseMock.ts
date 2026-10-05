@@ -119,6 +119,10 @@ jest.mock('firebase/firestore', () => {
       callback({ docs, metadata: { fromCache: false } });
       return () => {}; // return unsubscribe function
     }),
+    getDocsFromServer: jest.fn(async (colRef: any) => {
+      const fs = jest.requireMock('firebase/firestore') as any;
+      return fs.getDocs(colRef);
+    }),
     getDocs: jest.fn(async (colRef: any) => {
       const col = colRef.name as keyof typeof mockDbState;
       let itens = [...(mockDbState[col] || [])];
