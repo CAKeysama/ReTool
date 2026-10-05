@@ -1,15 +1,30 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReToolProvider } from './context/ReToolContext';
 import { Layout } from './components/Layout';
-import { Home } from './pages/Home';
-import { Dispositivos } from './pages/Dispositivos';
-import { DispositivoDetails } from './pages/DispositivoDetails';
-import { Categorias } from './pages/Categorias';
-import { Reutilizacoes } from './pages/Reutilizacoes';
-import { Sobre } from './pages/Sobre';
 import { Login } from './pages/Login';
+import { SkeletonCards, SkeletonLinha } from './components/feedback';
+
+// Cada tela vira um arquivo separado, baixado quando a rota é aberta.
+const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
+const Dispositivos = lazy(() => import('./pages/Dispositivos').then(m => ({ default: m.Dispositivos })));
+const DispositivoDetails = lazy(() => import('./pages/DispositivoDetails').then(m => ({ default: m.DispositivoDetails })));
+const Categorias = lazy(() => import('./pages/Categorias').then(m => ({ default: m.Categorias })));
+const Reutilizacoes = lazy(() => import('./pages/Reutilizacoes').then(m => ({ default: m.Reutilizacoes })));
+const Sobre = lazy(() => import('./pages/Sobre').then(m => ({ default: m.Sobre })));
+
+function CarregandoPagina() {
+  return (
+    <div aria-busy="true" aria-label="Carregando página" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '8px 0' }}>
+      <SkeletonLinha largura={260} altura={22} />
+      <SkeletonLinha largura={380} altura={12} />
+      <SkeletonCards quantidade={3} />
+    </div>
+  );
+}
+
+const pagina = (el: React.ReactNode) => <Suspense fallback={<CarregandoPagina />}>{el}</Suspense>;
 
 function ProtectedLayout() {
   const { userProfile, loading } = useAuth();
@@ -90,19 +105,19 @@ function App() {
               } 
             />
             <Route path="/" element={<ProtectedLayout />}>
-              <Route index element={<Home />} />
-              <Route path="sobre" element={<Sobre />} />
-              <Route path="dispositivos" element={<Dispositivos />} />
-              <Route path="dispositivos/:id" element={<DispositivoDetails />} />
+              <Route index element={pagina(<Home />)} />
+              <Route path="sobre" element={pagina(<Sobre />)} />
+              <Route path="dispositivos" element={pagina(<Dispositivos />)} />
+              <Route path="dispositivos/:id" element={pagina(<DispositivoDetails />)} />
               <Route 
                 path="categorias" 
                 element={
                   <RoleRoute allowedRoles={['admin', 'projetista']}>
-                    <Categorias />
+                    {pagina(<Categorias />)}
                   </RoleRoute>
                 } 
               />
-              <Route path="reutilizacoes" element={<Reutilizacoes />} />
+              <Route path="reutilizacoes" element={pagina(<Reutilizacoes />)} />
             </Route>
             <Route path="*" element={<Navigate to="/dispositivos" replace />} />
           </Routes>

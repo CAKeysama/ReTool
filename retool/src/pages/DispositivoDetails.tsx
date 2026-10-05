@@ -7,15 +7,18 @@ import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink, Send, C
 import { AccessibleModal } from '../components/AccessibleModal';
 import { SolicitarReutilizacaoModal } from '../components/SolicitarReutilizacaoModal';
 import { formatFileSize } from '../utils/fileValidators';
+import { useDispositivo, useReutilizacoesDoDispositivo } from '../presentation/hooks/useDispositivo';
+import { EstadoDados, SkeletonLinha, SkeletonTabela, classificarErro } from '../components/feedback';
 
 export function DispositivoDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { canCadastrar, canEditar, canExcluir, canSolicitar, isEngenharia } = usePermissions();
-  const { dispositivos, categorias, reutilizacoes, familias, produtos, addReutilizacao, deleteReutilizacao, addProduto, openDispForm, announce } = useReTool();
-  
-  const disp = dispositivos.find(p => p.id === id);
-  const dispReutilizacoes = reutilizacoes.filter(u => u.dispositivoId === id);
+  const { categorias, familias, produtos, addReutilizacao, deleteReutilizacao, addProduto, openDispForm, announce } = useReTool();
+
+  // Só o documento exibido e as reutilizações dele (antes: coleções inteiras).
+  const { dispositivo: disp, estado: estadoDisp, erro: erroDisp, tentarNovamente } = useDispositivo(id);
+  const { reutilizacoes: dispReutilizacoes, estado: estadoReu, erro: erroReu, tentarNovamente: tentarReu } = useReutilizacoesDoDispositivo(id);
   const categoria = categorias.find(c => c.id === disp?.categoriaId);
   const familia = familias.find(f => f.id === disp?.familiaId);
   const produto = produtos.find(p => p.id === disp?.produtoId);
@@ -35,6 +38,23 @@ export function DispositivoDetails() {
     descricaoAlteracao: ''
   });
   const [produtoCustomizado, setProdutoCustomizado] = useState('');
+  const [salvandoReutilizacao, setSalvandoReutilizacao] = useState(false);
+
+  if (estadoDisp === 'carregando') {
+    return (
+      <div aria-busy="true" aria-label="Carregando dispositivo">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: 'var(--spacing-xl)' }}>
+          <SkeletonLinha largura={260} altura={24} />
+          <SkeletonLinha largura={140} altura={14} />
+        </div>
+        <SkeletonTabela linhas={4} colunas={3} />
+      </div>
+    );
+  }
+
+  if (estadoDisp === 'erro') {
+    return <EstadoDados estado={classificarErro(erroDisp)} onTentarNovamente={tentarNovamente} />;
+  }
 
   if (!disp) {
     return (
@@ -68,17 +88,20 @@ export function DispositivoDetails() {
 
   const handleCreateReutilizacao = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (salvandoReutilizacao) return;
     if (!canCadastrar) {
       announce('Acesso negado: seu perfil não tem permissão para cadastrar reutilizações diretamente.');
       return;
     }
     let finalProdutoId = novaReutilizacao.produtoId;
     
+    if (finalProdutoId === 'custom' && !produtoCustomizado.trim()) {
+      alert('Por favor, digite o nome do novo produto.');
+      return;
+    }
+    setSalvandoReutilizacao(true);
+    try {
     if (finalProdutoId === 'custom') {
-      if (!produtoCustomizado.trim()) {
-        alert('Por favor, digite o nome do novo produto.');
-        return;
-      }
       finalProdutoId = await addProduto({ nome: produtoCustomizado.trim() });
     }
 
@@ -96,6 +119,12 @@ export function DispositivoDetails() {
     });
 
     setIsModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      announce('Não foi possível salvar a reutilização. Tente novamente.');
+    } finally {
+      setSalvandoReutilizacao(false);
+    }
   };
 
   const getBadgeColor = (text: string) => {
@@ -423,7 +452,11 @@ export function DispositivoDetails() {
           </div>
         </div>
         
-        {dispReutilizacoes.length === 0 ? (
+        {estadoReu === 'carregando' ? (
+          <SkeletonTabela linhas={3} colunas={6} />
+        ) : estadoReu === 'erro' ? (
+          <EstadoDados estado={classificarErro(erroReu)} compacto onTentarNovamente={tentarReu} />
+        ) : dispReutilizacoes.length === 0 ? (
           <div style={{ padding: 'var(--spacing-lg)', color: '#9ca3af', fontSize: '0.9rem', textAlign: 'center' }}>
             Nenhuma reutilização registrada ainda.
           </div>
@@ -705,7 +738,7 @@ export function DispositivoDetails() {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }}>
             <button type="button" className="btn" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: 'white' }}>Registrar Reutilização</button>
+            <button type="submit" className="btn btn-primary" disabled={salvandoReutilizacao} aria-busy={salvandoReutilizacao} style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: 'white' }}>{salvandoReutilizacao ? 'Registrando…' : 'Registrar Reutilização'}</button>
           </div>
         </form>
       </AccessibleModal>

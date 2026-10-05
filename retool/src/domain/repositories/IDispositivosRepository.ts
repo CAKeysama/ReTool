@@ -12,6 +12,18 @@ export interface ResultadoImportacaoLote {
   atualizados?: number;
   /** Mensagens das falhas de gravação, se houver. */
   falhas?: string[];
+  /** Registros que já estavam iguais no banco e não foram regravados (economia de cota). */
+  ignoradosSemAlteracao?: number;
+  /** Motivo da interrupção antes do fim: cancelamento pelo usuário ou cota diária esgotada. */
+  interrompido?: 'cancelado' | 'cota';
+  /** Registros que ficaram sem gravar por causa da interrupção (reimportar completa). */
+  naoGravados?: number;
+  /** Documentos de dispositivos lidos do banco para comparar (custo em leituras). */
+  documentosLidos?: number;
+  /** Estado final dos dispositivos ({ id, ...dados }) após a importação — reconstrói o índice de busca sem reler a coleção. */
+  documentosFinais?: Dispositivo[];
+  /** Documentos efetivamente gravados (combinações repetidas na lista contam 1). */
+  documentosGravados?: number;
 }
 
 /** Progresso real de uma importação (contado pelo trabalho já feito). */
@@ -27,10 +39,24 @@ export interface OpcoesImportacaoLote {
   onProgresso?: (p: ProgressoImportacao) => void;
   /** Cancela entre lotes; o que já foi gravado continua gravado (reimportar completa). */
   sinal?: AbortSignal;
+  /** Quantidade aproximada de dispositivos no banco (só para o total do progresso de leitura). */
+  totalExistentesEstimado?: number;
+  /**
+   * Dispositivos existentes já conhecidos e conferidos (catálogo de busca
+   * sincronizado com o banco): dispensa ler a coleção inteira. Precisam ter
+   * todos os campos que a importação compara.
+   */
+  existentesConhecidos?: Partial<Dispositivo>[];
+  /**
+   * Meta do catálogo de busca: cada lote atualiza também as partes do
+   * catálogo (no mesmo commit), sem reconstruir tudo no fim.
+   */
+  indice?: { partes: number } | null;
+  /** O catálogo de classificações existe: classificações novas também entram nele. */
+  catalogoClassificacoes?: boolean;
 }
 
 export interface IDispositivosRepository {
-  subscribeAll(callback: (dispositivos: Dispositivo[]) => void): () => void;
   add(dispositivo: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }): Promise<string>;
   update(id: string, data: Partial<Dispositivo>): Promise<void>;
   delete(id: string): Promise<void>;

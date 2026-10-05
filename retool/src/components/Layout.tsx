@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Settings, Home, List, Component, Menu, X } from 'lucide-react';
-import { useReTool } from '../context/ReToolContext';
+import { useReTool, useAnuncio } from '../context/ReToolContext';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { usePermissions } from '../hooks/usePermissions';
-import { DispositivoForm } from '../pages/DispositivoForm';
 import { UserNavMenu } from './UserNavMenu';
-import { UsersManagementModal } from './UsersManagementModal';
-import { AuditLogsModal } from './AuditLogsModal';
 import { NotificationsMenu } from './NotificationsMenu';
 
+// Formulário e modais administrativos só são baixados quando abertos.
+const DispositivoForm = lazy(() => import('../pages/DispositivoForm').then(m => ({ default: m.DispositivoForm })));
+const UsersManagementModal = lazy(() => import('./UsersManagementModal').then(m => ({ default: m.UsersManagementModal })));
+const AuditLogsModal = lazy(() => import('./AuditLogsModal').then(m => ({ default: m.AuditLogsModal })));
+
 export function Layout() {
-  const { announcement, isDispFormOpen } = useReTool();
+  const { isDispFormOpen } = useReTool();
+  const announcement = useAnuncio();
   const { canCadastrar, canEditar, canExcluir, canVerLogs } = usePermissions();
   const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
@@ -38,10 +41,11 @@ export function Layout() {
         </div>
 
         <Outlet />
-        {isDispFormOpen && <DispositivoForm />}
-        
-        <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
-        {canVerLogs && <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />}
+        <ModaisGlobais
+          isDispFormOpen={isDispFormOpen}
+          isUsersModalOpen={isUsersModalOpen} onCloseUsers={() => setIsUsersModalOpen(false)}
+          isLogsModalOpen={canVerLogs && isLogsModalOpen} onCloseLogs={() => setIsLogsModalOpen(false)}
+        />
 
         {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
         <nav className="bottom-nav" aria-label="Navegação Mobile">
@@ -179,10 +183,26 @@ export function Layout() {
         <Outlet />
       </main>
       
-      {isDispFormOpen && <DispositivoForm />}
-      <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
-      {canVerLogs && <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />}
+      <ModaisGlobais
+        isDispFormOpen={isDispFormOpen}
+        isUsersModalOpen={isUsersModalOpen} onCloseUsers={() => setIsUsersModalOpen(false)}
+        isLogsModalOpen={canVerLogs && isLogsModalOpen} onCloseLogs={() => setIsLogsModalOpen(false)}
+      />
     </div>
+  );
+}
+
+function ModaisGlobais({ isDispFormOpen, isUsersModalOpen, onCloseUsers, isLogsModalOpen, onCloseLogs }: {
+  isDispFormOpen: boolean;
+  isUsersModalOpen: boolean; onCloseUsers: () => void;
+  isLogsModalOpen: boolean; onCloseLogs: () => void;
+}) {
+  return (
+    <Suspense fallback={null}>
+      {isDispFormOpen && <DispositivoForm />}
+      {isUsersModalOpen && <UsersManagementModal isOpen onClose={onCloseUsers} />}
+      {isLogsModalOpen && <AuditLogsModal isOpen onClose={onCloseLogs} />}
+    </Suspense>
   );
 }
 

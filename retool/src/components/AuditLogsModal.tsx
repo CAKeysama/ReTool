@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ROLES_CONFIG, UserRole } from '../domain/entities/user';
 import { 
@@ -16,6 +16,38 @@ import {
   Repeat2,
   Upload
 } from 'lucide-react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { AuditLog } from '../domain/entities/auditLog';
+import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
+
+const auditRepo = new FirestoreAuditLogRepository();
+import { EstadoDados, SkeletonLista, classificarErro } from './feedback';
+
+/** Registros renderizados por bloco; o restante entra com "Mostrar mais". */
+const LIMITE_LINHAS = 50;
+/** Sem sinal de "pronto" do contexto, desiste do skeleton depois disso. */
+
+/** Monta o JSON só quando o usuário abre o detalhe (evita stringify de todas as linhas a cada render). */
+function DetalhesJson({ conteudo, dadosAnteriores }: { conteudo: unknown; dadosAnteriores: unknown }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <details style={{ fontSize: '0.75rem' }} onToggle={e => setAberto((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary style={{ cursor: 'pointer', color: '#2563eb', fontWeight: 600, userSelect: 'none' }}>
+        Ver conteúdo da operação (JSON)
+      </summary>
+      {aberto && (
+        <pre style={{
+          margin: '6px 0 0', padding: '10px 12px',
+          backgroundColor: '#f3f4f6', border: '1px solid var(--color-border)',
+          borderRadius: '6px', fontSize: '0.72rem',
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '220px', overflowY: 'auto'
+        }}>
+          {JSON.stringify({ conteudo, dadosAnteriores }, null, 2)}
+        </pre>
+      )}
+    </details>
+  );
+}
 
 interface AuditLogsModalProps {
   isOpen: boolean;
@@ -23,17 +55,41 @@ interface AuditLogsModalProps {
 }
 
 export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
-  const { auditLogs, currentRole } = useAuth();
-  const [filterText, setFilterText] = useState('');
-  const [filterAcao, setFilterAcao] = useState<string>('todos');
+  const { currentRole } = useAuth();
+  // Assina os 100 registros mais recentes só enquanto o modal está aberto
+  // (antes a trilha era assinada no login de toda administradora).
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [logsProntos, setLogsProntos] = useState(false);
+  const [erroLogs, setErroLogs] = useState<unknown>(null);
+  useEffect(() => {
+    if (!isOpen || currentRole !== 'admin') return;
+    setLogsProntos(false);
+    setErroLogs(null);
+    return auditRepo.subscribeLogs(
+      logs => { setAuditLogs(logs); setLogsProntos(true); },
+      100,
+      e => { setErroLogs(e); setLogsProntos(true); }
+    );
+  }, [isOpen, currentRole]);
+  const [filterText, setFilterTextBruto] = useState('');
+  const [filterAcao, setFilterAcaoBruto] = useState<string>('todos');
+  const textoAplicado = useDebouncedValue(filterText, 250);
+  const [limite, setLimite] = useState(LIMITE_LINHAS);
+  const setFilterText = (v: string) => { setFilterTextBruto(v); setLimite(LIMITE_LINHAS); };
+  const setFilterAcao = (v: string) => { setFilterAcaoBruto(v); setLimite(LIMITE_LINHAS); };
 
-  if (!isOpen) return null;
-  // Bloqueio de visualização: a trilha de auditoria é exclusiva da Administração.
-  if (currentRole !== 'admin') return null;
+  const carregando = !logsProntos;
 
-  const filteredLogs = auditLogs.filter(log => {
-    const q = filterText.toLowerCase();
-    const matchText = filterText === '' ||
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
+  const filteredLogs = useMemo(() => auditLogs.filter(log => {
+    const q = textoAplicado.trim().toLowerCase();
+    const matchText = q === '' ||
       (log.usuarioNome?.toLowerCase().includes(q)) ||
       (log.usuarioEmail?.toLowerCase().includes(q)) ||
       (log.entidadeNome?.toLowerCase().includes(q)) ||
@@ -43,7 +99,14 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
 
     const matchAcao = filterAcao === 'todos' || log.acao === filterAcao;
     return matchText && matchAcao;
-  });
+  }), [auditLogs, textoAplicado, filterAcao]);
+  const logsVisiveis = useMemo(() => filteredLogs.slice(0, limite), [filteredLogs, limite]);
+  const temFiltro = textoAplicado.trim() !== '' || filterAcao !== 'todos';
+  const filtrando = filterText !== textoAplicado;
+
+  if (!isOpen) return null;
+  // Bloqueio de visualização: a trilha de auditoria é exclusiva da Administração.
+  if (currentRole !== 'admin') return null;
 
   const getActionBadge = (acao: string) => {
     switch (acao) {
@@ -194,12 +257,16 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
           borderBottom: '1px solid var(--color-border)',
           display: 'flex',
           gap: '12px',
-          alignItems: 'center'
+          alignItems: 'center',
+          flexWrap: 'wrap'
         }}>
-          <div style={{ position: 'relative', flex: 1 }}>
-            <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+          <div style={{ position: 'relative', flex: '1 1 220px' }}>
+            <Search size={16} color="#9ca3af" aria-hidden="true" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+            <label htmlFor="filtro-auditoria" className="sr-only">Buscar nos registros de auditoria</label>
             <input
-              type="text"
+              id="filtro-auditoria"
+              type="search"
+              autoComplete="off"
               placeholder="Buscar por usuário, item, entidade ou detalhe..."
               value={filterText}
               onChange={e => setFilterText(e.target.value)}
@@ -214,6 +281,7 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
           </div>
 
           <select
+            aria-label="Filtrar por tipo de ação"
             value={filterAcao}
             onChange={e => setFilterAcao(e.target.value)}
             style={{
@@ -240,17 +308,32 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
 
         {/* LISTA DE REGISTROS */}
         <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1 }}>
-          {filteredLogs.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6b7280' }}>
-              <FileText size={36} color="#9ca3af" style={{ margin: '0 auto 12px auto', display: 'block' }} />
-              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Nenhum log de auditoria encontrado</div>
+          {carregando ? (
+            <>
+              <span className="sr-only" role="status">Carregando registros de auditoria…</span>
+              <SkeletonLista linhas={5} alturaLinha={84} />
+            </>
+          ) : erroLogs ? (
+            <EstadoDados estado={classificarErro(erroLogs)} />
+          ) : auditLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6b7280' }} role="status">
+              <FileText size={36} color="#9ca3af" aria-hidden="true" style={{ margin: '0 auto 12px auto', display: 'block' }} />
+              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Nenhum log de auditoria registrado</div>
               <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
                 Ações de exclusão e aprovação realizadas no sistema aparecerão listadas aqui automaticamente.
               </div>
             </div>
+          ) : filteredLogs.length === 0 ? (
+            <EstadoDados estado="sem-resultados" compacto>
+              {temFiltro && (
+                <button type="button" className="btn" onClick={() => { setFilterText(''); setFilterAcao('todos'); }}>
+                  Limpar filtros
+                </button>
+              )}
+            </EstadoDados>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {filteredLogs.map(log => {
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', opacity: filtrando ? 0.6 : 1, transition: 'opacity 0.15s' }} aria-busy={filtrando || undefined}>
+              {logsVisiveis.map(log => {
                 const userRoleConf = ROLES_CONFIG[log.usuarioPerfil] || ROLES_CONFIG.gerencia;
                 return (
                   <div
@@ -265,8 +348,8 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
                       gap: '6px'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', minWidth: 0 }}>
                         {getActionBadge(log.acao)}
                         <span style={{ 
                           fontSize: '0.72rem', 
@@ -303,23 +386,17 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
                     )}
 
                     {(log.conteudo || log.dadosAnteriores) && (
-                      <details style={{ fontSize: '0.75rem' }}>
-                        <summary style={{ cursor: 'pointer', color: '#2563eb', fontWeight: 600, userSelect: 'none' }}>
-                          Ver conteúdo da operação (JSON)
-                        </summary>
-                        <pre style={{
-                          margin: '6px 0 0', padding: '10px 12px',
-                          backgroundColor: '#f3f4f6', border: '1px solid var(--color-border)',
-                          borderRadius: '6px', fontSize: '0.72rem',
-                          whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '220px', overflowY: 'auto'
-                        }}>
-                          {JSON.stringify({ conteudo: log.conteudo, dadosAnteriores: log.dadosAnteriores }, null, 2)}
-                        </pre>
-                      </details>
+                      <DetalhesJson conteudo={log.conteudo} dadosAnteriores={log.dadosAnteriores} />
                     )}
                   </div>
                 );
               })}
+              {filteredLogs.length > logsVisiveis.length && (
+                <div className="lista-mostrar-mais">
+                  <span>Exibindo {logsVisiveis.length.toLocaleString('pt-BR')} de {filteredLogs.length.toLocaleString('pt-BR')}</span>
+                  <button type="button" className="btn" onClick={() => setLimite(l => l + LIMITE_LINHAS)}>Mostrar mais</button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -334,7 +411,9 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
           backgroundColor: '#fafafa'
         }}>
           <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-            Total de registros: {filteredLogs.length}
+            {carregando ? 'Carregando registros…' : temFiltro
+              ? `${filteredLogs.length.toLocaleString('pt-BR')} de ${auditLogs.length.toLocaleString('pt-BR')} registros`
+              : `Total de registros: ${filteredLogs.length.toLocaleString('pt-BR')}`}
           </div>
           <button
             type="button"

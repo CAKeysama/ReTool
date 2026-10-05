@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Check, CheckCheck, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useReTool } from '../context/ReToolContext';
+import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
 import { Notificacao } from '../domain/entities/notificacao';
 import { corDoStatusReutilizacao, normalizarStatusReutilizacao, rotuloCurtoStatusReutilizacao } from '../domain/entities/reutilizacao';
+
+const reutilizacoesRepo = new FirestoreReutilizacoesRepository();
 
 interface NotificationsMenuProps {
   onOpenUsersModal?: () => void;
@@ -19,9 +21,11 @@ function formatarData(iso: string): string {
 }
 
 /** Status "vivo" da notificação, derivado da entidade referenciada. */
-function statusDaNotificacao(n: Notificacao, reutilizacoes: { id: string; status?: string }[], usuariosAtivos: Map<string, boolean>): { label: string; cor: string; fundo: string } {
+function statusDaNotificacao(n: Notificacao, reutilizacoes: Map<string, { status?: string } | null> | null, usuariosAtivos: Map<string, boolean>): { label: string; cor: string; fundo: string } {
   if (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') {
-    const reu = reutilizacoes.find(r => r.id === n.entidadeId);
+    // Status ainda sendo buscado (só as reutilizações das notificações exibidas).
+    if (!reutilizacoes || !reutilizacoes.has(n.entidadeId || '')) return { label: '…', cor: '#6b7280', fundo: '#f3f4f6' };
+    const reu = reutilizacoes.get(n.entidadeId || '');
     if (!reu) return { label: 'Removida', cor: '#6b7280', fundo: '#f3f4f6' };
     const st = normalizarStatusReutilizacao(reu.status);
     const cor = corDoStatusReutilizacao(st);
@@ -44,10 +48,30 @@ function statusDaNotificacao(n: Notificacao, reutilizacoes: { id: string; status
 
 export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: NotificationsMenuProps) {
   const { notifications, marcarNotificacaoLida, marcarNotificacaoResolvida, decidirSolicitacaoConta, users, currentRole } = useAuth();
-  const { reutilizacoes } = useReTool();
   const navigate = useNavigate();
 
   const [isOpen, setIsOpen] = useState(false);
+  // Status vivo das reutilizações citadas: lido só ao abrir o painel e só
+  // para as notificações exibidas (antes vinha da coleção inteira em memória).
+  const [reutilizacoes, setReutilizacoes] = useState<Map<string, { status?: string } | null> | null>(null);
+  const idsReutilizacao = notifications
+    .filter(n => (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') && n.entidadeId)
+    .map(n => n.entidadeId as string);
+  const chaveIds = Array.from(new Set(idsReutilizacao)).sort().join(',');
+  useEffect(() => {
+    if (!isOpen || !chaveIds) return;
+    let vivo = true;
+    const ids = chaveIds.split(',');
+    reutilizacoesRepo.obterPorIds(ids)
+      .then(lista => {
+        if (!vivo) return;
+        const m = new Map<string, { status?: string } | null>(ids.map(id => [id, null]));
+        for (const r of lista) m.set(r.id, r);
+        setReutilizacoes(m);
+      })
+      .catch(() => { if (vivo) setReutilizacoes(null); });
+    return () => { vivo = false; };
+  }, [isOpen, chaveIds]);
   const [processando, setProcessando] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 

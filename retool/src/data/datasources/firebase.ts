@@ -1,6 +1,5 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
 
 const configFromEnv = (prefix: string) => ({
@@ -19,10 +18,11 @@ const fallbackConfig = configFromEnv('VITE_FIREBASE_FALLBACK');
 const useFallback = import.meta.env.VITE_USE_FALLBACK_DB === 'true';
 const activeConfig = useFallback ? fallbackConfig : primaryConfig;
 
-const app = initializeApp(activeConfig);
+export const app = initializeApp(activeConfig);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
 export const auth = getAuth(app);
+// Storage fica em ./storage.ts: o SDK (~10 KB gzip) só é baixado quando um
+// upload ou exclusão de arquivos acontece.
 
 // Instância secundária do Firebase App dedicada à criação de contas pela
 // Administração. `createUserWithEmailAndPassword` troca a sessão ativa da

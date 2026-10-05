@@ -156,6 +156,47 @@ service cloud.firestore {
       allow delete: if canExcluir();
     }
 
+    // ------------- CATÁLOGOS (busca e classificações) ---------------
+    // Cópias compactas de dados que já são legíveis nas coleções de origem,
+    // com a mesma regra de leitura. Servem para buscar por trecho e abrir o
+    // app sem baixar coleções inteiras. Quem escreve é quem pode cadastrar/
+    // editar (as escritas acompanham as da coleção no mesmo lote). Formato
+    // validado: um catálogo adulterado não consegue forçar milhares de
+    // leituras nos clientes (teto de partes) nem guardar outros campos.
+
+    // Meta do índice de busca de dispositivos.
+    match /indices/dispositivos {
+      function metaValida() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['partes', 'versoes', 'total', 'geracao', 'atualizadoEm'])
+          && d.partes is int && d.partes >= 1 && d.partes <= 1000
+          && d.versoes is map && d.total is int;
+      }
+      allow get: if signedIn();
+      allow create, update: if canEditar() && metaValida();
+      allow delete: if isAdmin();
+
+      // Partes do índice: { itens: { idDoDispositivo: entradaCompacta } }.
+      match /partes/{parteId} {
+        allow get, list: if signedIn();
+        allow create, update: if canEditar()
+          && request.resource.data.keys().hasOnly(['itens'])
+          && request.resource.data.itens is map;
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Categorias, famílias e produtos num único documento.
+    match /indices/classificacoes {
+      allow get: if signedIn();
+      allow create, update: if canEditar()
+        && request.resource.data.keys().hasOnly(['categorias', 'familias', 'produtos', 'atualizadoEm'])
+        && request.resource.data.categorias is map
+        && request.resource.data.familias is map
+        && request.resource.data.produtos is map;
+      allow delete: if isAdmin();
+    }
+
     // ------------------- REUTILIZAÇÕES ------------------------------
     // Máquina de estados aplicada no servidor (espelha
     // TRANSICOES_REUTILIZACAO em src/domain/entities/reutilizacao.ts).

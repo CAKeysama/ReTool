@@ -31,6 +31,10 @@ jest.mock('../../data/datasources/firebase', () => ({
   storage: {},
 }));
 
+jest.mock('../../data/datasources/storage', () => ({
+  storage: {},
+}));
+
 jest.mock('../../config/firebase', () => ({
   db: {},
   storage: {},
@@ -40,9 +44,13 @@ jest.mock('firebase/firestore', () => {
   return {
     getFirestore: jest.fn(() => ({})),
     collection: jest.fn((db: any, name: string) => ({ name })),
-    query: jest.fn((colRef: any, ..._constraints: any[]) => colRef),
-    orderBy: jest.fn((..._args: any[]) => ({ tipo: 'orderBy' })),
-    limit: jest.fn((..._args: any[]) => ({ tipo: 'limit' })),
+    // As restrições ficam anotadas na consulta (`restricoes`); getDocs só as
+    // aplica na leitura paginada por id (orderBy(documentId()) + startAfter + limit).
+    query: jest.fn((colRef: any, ...constraints: any[]) => ({ ...colRef, restricoes: [...(colRef?.restricoes || []), ...constraints] })),
+    orderBy: jest.fn((campo?: any, ..._args: any[]) => ({ tipo: 'orderBy', campo })),
+    limit: jest.fn((n?: any) => ({ tipo: 'limit', n })),
+    documentId: jest.fn(() => '__name__'),
+    startAfter: jest.fn((valor?: any) => ({ tipo: 'startAfter', valor })),
     serverTimestamp: jest.fn(() => ({
       __serverTimestampMock: true,
       toDate: () => new Date('2026-01-02T03:04:05.000Z')
@@ -96,11 +104,20 @@ jest.mock('firebase/firestore', () => {
     }),
     getDocs: jest.fn(async (colRef: any) => {
       const col = colRef.name as keyof typeof mockDbState;
-      const docs = (mockDbState[col] || []).map(item => ({
+      let itens = [...(mockDbState[col] || [])];
+      const restricoes: any[] = colRef.restricoes || [];
+      if (restricoes.some(r => r?.tipo === 'orderBy' && r.campo === '__name__')) {
+        itens.sort((a, b) => (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0));
+        const depois = restricoes.find(r => r?.tipo === 'startAfter');
+        if (depois) itens = itens.filter(i => String(i.id) > String(depois.valor));
+        const lim = restricoes.find(r => r?.tipo === 'limit' && typeof r.n === 'number');
+        if (lim) itens = itens.slice(0, lim.n);
+      }
+      const docs = itens.map(item => ({
         id: item.id,
         data: () => item
       }));
-      return { docs };
+      return { docs, size: docs.length, empty: docs.length === 0 };
     }),
     writeBatch: jest.fn(() => {
       const operations: any[] = [];
@@ -110,6 +127,9 @@ jest.mock('firebase/firestore', () => {
         }),
         delete: jest.fn((docRef: any) => {
           operations.push({ type: 'delete', docRef });
+        }),
+        update: jest.fn((docRef: any, data: any) => {
+          operations.push({ type: 'set', docRef, data, options: { merge: true } });
         }),
         commit: jest.fn(async () => {
           for (const op of operations) {

@@ -1,26 +1,35 @@
-import React from 'react';
-import { useDispositivosController } from '../presentation/hooks/useDispositivosController';
+import React, { Suspense, lazy } from 'react';
+import { TAMANHOS_PAGINA, useDispositivosController } from '../presentation/hooks/useDispositivosController';
 import { FocusableList } from '../components/FocusableList';
-import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
-import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks, CopyX } from 'lucide-react';
+import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks, CopyX, RefreshCw } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
-import { ImportModal } from '../components/ImportModal';
-import { DuplicadosModal } from '../components/DuplicadosModal';
 import { usePermissions } from '../hooks/usePermissions';
+import { useReTool } from '../context/ReToolContext';
+import { SkeletonLista, EstadoDados, ConteudoAtualizavel, IndicadorAtualizacao, BarraProgresso, classificarErro } from '../components/feedback';
+
+// Modais pesados só são baixados quando abertos (a importação traz o leitor de planilhas).
+const ImportModal = lazy(() => import('../components/ImportModal').then(m => ({ default: m.ImportModal })));
+const DuplicadosModal = lazy(() => import('../components/DuplicadosModal').then(m => ({ default: m.DuplicadosModal })));
+const BulkActionModal = lazy(() => import('../components/BulkActionModal').then(m => ({ default: m.BulkActionModal })));
+
+const fmt = (n: number) => n.toLocaleString('pt-BR');
 
 export function Dispositivos() {
   const { canCadastrar, canEditar, canExcluir, isAdmin } = usePermissions();
   const [isDuplicadosOpen, setIsDuplicadosOpen] = React.useState(false);
   const {
     categorias,
-    familias,
-    produtos,
+    nomesCategoria,
+    nomesFamilia,
+    nomesProduto,
     navigate,
     searchInputRef,
 
     // Filtros
     filterQuery,
     handleSearchChange,
+    setBuscaFocada,
+    buscaPendente,
     filterCategoria,
     setFilterCategoria,
     filterProcesso,
@@ -28,18 +37,15 @@ export function Dispositivos() {
     showFilters,
     setShowFilters,
 
-    // Paginação
+    // Paginação / dados
     itemsPerPage,
     setItemsPerPage,
-    currentPage,
-    setCurrentPage,
-    totalPages,
-    filteredDispositivos,
-    paginatedDispositivos,
+    lista,
 
     // Modais individuais
     dispToDelete,
     setDispToDelete,
+    isDeleting,
     isImportOpen,
     setIsImportOpen,
 
@@ -53,7 +59,8 @@ export function Dispositivos() {
     setIsBulkConfirmOpen,
     isBulkLoading,
     bulkProgress,
-    bulkFilteredDispositivos,
+    bulkItems,
+    bulkEmptyMessage,
     toggleBulkSelect,
     toggleSelectAll,
     closeBulkModal,
@@ -65,13 +72,29 @@ export function Dispositivos() {
     getBadgeColor,
     openDispForm
   } = useDispositivosController();
+  const { reconstruirIndiceBusca, announce } = useReTool();
+  const [indiceProgresso, setIndiceProgresso] = React.useState<{ lidos: number; total: number | null } | null>(null);
 
-  const bulkItems: BulkItem[] = bulkFilteredDispositivos.map(d => ({
-    id: d.id,
-    label: d.nome || 'Sem nome',
-    sublabel: d.codigo,
-    inactive: d.ativo === false
-  }));
+  const atualizarIndice = async () => {
+    if (indiceProgresso) return;
+    setIndiceProgresso({ lidos: 0, total: null });
+    try {
+      await reconstruirIndiceBusca(p => setIndiceProgresso(p));
+    } catch (e) {
+      console.error(e);
+      if ((e as Error)?.message !== 'indice-alterado-durante-varredura') {
+        announce('Não foi possível atualizar o índice de busca. Tente novamente.');
+      }
+    } finally {
+      setIndiceProgresso(null);
+    }
+  };
+
+  const filtrando = !!(filterQuery.trim() || filterCategoria || filterProcesso);
+  const carregandoPrimeira = lista.estado === 'carregando' || lista.estado === 'preparando-busca';
+  const subtitulo = lista.total === null
+    ? (carregandoPrimeira ? 'Carregando dispositivos…' : '')
+    : `${fmt(lista.total)} dispositivo${lista.total === 1 ? '' : 's'} ${filtrando ? 'encontrado' + (lista.total === 1 ? '' : 's') : 'cadastrado' + (lista.total === 1 ? '' : 's')}`;
 
   return (
     <>
@@ -79,7 +102,7 @@ export function Dispositivos() {
         <div className="flex-responsive-header">
           <div>
             <h2 style={{ fontSize: '1.8rem', fontWeight: '800' }}>Dispositivos</h2>
-            <div className="subtitle">{filteredDispositivos.length} dispositivos encontrados</div>
+            <div className="subtitle" aria-live="polite">{subtitulo}</div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
 
@@ -92,6 +115,24 @@ export function Dispositivos() {
               >
                 <Upload size={18} />
                 <span className="hide-on-mobile">Importar</span>
+              </button>
+            )}
+
+            {canEditar && (lista.indiceAusente || lista.indiceDesatualizado || indiceProgresso) && (
+              <button
+                className="btn hide-on-mobile"
+                onClick={atualizarIndice}
+                disabled={!!indiceProgresso}
+                aria-label="Atualizar o índice de busca de dispositivos"
+                title={lista.indiceAusente ? 'A busca por trecho precisa do índice. Criá-lo lê todos os dispositivos uma vez.' : 'O índice de busca difere do banco (alguém gravou fora do app). Atualizar lê todos os dispositivos uma vez.'}
+                style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <RefreshCw size={18} className={indiceProgresso ? 'spin' : undefined} />
+                <span className="hide-on-mobile">
+                  {indiceProgresso
+                    ? `Atualizando índice${indiceProgresso.total ? ` ${Math.round((indiceProgresso.lidos / indiceProgresso.total) * 100)}%` : '…'}`
+                    : lista.indiceAusente ? 'Criar índice de busca' : 'Atualizar índice'}
+                </span>
               </button>
             )}
 
@@ -141,8 +182,11 @@ export function Dispositivos() {
               placeholder="Buscar por nome ou código..." 
               value={filterQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => setBuscaFocada(true)}
+              onBlur={() => setBuscaFocada(false)}
               style={{ paddingLeft: '44px', paddingRight: '16px', height: '44px', borderRadius: 'var(--radius)', borderColor: filterQuery ? 'var(--color-primary)' : 'var(--color-border)' }}
               aria-label="Filtro de busca por nome ou código"
+              aria-busy={buscaPendente || carregandoPrimeira}
             />
           </div>
 
@@ -189,28 +233,66 @@ export function Dispositivos() {
           </div>
         </div>
 
+        {/* Estados da lista: carregando ≠ vazio ≠ sem resultados ≠ erro */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', minHeight: '20px', marginBottom: '4px' }}>
+          <IndicadorAtualizacao ativo={buscaPendente || lista.estado === 'atualizando'} texto={buscaPendente ? 'Buscando…' : 'Atualizando…'} />
+        </div>
+        {lista.estado === 'erro' && lista.itens.length === 0 ? (
+          <EstadoDados estado={classificarErro(lista.erro)} onTentarNovamente={lista.tentarNovamente} />
+        ) : lista.estado === 'preparando-busca' ? (
+          <div>
+            <div style={{ marginBottom: 'var(--spacing-md)' }}>
+              {lista.indiceAusente ? (
+                <EstadoDados
+                  estado="vazio"
+                  compacto
+                  titulo="Busca por trecho indisponível"
+                  descricao={canEditar
+                    ? 'O índice de busca ainda não foi criado. Use "Criar índice de busca" (lê todos os dispositivos uma única vez).'
+                    : 'O índice de busca ainda não foi criado. Peça a uma Administradora ou Projetista para criá-lo.'}
+                />
+              ) : lista.progressoIndice ? (
+                <BarraProgresso
+                  feitos={lista.progressoIndice.partes}
+                  total={lista.progressoIndice.total}
+                  rotulo="Preparando a busca"
+                  detalhe="Primeiro acesso neste navegador: as próximas buscas serão imediatas."
+                />
+              ) : null}
+            </div>
+            {!lista.indiceAusente && <SkeletonLista linhas={Math.min(itemsPerPage, 6)} />}
+          </div>
+        ) : lista.estado === 'carregando' ? (
+          <SkeletonLista linhas={Math.min(itemsPerPage, 6)} />
+        ) : lista.itens.length === 0 ? (
+          filtrando
+            ? <EstadoDados estado="sem-resultados" descricao="Nenhum dispositivo corresponde à busca ou aos filtros." />
+            : <EstadoDados estado="vazio" titulo="Nenhum dispositivo cadastrado" descricao="Cadastre um dispositivo ou importe uma planilha." />
+        ) : (
+        <ConteudoAtualizavel atualizando={buscaPendente || lista.estado === 'atualizando'}>
         <FocusableList
-          items={paginatedDispositivos}
+          items={lista.itens}
+          getKey={(disp) => disp.id}
           ariaLabel="Lista de dispositivos. Use setas para navegar, Enter para detalhes."
           onItemAction={(disp) => navigate(`/dispositivos/${disp.id}`)}
           onDeleteItem={canExcluir ? (disp) => setDispToDelete(disp.id) : undefined}
           onEditItem={canEditar ? (disp) => openDispForm(disp.id) : undefined}
-          renderItem={(disp, idx, isFocused) => {
-            const cat = categorias.find(c => c.id === disp.categoriaId);
-            const fam = familias.find(f => f.id === disp.familiaId);
-            const prod = produtos.find(p => p.id === disp.produtoId);
+          renderItem={(disp) => {
+            const catNome = nomesCategoria.get(disp.categoriaId || '');
+            const famNome = nomesFamilia.get(disp.familiaId || '');
+            const prodNome = nomesProduto.get(disp.produtoId || '');
             return (
               <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 'var(--spacing-lg)' }}>
                 <div style={{ 
                   width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', 
                   backgroundColor: 'var(--color-hover)', display: 'flex', 
-                  alignItems: 'center', justifyContent: 'center', color: '#9ca3af' 
+                  alignItems: 'center', justifyContent: 'center', color: '#9ca3af', flexShrink: 0
                 }}>
                   <Box size={20} />
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '1.05rem' }}>
                       {disp.nome || 'Nome não informado'}
                     </span>
@@ -220,9 +302,9 @@ export function Dispositivos() {
                   </div>
                   
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {cat?.nome && <span className={getBadgeColor(cat.nome)}>{cat.nome}</span>}
-                    {fam?.nome && <span className={getBadgeColor(fam.nome)}>{fam.nome}</span>}
-                    {prod?.nome && <span className="badge badge-blue">{prod.nome}</span>}
+                    {catNome && <span className={getBadgeColor(catNome)}>{catNome}</span>}
+                    {famNome && <span className={getBadgeColor(famNome)}>{famNome}</span>}
+                    {prodNome && <span className="badge badge-blue">{prodNome}</span>}
                     {disp.peso && <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: 500 }}>{disp.peso}g</span>}
                     {(disp.palavrasChave || []).map(tag => (
                       <span key={tag} className="badge badge-pink" style={{ fontSize: '0.75rem' }}>{tag}</span>
@@ -233,48 +315,46 @@ export function Dispositivos() {
             )
           }}
         />
+        </ConteudoAtualizavel>
+        )}
 
-        {/* CONTROLES DE PAGINAÇÃO */}
-        {filteredDispositivos.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--spacing-md)' }}>
+        {/* CONTROLES DE PAGINAÇÃO (cursor no servidor; sem opção "Tudo") */}
+        {(lista.itens.length > 0 || lista.pagina > 1) && (
+          <div className="paginacao" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: 'var(--spacing-md)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--color-text-body)' }}>Itens por página:</span>
+              <label htmlFor="itens-por-pagina" style={{ fontSize: '0.85rem', color: 'var(--color-text-body)' }}>Itens por página:</label>
               <select 
+                id="itens-por-pagina"
                 className="input-field" 
                 style={{ width: 'auto', padding: '4px 8px', height: 'auto', fontSize: '0.85rem' }}
                 value={itemsPerPage}
-                onChange={(e) => setItemsPerPage(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                onChange={(e) => setItemsPerPage(Number(e.target.value))}
               >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value="all">Tudo</option>
+                {TAMANHOS_PAGINA.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
 
-            {itemsPerPage !== 'all' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  className="btn btn-icon"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(p => p - 1)}
-                  aria-label="Página anterior"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: 600, minWidth: '45px', textAlign: 'center' }}>
-                  {currentPage} de {totalPages}
-                </span>
-                <button
-                  className="btn btn-icon"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setCurrentPage(p => p + 1)}
-                  aria-label="Próxima página"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                className="btn btn-icon"
+                disabled={!lista.temAnterior || lista.estado === 'atualizando'}
+                onClick={lista.anterior}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: 600, minWidth: '45px', textAlign: 'center' }} aria-live="polite">
+                {lista.pagina}{lista.totalPaginas !== null ? ` de ${fmt(lista.totalPaginas)}` : ''}
+              </span>
+              <button
+                className="btn btn-icon"
+                disabled={!lista.temProxima || lista.estado === 'atualizando'}
+                onClick={lista.proxima}
+                aria-label="Próxima página"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -282,18 +362,21 @@ export function Dispositivos() {
         <AccessibleModal isOpen={!!dispToDelete} onClose={() => setDispToDelete(null)} title="Confirmar exclusão">
           <p>Tem certeza que deseja remover este dispositivo?</p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
-            <button className="btn" onClick={() => setDispToDelete(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={handleDelete}>Confirmar</button>
+            <button className="btn" onClick={() => setDispToDelete(null)} disabled={isDeleting}>Cancelar</button>
+            <button className="btn btn-primary" onClick={handleDelete} disabled={isDeleting} aria-busy={isDeleting}>
+              {isDeleting ? 'Excluindo…' : 'Confirmar'}
+            </button>
           </div>
         </AccessibleModal>
 
       </div>
 
-      <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />
-      <DuplicadosModal isOpen={isDuplicadosOpen} onClose={() => setIsDuplicadosOpen(false)} />
+      <Suspense fallback={null}>
+      {isImportOpen && <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />}
+      {isDuplicadosOpen && <DuplicadosModal isOpen={isDuplicadosOpen} onClose={() => setIsDuplicadosOpen(false)} />}
 
       {/* Modal de Ações em Massa */}
-      <BulkActionModal
+      {isBulkModalOpen && <BulkActionModal
         isOpen={isBulkModalOpen}
         onClose={closeBulkModal}
         items={bulkItems}
@@ -309,7 +392,9 @@ export function Dispositivos() {
         isLoading={isBulkLoading}
         progress={bulkProgress}
         canDisable={true}
-      />
+        emptyMessage={bulkEmptyMessage}
+      />}
+      </Suspense>
 
       {canCadastrar && (
         <button className="fab-button" onClick={() => openDispForm()} aria-label="Cadastrar novo dispositivo">

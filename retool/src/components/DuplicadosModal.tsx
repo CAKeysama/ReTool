@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AccessibleModal } from './AccessibleModal';
 import { useReTool } from '../context/ReToolContext';
-import { planejarLimpezaDuplicados } from '../domain/entities/dispositivo';
-import { AlertCircle, CheckCircle2, Download } from 'lucide-react';
+import { Dispositivo, planejarLimpezaDuplicados } from '../domain/entities/dispositivo';
+import { varrerDispositivos, varrerColecao } from '../data/repositories/FirestoreDispositivosConsultas';
+import { BarraProgresso, EstadoDados, classificarErro } from './feedback';
+import { AlertCircle, CheckCircle2, Download, Search } from 'lucide-react';
 
 interface DuplicadosModalProps {
   isOpen: boolean;
@@ -18,18 +20,48 @@ const csvCampo = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
  * (reutilizações, imagens, anexos, observações) nunca são apagados.
  */
 export function DuplicadosModal({ isOpen, onClose }: DuplicadosModalProps) {
-  const { dispositivos, reutilizacoes, limparDispositivosDuplicados } = useReTool();
+  const { limparDispositivosDuplicados } = useReTool();
   const [confirmado, setConfirmado] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultado, setResultado] = useState<{ excluidos: number; erros: number } | null>(null);
 
+  // A verificação lê a coleção inteira, então só acontece quando pedida
+  // (botão "Verificar"), em páginas, com progresso real e cancelável.
+  const [base, setBase] = useState<{ dispositivos: Dispositivo[]; comReutilizacao: Set<string> } | null>(null);
+  const [varrendo, setVarrendo] = useState<{ etapa: string; feitos: number; total: number | null } | null>(null);
+  const [erroVarredura, setErroVarredura] = useState<unknown>(null);
+  const cancelar = useRef<AbortController | null>(null);
+
+  const verificar = async () => {
+    if (varrendo) return;
+    const ctrl = new AbortController();
+    cancelar.current = ctrl;
+    setErroVarredura(null);
+    setResultado(null);
+    setConfirmado(false);
+    try {
+      setVarrendo({ etapa: 'Lendo dispositivos', feitos: 0, total: null });
+      const dispositivos = await varrerDispositivos(p => setVarrendo({ etapa: 'Lendo dispositivos', feitos: p.lidos, total: p.total }), ctrl.signal);
+      setVarrendo({ etapa: 'Lendo reutilizações', feitos: 0, total: null });
+      const ids = await varrerColecao('reutilizacoes', d => String(d.data().dispositivoId || ''),
+        p => setVarrendo({ etapa: 'Lendo reutilizações', feitos: p.lidos, total: p.total }), ctrl.signal);
+      setBase({ dispositivos, comReutilizacao: new Set(ids) });
+    } catch (e) {
+      if ((e as { name?: string })?.name !== 'AbortError') setErroVarredura(e);
+    } finally {
+      cancelar.current = null;
+      setVarrendo(null);
+    }
+  };
+
   const plano = useMemo(
-    () => planejarLimpezaDuplicados(dispositivos, new Set(reutilizacoes.map(u => u.dispositivoId))),
-    [dispositivos, reutilizacoes]
+    () => (base ? planejarLimpezaDuplicados(base.dispositivos, base.comReutilizacao) : null),
+    [base]
   );
-  const idsRemover = useMemo(() => plano.grupos.flatMap(g => g.remover.map(d => d.id)), [plano]);
+  const idsRemover = useMemo(() => (plano ? plano.grupos.flatMap(g => g.remover.map(d => d.id)) : []), [plano]);
 
   const baixarLista = () => {
+    if (!plano) return;
     const linhas = [['acao', 'codigo', 'dispositivo', 'id', 'dataCriacao', 'motivo'].join(';')];
     for (const g of plano.grupos) {
       linhas.push(['manter', g.manter.codigo, g.manter.nome, g.manter.id, g.manter.dataCriacao, 'documento mantido'].map(csvCampo).join(';'));
@@ -46,11 +78,16 @@ export function DuplicadosModal({ isOpen, onClose }: DuplicadosModalProps) {
   };
 
   const handleRemover = async () => {
+    if (!base || isProcessing) return;
     setIsProcessing(true);
     try {
-      const r = await limparDispositivosDuplicados(idsRemover);
+      const r = await limparDispositivosDuplicados(idsRemover, base.dispositivos);
       setResultado(r);
       setConfirmado(false);
+      // A lista mostrada já não vale: pede nova verificação.
+      setBase(null);
+    } catch (e) {
+      setErroVarredura(e);
     } finally {
       setIsProcessing(false);
     }
@@ -58,6 +95,8 @@ export function DuplicadosModal({ isOpen, onClose }: DuplicadosModalProps) {
 
   const handleClose = () => {
     if (isProcessing) return;
+    cancelar.current?.abort();
+    setBase(null);
     setConfirmado(false);
     setResultado(null);
     onClose();
@@ -68,18 +107,45 @@ export function DuplicadosModal({ isOpen, onClose }: DuplicadosModalProps) {
   return (
     <AccessibleModal isOpen={isOpen} onClose={handleClose} title="Dispositivos duplicados" maxWidth="800px">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-        <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-text-body)' }}>
-          {fmt(plano.totalDocumentos)} documentos · {fmt(plano.combinacoesDistintas)} combinações Código + Dispositivo distintas ·{' '}
-          {fmt(plano.grupos.length)} combinações repetidas
-        </p>
-
         {resultado && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', borderRadius: 'var(--radius)', fontSize: '0.9rem',
+          <div role="status" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', borderRadius: 'var(--radius)', fontSize: '0.9rem',
             backgroundColor: resultado.erros ? '#fee2e2' : '#dcfce7', color: resultado.erros ? '#b91c1c' : 'var(--color-success)' }}>
             {resultado.erros ? <AlertCircle size={18} /> : <CheckCircle2 size={18} />}
             {fmt(resultado.excluidos)} removidos{resultado.erros ? `, ${fmt(resultado.erros)} com erro` : ''}.
           </div>
         )}
+
+        {!plano && !varrendo && (
+          <>
+            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-text-body)' }}>
+              A verificação lê todos os dispositivos e reutilizações do banco (1 leitura por documento, contada na cota diária do Firebase).
+              Use quando suspeitar de repetidos, por exemplo depois de uma importação antiga.
+            </p>
+            {!!erroVarredura && (
+              <EstadoDados estado={classificarErro(erroVarredura)} compacto onTentarNovamente={verificar} />
+            )}
+            <div>
+              <button className="btn btn-primary" onClick={verificar} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Search size={16} /> {resultado ? 'Verificar de novo' : 'Verificar duplicados'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {varrendo && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <BarraProgresso feitos={varrendo.feitos} total={varrendo.total ?? undefined} rotulo={varrendo.etapa} />
+            <div>
+              <button className="btn" onClick={() => cancelar.current?.abort()}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        {plano && (<>
+        <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--color-text-body)' }}>
+          {fmt(plano.totalDocumentos)} documentos · {fmt(plano.combinacoesDistintas)} combinações Código + Dispositivo distintas ·{' '}
+          {fmt(plano.grupos.length)} combinações repetidas
+        </p>
 
         {plano.grupos.length === 0 ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
@@ -144,6 +210,7 @@ export function DuplicadosModal({ isOpen, onClose }: DuplicadosModalProps) {
             </div>
           </>
         )}
+        </>)}
       </div>
     </AccessibleModal>
   );

@@ -55,9 +55,84 @@ separador pode colidir.
    - imagens já cadastradas não são apagadas ao atualizar;
    - grava em lotes de 500 (inclusive o último, incompleto); falha num lote
      não interrompe os demais e é devolvida em `erros`/`falhas`;
-   - devolve `inseridos`, `atualizados`, `sucesso` e `erros`. Com `erros > 0`
-     o modal continua aberto informando a importação parcial; reimportar o
-     mesmo arquivo grava só o que faltou (sem duplicar).
+   - documento existente cujos campos importados já estão iguais **não é
+     regravado** (`ignoradosSemAlteracao`);
+   - devolve `inseridos`, `atualizados`, `ignoradosSemAlteracao`, `sucesso`,
+     `erros` e, se parou antes do fim, `interrompido` (`'cancelado'` ou
+     `'cota'`) e `naoGravados`. Reimportar o mesmo arquivo grava só o que
+     faltou (sem duplicar).
+
+Detalhes de desempenho e custo na seção abaixo.
+
+## Desempenho e custo (arquivos grandes)
+
+Referência: arquivo oficial com 472.976 linhas e 19.621 combinações
+Código + Dispositivo; banco com ~13.400 dispositivos; plano gratuito (Spark)
+com cota diária de operações do Firestore (~17 mil operações no uso do cliente).
+
+### Como a importação é feita
+
+| Etapa | Onde roda | Progresso | Cancelamento |
+|---|---|---|---|
+| Lendo arquivo (descompactar o .xlsx) | Web Worker (`planilhaDispositivos.worker.ts`) | indeterminado (a biblioteca faz numa chamada só) | encerra o Worker |
+| Processando (linhas → regra Código + Dispositivo) | Web Worker | linhas feitas / total, a cada 5.000 | encerra o Worker |
+| Lendo dispositivos existentes | thread principal, Firestore paginado | documentos lidos / total estimado (catálogo de busca já carregado; sem ele, indeterminado) | entre páginas — nada foi gravado ainda |
+| Gravando | thread principal, `writeBatch` de até 500 operações | registros / total + "Lote N / M" | entre lotes — o que já foi gravado fica |
+
+- **Worker**: o `ArrayBuffer` do arquivo é transferido (sem cópia) e a
+  biblioteca `xlsx` só é carregada dentro do Worker. Se o navegador não tiver
+  Worker, o mesmo código roda na thread principal (fallback) — mesmo
+  resultado, mas a tela fica ocupada durante o processamento. O resultado do
+  Worker e do fallback é idêntico ao do processamento anterior (teste de
+  paridade célula a célula em `processamentoPlanilha.test.ts`).
+- **Leitura mais rápida**: modo denso (`dense: true`) e texto formatado
+  calculado só nas células com formato numérico explícito, com cache por
+  formato. Medido em node com 472.976 linhas sintéticas (8 colunas, .xlsx
+  de 55 MB): processamento anterior 33,3 s; atual 11,9 s. No Worker o maior
+  bloqueio da thread principal foi de 33 ms (contra 11,9 s no fallback e
+  33,3 s antes), com 191 avisos de progresso.
+- **Leitura dos existentes paginada**: `orderBy(documentId())` + `limit(1000)`
+  + `startAfter`, em vez de um `getDocs` da coleção inteira. O custo em
+  leituras é o mesmo (1 por documento), mas há progresso, cancelamento e
+  nenhuma resposta gigante. O estado final (`documentosFinais`) é devolvido ao
+  contexto para refazer o catálogo de busca sem reler a coleção.
+- **Planejamento** (`planejarGravacao`, `gravacaoDispositivos.ts`): compara,
+  para cada combinação, os campos que seriam gravados com o documento atual
+  (vazio = ausente; imagens vazias da planilha não contam nem apagam).
+  ~80 ms para 19.621 registros × 13.400 existentes.
+
+### Custo em operações do Firestore
+
+- **Leituras** = nº de dispositivos existentes (1 por documento; páginas de
+  1.000 → ~14 consultas para 13.400).
+- **Escritas** = só registros **novos ou alterados** (+ categorias, famílias
+  e produtos novos). O tamanho do lote não muda o custo (cobrança por
+  documento), só o nº de idas ao servidor.
+
+| Cenário (arquivo oficial, banco com ~13.400) | Antes | Agora |
+|---|---|---|
+| Reimportar sobre banco já igual | 13.400 leituras + 19.621 escritas = **33.021** (estoura a cota) | 13.400 leituras + **0** escritas = **13.400** |
+| Banco com 13.400 iguais + 6.221 novos | 33.021 | 13.400 + 6.221 = **19.621** |
+
+### Cota esgotada (`resource-exhausted`)
+
+A importação **para imediatamente** no primeiro lote recusado por cota
+(não insiste nos seguintes, que também falhariam). Como o `writeBatch` é
+atômico, o lote recusado não fica pela metade. O resultado vem com
+`interrompido: 'cota'` e `naoGravados`; o modal mostra quantos foram
+gravados, ignorados sem alteração e não gravados. Se a cota acabar ainda na
+leitura dos existentes, nada é gravado. Para completar: importar o **mesmo
+arquivo** no dia seguinte — o que já foi gravado é reconhecido pela chave
+Código + Dispositivo e pulado por estar igual (sem duplicar e sem gastar
+escrita).
+
+### Cancelamento
+
+O botão **Cancelar** do modal encerra o Worker na leitura/processamento; na
+gravação, aborta (`AbortSignal`) antes do próximo lote — o lote em andamento
+termina. Resultado: `interrompido: 'cancelado'` com `naoGravados`; o que já
+foi gravado continua salvo e reimportar completa. Durante a gravação o botão
+Importar fica travado e o modal não fecha (use Cancelar).
 
 ## Bug corrigido: combinações perdidas na importação
 
@@ -104,7 +179,7 @@ correção), para recriar as combinações que tinham sido sobrescritas.
 ## Como validar novamente
 
 ```bash
-npm test -- planilhaDispositivos FirestoreDispositivosRepository
+npm test -- importacao FirestoreDispositivosRepository ImportarLoteUseCase
 ```
 
 - `src/tests/application/importacao/planilhaDispositivos.test.ts` — regra,
@@ -112,7 +187,12 @@ npm test -- planilhaDispositivos FirestoreDispositivosRepository
   desatualizada, arquivo vazio/grande e a planilha `docs/RETOOL import test.xlsx`.
 - `src/tests/data/repositories/FirestoreDispositivosRepository.test.ts` —
   chave composta na gravação, preservação de imagens, lotes de 500 com último
-  incompleto, falha de lote e reimportação idempotente.
+  incompleto, falha de lote, reimportação idempotente, 0 escritas sobre banco
+  igual, leitura paginada, progresso, cancelamento e cota esgotada.
+- `src/tests/application/importacao/gravacaoDispositivos.test.ts` — pular não
+  alterados, regra Código + Dispositivo no planejamento, lotes, erro de cota.
+- `src/tests/application/importacao/processamentoPlanilha.test.ts` — paridade
+  Worker × fallback × processamento anterior e progresso.
 
 Com uma planilha real: no modal, confira se "combinações únicas" bate com a
 contagem feita no Excel (ex.: Remover Duplicatas nas colunas Código e

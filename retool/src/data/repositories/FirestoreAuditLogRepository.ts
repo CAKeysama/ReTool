@@ -1,5 +1,5 @@
 import { db } from '../datasources/firebase';
-import { collection, onSnapshot, doc, setDoc, query, orderBy, limit, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, query, orderBy, limit, serverTimestamp, Timestamp, WriteBatch } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { AuditLog } from '../../domain/entities/auditLog';
 
@@ -37,8 +37,22 @@ export class FirestoreAuditLogRepository {
     return id;
   }
 
+  /**
+   * Acrescenta um registro de auditoria a um writeBatch (operações em massa:
+   * cada item continua com seu próprio registro, gravado junto com a alteração).
+   */
+  adicionarAoBatch(batch: WriteBatch, logData: AuditLogInput): void {
+    const id = uuidv4();
+    batch.set(doc(db, 'audit_logs', id), {
+      ...logData,
+      id,
+      dataHora: logData.dataHora || new Date().toISOString(),
+      dataHoraServidor: serverTimestamp()
+    });
+  }
+
   /** Assinatura em tempo real, sempre do registro mais recente para o mais antigo. */
-  subscribeLogs(callback: (logs: AuditLog[]) => void, maxCount = 100): () => void {
+  subscribeLogs(callback: (logs: AuditLog[]) => void, maxCount = 100, onError?: (e: unknown) => void): () => void {
     const q = query(
       collection(db, 'audit_logs'),
       orderBy('dataHora', 'desc'),
@@ -62,10 +76,12 @@ export class FirestoreAuditLogRepository {
       callback(list.slice(0, maxCount));
     };
 
+    // Sem fallback para a coleção inteira: a trilha cresce sem limite e o
+    // listener de fallback nunca era encerrado. A ordenação usa o índice
+    // automático de campo único (dataHora), que sempre existe.
     return onSnapshot(q, emitir, (error) => {
-      console.warn('Fallback na ordenação de audit_logs:', error);
-      // Caso o índice do Firestore ainda não esteja criado, faz snapshot simples
-      return onSnapshot(collection(db, 'audit_logs'), emitir);
+      console.warn('Falha ao carregar audit_logs:', error);
+      onError?.(error);
     });
   }
 }

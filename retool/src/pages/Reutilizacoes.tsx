@@ -1,9 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense, lazy } from 'react';
 import { useReTool } from '../context/ReToolContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { Tabs, EmptyState } from '../components/Tabs';
-import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
+import type { BulkItem } from '../components/BulkActionModal';
 import { FluxoReutilizacaoModal } from '../components/FluxoReutilizacaoModal';
+import { SeletorDispositivo } from '../components/SeletorDispositivo';
+import { EstadoDados, SkeletonLista, SkeletonTabela, classificarErro } from '../components/feedback';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useReutilizacoes, useNomesDispositivos } from '../presentation/hooks/useReutilizacoes';
 import { ListChecks, ChevronDown, Check, X, Clock, Factory, Send, Wrench, ExternalLink, Info } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
@@ -16,11 +20,18 @@ import {
   transicaoReutilizacaoPermitida
 } from '../domain/entities/reutilizacao';
 
+const BulkActionModal = lazy(() => import('../components/BulkActionModal').then(m => ({ default: m.BulkActionModal })));
+
+/** Registros por página no histórico e cartões por vez nas filas. */
+const POR_PAGINA = 25;
+const CARTOES_POR_VEZ = 50;
+
 const FILA_PROJETISTA: ReutilizacaoStatus[] = ['Em análise (Projetista)', 'Aguardando novo filtro (Projetista)'];
 const FILA_ENGENHARIA: ReutilizacaoStatus[] = ['Em análise (Engenharia)', 'Reutilização aprovada', 'Reutilização não aprovada'];
 
 export function Reutilizacoes() {
-  const { reutilizacoes, dispositivos, deleteReutilizacao, transicionarReutilizacao, announce } = useReTool();
+  const { deleteReutilizacao, transicionarReutilizacao, announce } = useReTool();
+  const { itens: reutilizacoes, estado: estadoDados, erro: erroDados, tentarNovamente } = useReutilizacoes();
   const { canExcluir, isProjetista, isEngenharia, isAdmin, currentRole } = usePermissions();
   const BULK_THRESHOLD = 20;
   const { progress: bulkProgress, runWithProgress } = useBulkProgress();
@@ -36,6 +47,11 @@ export function Reutilizacoes() {
   const [filterDispId, setFilterDispId] = useState('');
   const [filterText, setFilterText] = useState('');
   const [filterStatus, setFilterStatus] = useState<'todos' | ReutilizacaoStatus>('todos');
+  const textoBusca = useDebouncedValue(filterText, 200);
+  const [pagina, setPagina] = useState(1);
+  const [limiteCartoes, setLimiteCartoes] = useState(CARTOES_POR_VEZ);
+  // Uma transição por registro de cada vez (evita clique duplo gerar duas).
+  const [transicionando, setTransicionando] = useState<Set<string>>(new Set());
 
   // Seleção da tabela (Ações em Massa)
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -69,7 +85,7 @@ export function Reutilizacoes() {
   // Navegação vinda de uma notificação: abre a aba certa e destaca o registro.
   useEffect(() => {
     const st = location.state as { reutilizacaoId?: string; dispositivoId?: string } | null;
-    if (!st?.reutilizacaoId) return;
+    if (!st?.reutilizacaoId || estadoDados !== 'pronto') return;
     const alvo = reutilizacoes.find(u => u.id === st.reutilizacaoId);
     setDestacarId(st.reutilizacaoId);
     if (!alvo) return;
@@ -78,15 +94,15 @@ export function Reutilizacoes() {
     else if (FILA_ENGENHARIA.includes(s) && (isEngenharia || isAdmin)) setActiveTab('filaEngenharia');
     else setActiveTab('historico');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
+  }, [location.state, estadoDados]);
 
   // ---------------- HISTÓRICO (tabela) ----------------
   const historicoFiltrado = useMemo(() => {
     return reutilizacoes.filter(u => {
       const matchPeca = filterDispId === '' || u.dispositivoId === filterDispId;
       const matchStatus = filterStatus === 'todos' || statusDe(u) === filterStatus;
-      const q = filterText.toLowerCase();
-      const matchText = filterText === '' ||
+      const q = textoBusca.toLowerCase();
+      const matchText = textoBusca === '' ||
         (u.descricaoAlteracao?.toLowerCase().includes(q)) ||
         (u.responsavel?.toLowerCase().includes(q)) ||
         (u.solicitanteNome?.toLowerCase().includes(q)) ||
@@ -95,14 +111,39 @@ export function Reutilizacoes() {
         (u.descricaoPeca?.toLowerCase().includes(q));
       return matchPeca && matchStatus && matchText;
     });
-  }, [reutilizacoes, filterDispId, filterText, filterStatus]);
+  }, [reutilizacoes, filterDispId, textoBusca, filterStatus]);
+
+  // Filtro mudou: volta à primeira página.
+  useEffect(() => { setPagina(1); }, [filterDispId, textoBusca, filterStatus]);
+  const totalPaginas = Math.max(1, Math.ceil(historicoFiltrado.length / POR_PAGINA));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const historicoPagina = useMemo(
+    () => historicoFiltrado.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA),
+    [historicoFiltrado, paginaAtual]
+  );
+
+  // Nomes só dos dispositivos que aparecem na tela.
+  const filaVisivel = tabAtiva === 'filaProjetista' ? filaProjetista : tabAtiva === 'filaEngenharia' ? filaEngenharia : [];
+  const idsVisiveis = useMemo(() => [
+    ...(tabAtiva === 'historico' ? historicoPagina : filaVisivel.slice(0, limiteCartoes)).map(u => u.dispositivoId),
+    filterDispId,
+  ], [tabAtiva, historicoPagina, filaVisivel, limiteCartoes, filterDispId]);
+  const nomeDispositivo = useNomesDispositivos(idsVisiveis);
+  const rotuloDisp = (id: string) => {
+    const d = nomeDispositivo(id);
+    if (d === undefined) return 'Carregando…';
+    if (d === null) return 'Desconhecido';
+    return d.nome || 'Sem nome';
+  };
 
   // ---------------- AÇÕES EM MASSA ----------------
+  const bulkBusca = useDebouncedValue(bulkSearch, 200);
   const bulkFiltered = useMemo(() => {
-    if (!bulkSearch.trim()) return reutilizacoes;
-    const q = bulkSearch.toLowerCase();
+    if (!isBulkOpen) return [];
+    if (!bulkBusca.trim()) return reutilizacoes;
+    const q = bulkBusca.toLowerCase();
     return reutilizacoes.filter(u => {
-      const disp = dispositivos.find(d => d.id === u.dispositivoId);
+      const disp = nomeDispositivo(u.dispositivoId);
       return (
         u.descricaoAlteracao?.toLowerCase().includes(q) ||
         u.responsavel?.toLowerCase().includes(q) ||
@@ -111,16 +152,16 @@ export function Reutilizacoes() {
         disp?.nome?.toLowerCase().includes(q)
       );
     });
-  }, [reutilizacoes, bulkSearch]);
+  }, [isBulkOpen, reutilizacoes, bulkBusca, nomeDispositivo]);
 
-  const bulkItems: BulkItem[] = bulkFiltered.map(u => {
-    const disp = dispositivos.find(d => d.id === u.dispositivoId);
+  const bulkItems: BulkItem[] = useMemo(() => bulkFiltered.map(u => {
+    const disp = nomeDispositivo(u.dispositivoId);
     return {
       id: u.id,
       label: u.descricaoAlteracao || 'Sem descrição',
       sublabel: disp?.nome ? `${disp.nome} · OS: ${u.numeroOs || 'S/OS'}` : `OS: ${u.numeroOs || 'S/OS'}`,
     };
-  });
+  }), [bulkFiltered, nomeDispositivo]);
 
   const toggleItem = (id: string) => {
     setBulkSelected(prev => {
@@ -131,12 +172,12 @@ export function Reutilizacoes() {
     });
   };
 
-  const allVisibleSelected = historicoFiltrado.length > 0 && historicoFiltrado.every(u => bulkSelected.has(u.id));
+  const allVisibleSelected = historicoPagina.length > 0 && historicoPagina.every(u => bulkSelected.has(u.id));
   const toggleAllVisible = () => {
     setBulkSelected(prev => {
       const next = new Set(prev);
-      if (allVisibleSelected) historicoFiltrado.forEach(u => next.delete(u.id));
-      else historicoFiltrado.forEach(u => next.add(u.id));
+      if (allVisibleSelected) historicoPagina.forEach(u => next.delete(u.id));
+      else historicoPagina.forEach(u => next.add(u.id));
       return next;
     });
   };
@@ -162,10 +203,23 @@ export function Reutilizacoes() {
   };
 
   // ---------------- TRANSIÇÕES (somente nas abas de fila) ----------------
+  const transicionar = async (id: string, para: ReutilizacaoStatus, opts?: { motivo?: string }) => {
+    if (transicionando.has(id)) return;
+    setTransicionando(prev => new Set(prev).add(id));
+    try {
+      await transicionarReutilizacao(id, para, opts);
+    } catch (e) {
+      console.error(e);
+      announce('Não foi possível atualizar a reutilização. Tente novamente.');
+    } finally {
+      setTransicionando(prev => { const n = new Set(prev); n.delete(id); return n; });
+    }
+  };
+
   const naoAprovar = (u: Reutilizacao) => {
     const motivo = window.prompt('Informe o motivo da não aprovação:');
     if (motivo === null) return;
-    transicionarReutilizacao(u.id, 'Reutilização não aprovada', { motivo: motivo || 'Não justificado' });
+    transicionar(u.id, 'Reutilização não aprovada', { motivo: motivo || 'Não justificado' });
   };
 
   const botoesDeAcao = (u: Reutilizacao) => {
@@ -180,6 +234,8 @@ export function Reutilizacoes() {
       <button
         type="button"
         className="btn"
+        disabled={transicionando.has(u.id)}
+        aria-busy={transicionando.has(u.id)}
         onClick={(e) => { e.stopPropagation(); onClick(); }}
         style={cor === 'neutro'
           ? { padding: '6px 12px', minHeight: 32, fontSize: '0.78rem', fontWeight: 600 }
@@ -197,18 +253,18 @@ export function Reutilizacoes() {
     const acoes: React.ReactNode[] = [];
 
     if (st === 'Em análise (Engenharia)' && pode('Em análise (Projetista)')) {
-      acoes.push(btn('Solicitar Análise (1º Filtro)', () => transicionarReutilizacao(u.id, 'Em análise (Projetista)'), 'primary', <Send size={14} />));
+      acoes.push(btn('Solicitar Análise (1º Filtro)', () => transicionar(u.id, 'Em análise (Projetista)'), 'primary', <Send size={14} />));
     }
     if (st === 'Em análise (Projetista)') {
-      if (pode('Reutilização aprovada')) acoes.push(btn('Aprovar', () => transicionarReutilizacao(u.id, 'Reutilização aprovada'), 'success', <Check size={14} />));
+      if (pode('Reutilização aprovada')) acoes.push(btn('Aprovar', () => transicionar(u.id, 'Reutilização aprovada'), 'success', <Check size={14} />));
       if (pode('Reutilização não aprovada')) acoes.push(btn('Não Aprovar', () => naoAprovar(u), 'danger', <X size={14} />));
     }
     if (st === 'Reutilização não aprovada') {
-      if (pode('Aguardando novo filtro (Projetista)')) acoes.push(btn('Solicitar Dispositivo Novo', () => transicionarReutilizacao(u.id, 'Aguardando novo filtro (Projetista)'), 'primary', <Factory size={14} />));
+      if (pode('Aguardando novo filtro (Projetista)')) acoes.push(btn('Solicitar Dispositivo Novo', () => transicionar(u.id, 'Aguardando novo filtro (Projetista)'), 'primary', <Factory size={14} />));
     }
     if (st === 'Aguardando novo filtro (Projetista)') {
-      if (pode('Em análise (Projetista)')) acoes.push(btn('Similar Encontrado', () => transicionarReutilizacao(u.id, 'Em análise (Projetista)'), 'primary', <Wrench size={14} />));
-      if (pode('Liberado para fabricação (novo dispositivo)')) acoes.push(btn('Liberar Fabricação', () => transicionarReutilizacao(u.id, 'Liberado para fabricação (novo dispositivo)'), 'success', <Factory size={14} />));
+      if (pode('Em análise (Projetista)')) acoes.push(btn('Similar Encontrado', () => transicionar(u.id, 'Em análise (Projetista)'), 'primary', <Wrench size={14} />));
+      if (pode('Liberado para fabricação (novo dispositivo)')) acoes.push(btn('Liberar Fabricação', () => transicionar(u.id, 'Liberado para fabricação (novo dispositivo)'), 'success', <Factory size={14} />));
     }
 
     return acoes;
@@ -242,7 +298,6 @@ export function Reutilizacoes() {
 
   // ---------------- CARDS DAS FILAS (abas 1 e 2) ----------------
   const cartaoFila = (u: Reutilizacao) => {
-    const disp = dispositivos.find(p => p.id === u.dispositivoId);
     return (
       <div
         key={u.id}
@@ -264,7 +319,7 @@ export function Reutilizacoes() {
             <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{u.descricaoAlteracao || 'Descrição não informada'}</h4>
           </div>
           <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-            <strong>Dispositivo:</strong> {disp?.nome || 'Desconhecido'} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} | <strong>Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'}
+            <strong>Dispositivo:</strong> {rotuloDisp(u.dispositivoId)} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} | <strong>Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -293,32 +348,35 @@ export function Reutilizacoes() {
         </button>
       </div>
 
-      <Tabs tabs={tabs} active={tabAtiva} onChange={setActiveTab} />
+      <Tabs tabs={tabs} active={tabAtiva} onChange={t => { setActiveTab(t); setLimiteCartoes(CARTOES_POR_VEZ); }} />
+
+      {estadoDados === 'carregando' && tabAtiva !== 'historico' && (
+        <div aria-busy="true"><SkeletonLista linhas={4} alturaLinha={74} /></div>
+      )}
+      {estadoDados === 'erro' && (
+        <EstadoDados estado={classificarErro(erroDados)} onTentarNovamente={tentarNovamente} />
+      )}
 
       {/* ---------- ABA 1: FILA DO PROJETISTA ---------- */}
-      {tabAtiva === 'filaProjetista' && (
+      {tabAtiva === 'filaProjetista' && estadoDados === 'pronto' && (
         filaProjetista.length === 0 ? (
           <EmptyState message="Sem pendências no momento." />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {filaProjetista.map(cartaoFila)}
-          </div>
+          <ListaCartoes itens={filaProjetista} limite={limiteCartoes} onMais={() => setLimiteCartoes(l => l + CARTOES_POR_VEZ)} render={cartaoFila} />
         )
       )}
 
       {/* ---------- ABA 2: FILA DA ENGENHARIA ---------- */}
-      {tabAtiva === 'filaEngenharia' && (
+      {tabAtiva === 'filaEngenharia' && estadoDados === 'pronto' && (
         filaEngenharia.length === 0 ? (
           <EmptyState message="Sem pendências no momento." />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {filaEngenharia.map(cartaoFila)}
-          </div>
+          <ListaCartoes itens={filaEngenharia} limite={limiteCartoes} onMais={() => setLimiteCartoes(l => l + CARTOES_POR_VEZ)} render={cartaoFila} />
         )
       )}
 
       {/* ---------- ABA 3: HISTÓRICO GERAL (tabela) ---------- */}
-      {tabAtiva === 'historico' && (
+      {tabAtiva === 'historico' && estadoDados !== 'erro' && (
         <div style={{
           backgroundColor: 'var(--color-surface)',
           border: '1px solid var(--color-border)',
@@ -332,7 +390,7 @@ export function Reutilizacoes() {
             borderBottom: '1px solid var(--color-border)', backgroundColor: '#fafafa'
           }}>
             <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
-              {historicoFiltrado.length} {historicoFiltrado.length === 1 ? 'registro' : 'registros'}
+              {estadoDados === 'carregando' ? 'Carregando registros…' : <>{historicoFiltrado.length.toLocaleString('pt-BR')} {historicoFiltrado.length === 1 ? 'registro' : 'registros'}</>}
               {bulkSelected.size > 0 && <> · <span style={{ color: 'var(--color-primary)' }}>{bulkSelected.size} selecionado(s)</span></>}
             </div>
             {canExcluir && (
@@ -359,6 +417,7 @@ export function Reutilizacoes() {
               type="text"
               className="input-field"
               placeholder="Buscar por descrição, peça, solicitante ou OS..."
+              aria-label="Buscar no histórico"
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
             />
@@ -372,18 +431,16 @@ export function Reutilizacoes() {
                 <option key={st} value={st}>{st}</option>
               ))}
             </select>
-            <select
-              className="input-field"
-              value={filterDispId}
-              onChange={(e) => setFilterDispId(e.target.value)}
-            >
-              <option value="">Todos os Dispositivos</option>
-              {dispositivos.map(p => (
-                <option key={p.id} value={p.id}>{p.nome || 'Dispositivo Sem Nome'} ({p.codigo || 'S/C'})</option>
-              ))}
-            </select>
+            <SeletorDispositivo
+              valor={filterDispId}
+              rotuloValor={filterDispId ? `${rotuloDisp(filterDispId)} (${nomeDispositivo(filterDispId)?.codigo || 'S/C'})` : undefined}
+              onChange={setFilterDispId}
+            />
           </div>
 
+          {estadoDados === 'carregando' ? (
+            <div aria-busy="true" style={{ padding: '12px 16px' }}><SkeletonTabela linhas={8} colunas={6} /></div>
+          ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
               <thead>
@@ -409,8 +466,8 @@ export function Reutilizacoes() {
                 </tr>
               </thead>
               <tbody>
-                {historicoFiltrado.map(u => {
-                  const disp = dispositivos.find(p => p.id === u.dispositivoId);
+                {historicoPagina.map(u => {
+                  const nomeDisp = rotuloDisp(u.dispositivoId);
                   const aberto = expandedId === u.id;
                   return (
                     <React.Fragment key={u.id}>
@@ -437,7 +494,7 @@ export function Reutilizacoes() {
                         </td>
                         <td style={{ padding: '10px 8px', whiteSpace: 'nowrap', color: '#374151' }}>{formatarData(u)}</td>
                         <td style={{ padding: '10px 8px' }}>{chipDeStatus(u)}</td>
-                        <td style={{ padding: '10px 8px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={disp?.nome}>{disp?.nome || 'Desconhecido'}</td>
+                        <td style={{ padding: '10px 8px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={nomeDisp}>{nomeDisp}</td>
                         <td style={{ padding: '10px 8px', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.codigoPeca}>{u.codigoPeca || 'N/A'}</td>
                         <td style={{ padding: '10px 8px', whiteSpace: 'nowrap' }}>{u.solicitanteNome || u.responsavel || 'N/A'}</td>
                         <td style={{ padding: '10px 8px', color: 'var(--color-success)', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -478,17 +535,35 @@ export function Reutilizacoes() {
                 {historicoFiltrado.length === 0 && (
                   <tr>
                     <td colSpan={colunaCount} style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
-                      Nenhum registro encontrado para os filtros atuais.
+                      {reutilizacoes.length === 0
+                        ? 'Nenhuma reutilização registrada ainda.'
+                        : 'Nenhum registro encontrado para os filtros atuais.'}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          )}
+
+          {estadoDados === 'pronto' && totalPaginas > 1 && (
+            <nav aria-label="Paginação do histórico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 16px', borderTop: '1px solid var(--color-border)', fontSize: '0.83rem', flexWrap: 'wrap' }}>
+              <span>
+                {((paginaAtual - 1) * POR_PAGINA + 1).toLocaleString('pt-BR')}–{Math.min(paginaAtual * POR_PAGINA, historicoFiltrado.length).toLocaleString('pt-BR')} de {historicoFiltrado.length.toLocaleString('pt-BR')}
+              </span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button type="button" className="btn" disabled={paginaAtual <= 1} onClick={() => setPagina(paginaAtual - 1)}>Anterior</button>
+                <span aria-live="polite">Página {paginaAtual} de {totalPaginas}</span>
+                <button type="button" className="btn" disabled={paginaAtual >= totalPaginas} onClick={() => setPagina(paginaAtual + 1)}>Próxima</button>
+              </div>
+            </nav>
+          )}
         </div>
       )}
 
-      {/* Modal de Ações em Massa da tabela de histórico */}
+      {/* Modal de Ações em Massa da tabela de histórico (baixado só ao abrir) */}
+      {isBulkOpen && (
+      <Suspense fallback={null}>
       <BulkActionModal
         isOpen={isBulkOpen}
         onClose={closeBulk}
@@ -514,9 +589,26 @@ export function Reutilizacoes() {
         progress={bulkProgress}
         canDisable={false}
       />
+      </Suspense>
+      )}
 
       {/* Modal explicativo do fluxo de aceite */}
       <FluxoReutilizacaoModal isOpen={isFluxoOpen} onClose={() => setIsFluxoOpen(false)} />
+    </div>
+  );
+}
+
+function ListaCartoes({ itens, limite, onMais, render }: {
+  itens: Reutilizacao[]; limite: number; onMais: () => void; render: (u: Reutilizacao) => React.ReactNode;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {itens.slice(0, limite).map(render)}
+      {itens.length > limite && (
+        <button type="button" className="btn" onClick={onMais} style={{ alignSelf: 'center' }}>
+          Mostrar mais ({(itens.length - limite).toLocaleString('pt-BR')} restantes)
+        </button>
+      )}
     </div>
   );
 }

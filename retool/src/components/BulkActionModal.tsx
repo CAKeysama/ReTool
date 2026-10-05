@@ -2,6 +2,9 @@ import React from 'react';
 import { ListChecks, Search, X, CheckSquare, Square, Trash2, AlertTriangle } from 'lucide-react';
 import { AccessibleModal } from './AccessibleModal';
 import { BulkProgress } from '../hooks/useBulkProgress';
+import { VirtualList } from './VirtualList';
+
+const ALTURA_LINHA = 46;
 
 export interface BulkItem {
   id: string;
@@ -27,6 +30,8 @@ interface BulkActionModalProps {
   progress?: BulkProgress | null;
   /** Se false, o botão "Desativar" não aparece */
   canDisable?: boolean;
+  /** Texto quando a lista está vazia (ex.: carregando ou sem resultados). */
+  emptyMessage?: string;
 }
 
 export function BulkActionModal({
@@ -45,10 +50,11 @@ export function BulkActionModal({
   isLoading,
   progress,
   canDisable = true,
+  emptyMessage,
 }: BulkActionModalProps) {
   if (!isOpen) return null;
 
-  const allSelected = items.length > 0 && items.every(d => selected.has(d.id));
+  const allSelected = items.length > 0 && selected.size >= items.length && items.every(d => selected.has(d.id));
   const someSelected = selected.size > 0;
 
   return (
@@ -214,29 +220,32 @@ export function BulkActionModal({
             </span>
           </div>
 
-          {/* List */}
-          <div
-            className="custom-scrollbar"
-            style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}
-          >
-            {items.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px', color: '#9ca3af', fontSize: '0.9rem' }}>
-                Nenhum item encontrado
-              </div>
-            ) : (
-              items.map(item => {
+          {/* Lista virtualizada: só as linhas visíveis existem no DOM */}
+          {items.length === 0 ? (
+            <div style={{ flex: 1, textAlign: 'center', padding: '32px', color: '#9ca3af', fontSize: '0.9rem' }}>
+              {emptyMessage || 'Nenhum item encontrado'}
+            </div>
+          ) : (
+            <VirtualList
+              itens={items}
+              alturaItem={ALTURA_LINHA}
+              chave={item => item.id}
+              ariaLabel="Itens para ações em massa. Use as setas para navegar e Espaço para marcar."
+              onAtivar={item => onToggleItem(item.id)}
+              className="custom-scrollbar"
+              style={{ flex: 1, minHeight: Math.min(items.length, 6) * ALTURA_LINHA, padding: 0 }}
+              renderItem={(item, _i, ativo) => {
                 const isSelected = selected.has(item.id);
                 return (
                   <div
-                    key={item.id}
                     onClick={() => onToggleItem(item.id)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '12px',
-                      padding: '10px 24px',
+                      height: '100%', boxSizing: 'border-box',
+                      padding: '0 24px',
                       cursor: 'pointer',
-                      backgroundColor: isSelected ? 'rgba(228,13,44,0.05)' : 'transparent',
+                      backgroundColor: isSelected ? 'rgba(228,13,44,0.05)' : ativo ? 'var(--color-hover)' : 'transparent',
                       borderLeft: isSelected ? '3px solid var(--color-primary)' : '3px solid transparent',
-                      transition: 'background-color 0.15s, border-color 0.15s'
                     }}
                   >
                     {isSelected
@@ -253,7 +262,7 @@ export function BulkActionModal({
                           {item.label}
                         </span>
                         {item.sublabel && (
-                          <span style={{ fontSize: '0.78rem', color: '#9ca3af', flexShrink: 0 }}>
+                          <span style={{ fontSize: '0.78rem', color: '#9ca3af', flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {item.sublabel}
                           </span>
                         )}
@@ -269,9 +278,9 @@ export function BulkActionModal({
                     )}
                   </div>
                 );
-              })
-            )}
-          </div>
+              }}
+            />
+          )}
 
           {/* Footer */}
           <div style={{

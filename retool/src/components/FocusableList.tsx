@@ -8,9 +8,11 @@ interface FocusableListProps<T> {
   onDeleteItem?: (item: T) => void;
   onEditItem?: (item: T) => void;
   ariaLabel?: string;
+  /** Chave estável por item (evita remontar linhas ao paginar/filtrar). */
+  getKey?: (item: T, index: number) => string;
 }
 
-export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem, onEditItem, ariaLabel }: FocusableListProps<T>) {
+export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem, onEditItem, ariaLabel, getKey }: FocusableListProps<T>) {
   const { activeIndex, setActiveIndex, containerRef, handleKeyDown } = useKeyboardNavigation<HTMLUListElement>(items.length, 1);
 
   if (items.length === 0) {
@@ -36,7 +38,7 @@ export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem
         const isFocused = index === activeIndex;
         return (
           <li
-            key={index}
+            key={getKey ? getKey(item, index) : index}
             role="option"
             aria-selected={isFocused}
             tabIndex={0}

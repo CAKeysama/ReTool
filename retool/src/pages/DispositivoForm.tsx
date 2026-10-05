@@ -7,11 +7,16 @@ import { FileUploadDropzone } from '../components/FileUploadDropzone';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { usePermissions } from '../hooks/usePermissions';
+import { obterDispositivo } from '../data/repositories/FirestoreDispositivosConsultas';
+import { EstadoDados, SkeletonLista, classificarErro, mensagemDeErro } from '../components/feedback';
 
+/**
+ * Verifica a permissão antes de montar o formulário (os hooks do formulário
+ * nunca rodam condicionalmente) e, na edição, lê só o documento editado.
+ */
 export function DispositivoForm() {
   const { canCadastrar, canEditar } = usePermissions();
-  const { dispositivos, categorias, familias, produtos, addDispositivo, updateDispositivo, addCategoria, addFamilia, addProduto, announce, editingDispId, closeDispForm } = useReTool();
-  
+  const { announce, editingDispId, closeDispForm } = useReTool();
   const isEditing = Boolean(editingDispId);
   const isAllowed = isEditing ? canEditar : canCadastrar;
 
@@ -22,9 +27,48 @@ export function DispositivoForm() {
     }
   }, [isAllowed, isEditing, announce, closeDispForm]);
 
+  // Leitura única (não em tempo real): uma alteração externa não apaga o que
+  // a pessoa está digitando.
+  const [carga, setCarga] = useState<{ estado: 'carregando' | 'pronto' | 'erro'; disp: Dispositivo | null; erro?: unknown }>(
+    { estado: isEditing ? 'carregando' : 'pronto', disp: null }
+  );
+  const [tentativa, setTentativa] = useState(0);
+  useEffect(() => {
+    if (!editingDispId || !isAllowed) return;
+    let vivo = true;
+    setCarga({ estado: 'carregando', disp: null });
+    obterDispositivo(editingDispId)
+      .then(d => { if (vivo) setCarga({ estado: 'pronto', disp: d }); })
+      .catch(e => { if (vivo) setCarga({ estado: 'erro', disp: null, erro: e }); });
+    return () => { vivo = false; };
+  }, [editingDispId, isAllowed, tentativa]);
+
   if (!isAllowed) return null;
 
-  const dispEdicao = isEditing ? dispositivos.find(p => p.id === editingDispId) : null;
+  if (isEditing && carga.estado !== 'pronto') {
+    return (
+      <AccessibleModal isOpen={true} onClose={closeDispForm} title="Editar dispositivo" maxWidth="780px">
+        {carga.estado === 'carregando'
+          ? <div aria-busy="true"><SkeletonLista linhas={4} alturaLinha={56} /></div>
+          : <EstadoDados estado={classificarErro(carga.erro)} onTentarNovamente={() => setTentativa(t => t + 1)} />}
+      </AccessibleModal>
+    );
+  }
+  if (isEditing && !carga.disp) {
+    return (
+      <AccessibleModal isOpen={true} onClose={closeDispForm} title="Editar dispositivo" maxWidth="780px">
+        <EstadoDados estado="vazio" titulo="Dispositivo não encontrado" descricao="Ele pode ter sido excluído por outra pessoa." />
+      </AccessibleModal>
+    );
+  }
+  return <FormularioDispositivo dispEdicao={carga.disp} />;
+}
+
+function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null }) {
+  const { categorias, familias, produtos, addDispositivo, updateDispositivo, addCategoria, addFamilia, addProduto, announce, editingDispId, closeDispForm } = useReTool();
+  const isEditing = Boolean(editingDispId);
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
 
   // Garante um ID único estável para o dispositivo e sua pasta no Storage
   const deviceStorageId = useMemo(() => editingDispId || uuidv4(), [editingDispId]);
@@ -64,14 +108,14 @@ export function DispositivoForm() {
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isEditing && dispEdicao) {
+    if (dispEdicao) {
       setFormData({
         ...dispEdicao,
         palavrasChave: dispEdicao.palavrasChave || [],
         anexos: dispEdicao.anexos || []
       });
     }
-  }, [isEditing, dispEdicao]);
+  }, [dispEdicao]);
 
   useEffect(() => {
     firstInputRef.current?.focus();
@@ -84,20 +128,28 @@ export function DispositivoForm() {
   };
 
   const handleClose = () => {
+    if (salvando) return;
     closeDispForm();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fecha só depois que o banco confirmou; em erro, mantém o que foi digitado.
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEditing && editingDispId) {
-      updateDispositivo(editingDispId, formData);
+    if (salvando) return;
+    setSalvando(true);
+    setErroSalvar(null);
+    try {
+      if (isEditing && editingDispId) {
+        await updateDispositivo(editingDispId, formData);
+      } else {
+        await addDispositivo({ ...formData, id: deviceStorageId });
+      }
       closeDispForm();
-    } else {
-      addDispositivo({
-        ...formData,
-        id: deviceStorageId
-      });
-      closeDispForm();
+    } catch (err) {
+      console.error(err);
+      setErroSalvar(mensagemDeErro(err, 'Não foi possível salvar o dispositivo. Tente novamente.'));
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -557,17 +609,25 @@ export function DispositivoForm() {
 
         </div>
 
+        {erroSalvar && (
+          <div role="alert" style={{ padding: '10px 12px', borderRadius: 'var(--radius)', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '0.88rem' }}>
+            {erroSalvar}
+          </div>
+        )}
+
         {/* Botões */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-sm)' }}>
-          <button type="button" className="btn" onClick={handleClose}>
+          <button type="button" className="btn" onClick={handleClose} disabled={salvando}>
             Cancelar
           </button>
           <button 
             type="submit" 
             className="btn btn-primary" 
             aria-label="Salvar registro do dispositivo"
+            disabled={salvando}
+            aria-busy={salvando}
           >
-            {isEditing ? 'Salvar alterações' : 'Cadastrar dispositivo'}
+            {salvando ? 'Salvando…' : isEditing ? 'Salvar alterações' : 'Cadastrar dispositivo'}
           </button>
         </div>
 

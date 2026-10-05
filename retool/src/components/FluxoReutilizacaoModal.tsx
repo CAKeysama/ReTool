@@ -86,7 +86,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
           <p style={textoEtapa}>
             Na Fila do Projetista, a solicitação é avaliada e o resultado segue por um dos caminhos:
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '10px', marginTop: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))', gap: '10px', marginTop: '10px' }}>
             <div style={{ ...cartao, backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                 <Check size={15} style={{ color: 'var(--color-success)' }} />
@@ -139,7 +139,8 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
       {/* TODOS OS ESTADOS */}
       <div style={secao}>
         <h3 style={tituloSecao}>Todos os estados</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+        <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 480, borderCollapse: 'collapse', fontSize: '0.8rem' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
               <th style={{ padding: '6px 8px', fontWeight: 600, color: '#4b5563' }}>Status</th>
@@ -164,12 +165,13 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* PERMISSÕES */}
       <div style={secao}>
         <h3 style={tituloSecao}>Permissões por perfil</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '8px', fontSize: '0.8rem', color: '#4b5563' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: '8px', fontSize: '0.8rem', color: '#4b5563' }}>
           <div style={cartao}><strong>Engenharia:</strong> solicita, envia ao 1º filtro e solicita dispositivo novo.</div>
           <div style={cartao}><strong>Projetista:</strong> aprova/reprova no 1º filtro e decide similar/liberação no 2º filtro.</div>
           <div style={cartao}><strong>Admin:</strong> todas as transições do fluxo.</div>
@@ -185,7 +187,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
       </div>
 
       <div style={{ marginTop: 'var(--spacing-lg)', display: 'flex', justifyContent: 'flex-end' }}>
-        <button className="btn btn-primary" onClick={onClose} style={{ padding: '8px 20px' }}>
+        <button type="button" className="btn btn-primary" onClick={onClose} style={{ padding: '8px 20px' }}>
           Entendi
         </button>
       </div>

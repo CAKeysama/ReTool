@@ -5,6 +5,7 @@ import { Categoria } from '../../../domain/entities/categoria';
 import { Familia } from '../../../domain/entities/familia';
 import { Produto } from '../../../domain/entities/produto';
 import { Dispositivo } from '../../../domain/entities/dispositivo';
+import { ProgressoImportacao } from '../../../domain/repositories/IDispositivosRepository';
 import { describe, beforeEach, test, expect, jest } from '@jest/globals';
 
 describe('FirestoreDispositivosRepository', () => {
@@ -13,20 +14,6 @@ describe('FirestoreDispositivosRepository', () => {
   beforeEach(() => {
     resetMockDb();
     repository = new FirestoreDispositivosRepository();
-  });
-
-  test('should subscribe to all devices', () => {
-    const mockDevice = { id: 'd1', nome: 'Device 1' };
-    mockDbState.dispositivos.push(mockDevice);
-
-    let result: Dispositivo[] = [];
-    const unsub = repository.subscribeAll((data) => {
-      result = data;
-    });
-
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual(mockDevice);
-    expect(typeof unsub).toBe('function');
   });
 
   test('should add a device with a new uuid and dataCriacao', async () => {
@@ -188,7 +175,8 @@ describe('FirestoreDispositivosRepository', () => {
       const primeira = await importar(lista);
       const segunda = await importar(lista);
       expect(primeira).toMatchObject({ inseridos: 1200, atualizados: 0, erros: 0 });
-      expect(segunda).toMatchObject({ inseridos: 0, atualizados: 1200, erros: 0 });
+      // Nada mudou: nenhuma escrita na segunda vez (economia de cota).
+      expect(segunda).toMatchObject({ sucesso: 0, inseridos: 0, atualizados: 0, ignoradosSemAlteracao: 1200, erros: 0 });
       expect(mockDbState.dispositivos).toHaveLength(1200);
     });
 
@@ -226,12 +214,128 @@ describe('FirestoreDispositivosRepository', () => {
         // Reimportar grava só o que faltou.
         firestore.writeBatch.mockImplementation(original);
         const retry = await importar(lista);
-        expect(retry).toMatchObject({ inseridos: 500, atualizados: 600, erros: 0 });
+        expect(retry).toMatchObject({ inseridos: 500, atualizados: 0, ignoradosSemAlteracao: 600, erros: 0 });
         expect(mockDbState.dispositivos).toHaveLength(1100);
       } finally {
         firestore.writeBatch.mockImplementation(original);
         (console.error as jest.Mock).mockRestore();
       }
+    });
+  });
+
+  describe('importarLote — desempenho, progresso, cancelamento e cota', () => {
+    const firestore = () => jest.requireMock('firebase/firestore') as { writeBatch: jest.Mock; getDocs: jest.Mock };
+    const lista = (n: number, peso = '1') => Array.from({ length: n }, (_, i) => ({ codigo: `C${String(i).padStart(5, '0')}`, nome: 'D', peso }));
+    const commitsFeitos = () => firestore().writeBatch.mock.results
+      .map(r => (r.value as { commit: jest.Mock }).commit.mock.calls.length)
+      .reduce((a, b) => a + b, 0);
+
+    test('reimportar sobre banco igual: 0 escritas, só leituras paginadas (páginas de 1000)', async () => {
+      await repository.importarLote(lista(2500), [], [], [], [], [], []);
+      firestore().writeBatch.mockClear();
+      firestore().getDocs.mockClear();
+
+      const r = await repository.importarLote(lista(2500), [], [], [], [], [], []);
+
+      expect(r).toMatchObject({ sucesso: 0, inseridos: 0, atualizados: 0, ignoradosSemAlteracao: 2500, erros: 0, documentosLidos: 2500 });
+      expect(r.interrompido).toBeUndefined();
+      expect(commitsFeitos()).toBe(0);
+      expect(firestore().getDocs).toHaveBeenCalledTimes(3); // 1000 + 1000 + 500
+      expect(r.documentosFinais).toHaveLength(2500);
+    });
+
+    test('só os alterados e novos são gravados; documentosFinais reflete o estado final', async () => {
+      await repository.importarLote(lista(1000), [], [], [], [], [], []);
+      firestore().writeBatch.mockClear();
+      const nova = lista(1200).map((d, i) => (i < 10 ? { ...d, peso: '2' } : d));
+
+      const r = await repository.importarLote(nova, [], [], [], [], [], []);
+
+      expect(r).toMatchObject({ inseridos: 200, atualizados: 10, ignoradosSemAlteracao: 990, sucesso: 210 });
+      expect(commitsFeitos()).toBe(1); // 210 operações cabem num lote
+      expect(r.documentosFinais).toHaveLength(1200);
+      expect(r.documentosFinais!.find(d => d.codigo === 'C00000')).toMatchObject({ peso: '2' });
+    });
+
+    test('progresso real: lendo-existentes → gravando (lote / totalLotes) → concluido', async () => {
+      mockDbState.dispositivos.push({ id: 'x1', codigo: 'Z', nome: 'Z' });
+      const eventos: ProgressoImportacao[] = [];
+      await repository.importarLote(lista(1234), [], [], [], [], [], [], {
+        onProgresso: p => eventos.push({ ...p }), totalExistentesEstimado: 1,
+      });
+
+      expect(eventos[0]).toEqual({ etapa: 'lendo-existentes', feitos: 0, total: 1 });
+      expect(eventos).toContainEqual({ etapa: 'lendo-existentes', feitos: 1, total: 1 });
+      const gravando = eventos.filter(e => e.etapa === 'gravando');
+      expect(gravando.map(e => [e.feitos, e.lote, e.totalLotes])).toEqual([[0, 0, 3], [500, 1, 3], [1000, 2, 3], [1234, 3, 3]]);
+      expect(gravando.every(e => e.total === 1234)).toBe(true);
+      expect(eventos[eventos.length - 1]).toEqual({ etapa: 'concluido', feitos: 1234, total: 1234 });
+    });
+
+    test('cancelamento entre lotes: para, informa naoGravados e o já gravado fica', async () => {
+      const controle = new AbortController();
+      const r = await repository.importarLote(lista(1500), [], [], [], [], [], [], {
+        sinal: controle.signal,
+        onProgresso: p => { if (p.etapa === 'gravando' && p.lote === 1) controle.abort(); },
+      });
+
+      expect(r).toMatchObject({ interrompido: 'cancelado', sucesso: 500, inseridos: 500, naoGravados: 1000, erros: 0 });
+      expect(mockDbState.dispositivos).toHaveLength(500);
+      expect(r.documentosFinais).toHaveLength(500);
+
+      // Reimportar completa sem duplicar e sem regravar os 500.
+      const retry = await repository.importarLote(lista(1500), [], [], [], [], [], []);
+      expect(retry).toMatchObject({ inseridos: 1000, ignoradosSemAlteracao: 500 });
+      expect(mockDbState.dispositivos).toHaveLength(1500);
+    });
+
+    test('cancelado antes de começar: nenhuma leitura nem escrita', async () => {
+      const controle = new AbortController();
+      controle.abort();
+      firestore().getDocs.mockClear();
+      firestore().writeBatch.mockClear();
+      const r = await repository.importarLote(lista(10), [], [], [], [], [], [], { sinal: controle.signal });
+      expect(r).toMatchObject({ interrompido: 'cancelado', sucesso: 0, naoGravados: 10 });
+      expect(firestore().getDocs).not.toHaveBeenCalled();
+      expect(commitsFeitos()).toBe(0);
+    });
+
+    test('cota esgotada (resource-exhausted): para no lote recusado, sem tentar os seguintes', async () => {
+      const original = firestore().writeBatch.getMockImplementation()!;
+      let chamadas = 0;
+      const commitsTentados: number[] = [];
+      firestore().writeBatch.mockImplementation((...args: unknown[]) => {
+        const batch = original(...args) as { commit: jest.Mock };
+        const n = ++chamadas;
+        const commitOriginal = batch.commit.getMockImplementation()!;
+        batch.commit.mockImplementation(async () => {
+          commitsTentados.push(n);
+          if (n === 2) throw Object.assign(new Error('Quota exceeded.'), { code: 'resource-exhausted' });
+          return commitOriginal();
+        });
+        return batch;
+      });
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const r = await repository.importarLote(lista(2000), [], [], [], [], [], []);
+        expect(r).toMatchObject({ interrompido: 'cota', sucesso: 500, naoGravados: 1500, erros: 0 });
+        expect(r.falhas).toEqual(['Quota exceeded.']);
+        expect(commitsTentados).toEqual([1, 2]); // não insiste nos lotes 3 e 4
+        expect(mockDbState.dispositivos).toHaveLength(500);
+      } finally {
+        firestore().writeBatch.mockImplementation(original);
+        (console.error as jest.Mock).mockRestore();
+      }
+    });
+
+    test('cota esgotada já na leitura dos existentes: nada é gravado', async () => {
+      mockDbState.dispositivos.push({ id: 'x1', codigo: 'Z', nome: 'Z' });
+      firestore().getDocs.mockImplementationOnce(async () => { throw Object.assign(new Error('quota'), { code: 'resource-exhausted' }); });
+      firestore().writeBatch.mockClear();
+      const r = await repository.importarLote(lista(10), [], [], [], [], [], []);
+      expect(r).toMatchObject({ interrompido: 'cota', sucesso: 0, naoGravados: 10 });
+      expect(commitsFeitos()).toBe(0);
+      expect(mockDbState.dispositivos).toHaveLength(1);
     });
   });
 
