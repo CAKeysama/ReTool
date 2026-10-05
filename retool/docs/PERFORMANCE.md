@@ -131,6 +131,45 @@ o app volta a ler as coleções e quem pode editar o recria.
   recebe a imagem automaticamente.
 - Lista de usuárias: só depois do login.
 
+### Reutilizações: filas e histórico no servidor
+
+Consultar "as pendências da fila" ou "a página 3 do histórico" no servidor
+exige que todo documento tenha `status` canônico e `dataCriacao` em texto
+ISO; registros antigos (status `pendente`, sem status, sem data) sumiriam
+das consultas. Por isso a tela decide o modo com 3 `count()` (total, status
+canônico, `dataCriacao > ''`; cerca de 3 leituras a cada 1.000 documentos):
+
+- **Modo servidor** (todos os documentos alcançáveis):
+  - cada fila mostra o tamanho por `count()` e só a aba aberta tem listener,
+    com `status in` + mais recentes primeiro + 50 itens ("Mostrar mais"
+    amplia);
+  - o histórico é paginado por cursor (25 por página), com status e
+    dispositivo filtrados no servidor e total por `count()`;
+  - texto livre filtra a página atual e oferece "Buscar em todo o histórico"
+    (lê a coleção, ação explícita); "Ações em Massa" também carrega a
+    coleção só ao abrir.
+- **Modo legado** (há registros antigos): coleção inteira, como antes, com
+  aviso. Uma Administradora clica em **"Normalizar"**: o app lê a coleção
+  uma vez, mostra quantos registros mudam (status e data de criação, esta
+  derivada de `data` ou, sem nenhuma, do momento da normalização), pede
+  confirmação, grava em lotes de 500 com progresso e um registro de
+  auditoria. As regras já permitiam essa atualização só à Administradora.
+  Limite: se alguém mudar o status de um registro antigo entre a leitura e
+  a gravação, o lote pode sobrescrever essa mudança.
+
+Medido no emulador com 3.000 reutilizações (600 antigas):
+
+| Abrir a tela | Leituras |
+|---|---|
+| Antes | 3.000 |
+| Modo legado (antes de normalizar) | 3.009 |
+| Modo servidor, Administradora | 64 (fila aberta 51 + contagens 13) |
+| Modo servidor, Engenharia / Projetista | 63 / 61 |
+| Aba Histórico / próxima página / filtro de status | 29 / 26 / 27 |
+| Normalizar (uma vez) | 3.000 leituras + 600 escritas, ~2,3 s |
+
+As filas passaram a ser ordenadas da mais recente para a mais antiga.
+
 ### Renderização
 
 - Lista de ações em massa virtualizada (`VirtualList`): só as linhas visíveis
@@ -217,26 +256,30 @@ Nada de autorização foi movido para o cliente. As regras novas
 | Tamanho das partes | 1 MiB por documento; partes só são redivididas na reconstrução | a tela sugere "Atualizar índice" a partir de ~600 KB numa parte ou 1.500 itens por parte; toda importação refaz o catálogo |
 | Download do catálogo na primeira busca | cresce com o total (≈ 1 leitura a cada 750 dispositivos; 18 partes hoje) | aceitável até dezenas de milhares; acima disso, busca no servidor (próximos passos) |
 | Custo de uma edição | 1 escrita do dispositivo + 1 da parte + 1 da meta + 1 da auditoria; até 2 leituras (meta e, com imagem, a linha do mesmo Número da Peça) | antes eram 2 escritas, mas abrir o app lia a coleção inteira |
-| Reutilizações | a tela ainda assina a coleção inteira (301 leituras no teste) | paginar no servidor depois de migrar os status antigos (ver abaixo) |
+| Reutilizações | modo legado lê a coleção inteira até a normalização | uma Administradora clica em "Normalizar" uma vez (1 leitura e no máximo 1 escrita por registro) |
 | Gravação de importações grandes | o SDK do Firestore processa cada lote de ~480 documentos de uma vez: com CPU 4x mais lenta, tarefas de até ~1,3 s durante a gravação (processar a planilha não trava) | lotes menores reduziriam as pausas, mas cada lote também grava as partes do catálogo (+~19 escritas por lote), o que pesa na cota; mantido |
 | Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras e reimportar também (os existentes são lidos do servidor), então não faça os dois no mesmo dia |
 
 ## Publicação
 
 1. `firebase deploy --only firestore:rules,firestore:indexes` (ou o
-   `npm run deploy` de sempre). O `firebase.json` agora aponta para
-   `firestore.indexes.json`, que só isenta de indexação os mapas grandes do
-   catálogo. Se o console perguntar se deve apagar índices compostos que não
+   `npm run deploy` de sempre), **antes** de publicar o site. O
+   `firebase.json` agora aponta para `firestore.indexes.json`, que isenta de
+   indexação os mapas grandes do catálogo e cria três índices compostos:
+   notificações (`destinatarioUid`, `dataHora desc`) e reutilizações
+   (`status`, `dataCriacao desc`) e (`dispositivoId`, `dataCriacao desc`).
+   Sem eles, notificações, filas e histórico filtrado falham. Se o filtro de
+   status junto com o de dispositivo der `failed-precondition` (não foi
+   possível confirmar no emulador), crie também (`dispositivoId`, `status`,
+   `dataCriacao desc`). Se o console perguntar se deve apagar índices compostos que não
    estão no arquivo, responda **não** e acrescente-os ao arquivo.
 2. Uma Administradora ou Projetista abre Dispositivos e clica em **"Criar
    índice de busca"** (uma vez).
 
 ## Próximos passos
 
-1. **Reutilizações paginadas no servidor.** Hoje a tela filtra os status no
-   navegador porque há documentos com status antigos ou ausentes; consultar
-   por status no servidor perderia esses registros. Migrar os status e então
-   paginar.
+1. **Normalizar as reutilizações** em produção (botão da Administradora),
+   num dia com folga de cota, para a tela sair do modo legado.
 2. **Ids determinísticos na importação** (a partir de Código + Dispositivo),
    para duas importações simultâneas não criarem duplicados.
 3. **Leituras exigindo usuária ativa** nas regras (hoje basta estar logada).

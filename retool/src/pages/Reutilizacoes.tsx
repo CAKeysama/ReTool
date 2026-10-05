@@ -9,7 +9,11 @@ import { LimiteDeErro, CarregandoModal } from '../components/LimiteDeErro';
 import { EstadoDados, SkeletonLista, SkeletonTabela, classificarErro, mensagemDeErro } from '../components/feedback';
 import { gravarComPrazo } from '../utils/tempo';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { useReutilizacoes, useNomesDispositivos } from '../presentation/hooks/useReutilizacoes';
+import {
+  useReutilizacoes, useNomesDispositivos, useModoReutilizacoes, useFilaReutilizacoes, useHistoricoReutilizacoes, obterReutilizacao
+} from '../presentation/hooks/useReutilizacoes';
+import { NormalizarReutilizacoes } from '../components/NormalizarReutilizacoes';
+import { documentosLegados } from '../domain/services/consultaReutilizacoes';
 import { ListChecks, ChevronDown, Check, X, Clock, Factory, Send, Wrench, ExternalLink, Info } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
@@ -32,9 +36,35 @@ const CARTOES_POR_VEZ = 50;
 const FILA_PROJETISTA: ReutilizacaoStatus[] = ['Em análise (Projetista)', 'Aguardando novo filtro (Projetista)'];
 const FILA_ENGENHARIA: ReutilizacaoStatus[] = ['Em análise (Engenharia)', 'Reutilização aprovada', 'Reutilização não aprovada'];
 
+/** Data usada na ordenação do histórico (a mesma do orderBy no servidor). */
+const chaveData = (u: Reutilizacao) => u.dataCriacao || u.data || '';
+
+/**
+ * Busca de texto do histórico (o Firestore não busca por trecho: no modo
+ * servidor ela age só na página atual, ou na coleção carregada sob demanda).
+ */
+const casaTexto = (u: Reutilizacao, q: string) =>
+  !!(u.descricaoAlteracao?.toLowerCase().includes(q) ||
+    u.responsavel?.toLowerCase().includes(q) ||
+    u.solicitanteNome?.toLowerCase().includes(q) ||
+    u.codigoPeca?.toLowerCase().includes(q) ||
+    u.numeroOs?.toLowerCase().includes(q) ||
+    u.descricaoPeca?.toLowerCase().includes(q));
+
+/**
+ * Dois modos de leitura (ver PERFORMANCE.md):
+ * - servidor (acervo normalizado): cada fila é contada no servidor e só a
+ *   aba aberta assina seus 50 cartões mais recentes (`status in` + limit;
+ *   "Mostrar mais" amplia); o histórico assina só a página atual (orderBy
+ *   dataCriacao + limit + cursor), com total por count(). A coleção inteira
+ *   só é lida por ação explícita (buscar texto em todo o histórico, ações
+ *   em massa).
+ * - legado (há registros com status antigo ou sem dataCriacao): coleção
+ *   inteira em tempo real, como antes; a Administração vê o aviso para
+ *   normalizar.
+ */
 export function Reutilizacoes() {
   const { deleteReutilizacao, transicionarReutilizacao, announce } = useReTool();
-  const { itens: reutilizacoes, estado: estadoDados, erro: erroDados, doCache, tentarNovamente } = useReutilizacoes();
   const { canExcluir, isProjetista, isEngenharia, isAdmin, currentRole } = usePermissions();
   const BULK_THRESHOLD = 20;
   const { progress: bulkProgress, runWithProgress } = useBulkProgress();
@@ -63,68 +93,127 @@ export function Reutilizacoes() {
   const [bulkConfirm, setBulkConfirm] = useState<'disable' | 'delete' | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
   useAvisoAoSair(bulkLoading);
+  // Busca de texto em todo o histórico (carrega a coleção; só com clique).
+  const [buscaCompleta, setBuscaCompleta] = useState(false);
 
   const statusDe = (u: Reutilizacao): ReutilizacaoStatus => u.status || 'Em análise (Projetista)';
 
+  // ---------------- FONTES DE DADOS (modo servidor x legado) ----------------
+  const { modo, contagens, reverificar } = useModoReutilizacoes();
+  const servidor = modo === 'servidor';
+  const legado = modo === 'legado';
+  const todas = useReutilizacoes(legado || (servidor && (buscaCompleta || isBulkOpen)));
+  const reutilizacoes = todas.itens;
+  // Histórico no cliente: modo legado ou busca de texto em todo o histórico.
+  const historicoNoCliente = legado || buscaCompleta;
+
   // ---------------- ABAS DISPONÍVEIS POR PERFIL ----------------
-  const filaProjetista = useMemo(
-    () => reutilizacoes.filter(u => FILA_PROJETISTA.includes(statusDe(u))),
-    [reutilizacoes]
+  const filaProjetistaLegado = useMemo(
+    () => (legado ? reutilizacoes.filter(u => FILA_PROJETISTA.includes(statusDe(u))) : []),
+    [legado, reutilizacoes]
   );
-  const filaEngenharia = useMemo(
-    () => reutilizacoes.filter(u => FILA_ENGENHARIA.includes(statusDe(u))),
-    [reutilizacoes]
+  const filaEngenhariaLegado = useMemo(
+    () => (legado ? reutilizacoes.filter(u => FILA_ENGENHARIA.includes(statusDe(u))) : []),
+    [legado, reutilizacoes]
   );
+  const veFilaP = isProjetista || isAdmin;
+  const veFilaE = isEngenharia || isAdmin;
+  // A aba ativa sai do estado (o hook de cada fila precisa dela antes das abas existirem).
+  const abaPadrao = veFilaP ? 'filaProjetista' : veFilaE ? 'filaEngenharia' : 'historico';
+  const tabAtiva = activeTab && ((activeTab === 'filaProjetista' && veFilaP) || (activeTab === 'filaEngenharia' && veFilaE) || activeTab === 'historico')
+    ? activeTab : abaPadrao;
+  // Filas no servidor: count() para os contadores; listener só da aba aberta.
+  const filaP = useFilaReutilizacoes(FILA_PROJETISTA, limiteCartoes, servidor && veFilaP, tabAtiva === 'filaProjetista');
+  const filaE = useFilaReutilizacoes(FILA_ENGENHARIA, limiteCartoes, servidor && veFilaE, tabAtiva === 'filaEngenharia');
+
+  const filaProjetista = servidor ? filaP.itens : filaProjetistaLegado;
+  const filaEngenharia = servidor ? filaE.itens : filaEngenhariaLegado;
+  // Contadores só quando conhecidos (0 durante o carregamento enganaria).
+  const contaFilaP = servidor ? filaP.total ?? undefined : todas.estado === 'pronto' ? filaProjetistaLegado.length : undefined;
+  const contaFilaE = servidor ? filaE.total ?? undefined : todas.estado === 'pronto' ? filaEngenhariaLegado.length : undefined;
+  const totalGeral = legado && todas.estado === 'pronto' ? reutilizacoes.length : contagens?.total;
 
   const tabs = useMemo(() => {
     const t: { id: string; label: string; count?: number }[] = [];
-    if (isProjetista || isAdmin) t.push({ id: 'filaProjetista', label: 'Fila do Projetista', count: filaProjetista.length });
-    if (isEngenharia || isAdmin) t.push({ id: 'filaEngenharia', label: 'Fila da Engenharia', count: filaEngenharia.length });
-    t.push({ id: 'historico', label: 'Histórico Geral' });
+    if (veFilaP) t.push({ id: 'filaProjetista', label: 'Fila do Projetista', count: contaFilaP });
+    if (veFilaE) t.push({ id: 'filaEngenharia', label: 'Fila da Engenharia', count: contaFilaE });
+    t.push({ id: 'historico', label: 'Histórico Geral', count: totalGeral });
     return t;
-  }, [isProjetista, isEngenharia, isAdmin, filaProjetista.length, filaEngenharia.length]);
+  }, [veFilaP, veFilaE, contaFilaP, contaFilaE, totalGeral]);
 
-  const tabAtiva = activeTab && tabs.some(t => t.id === activeTab) ? activeTab : tabs[0].id;
+  const hist = useHistoricoReutilizacoes(
+    { status: filterStatus === 'todos' ? undefined : filterStatus, dispositivoId: filterDispId || undefined },
+    POR_PAGINA,
+    servidor && tabAtiva === 'historico' && !buscaCompleta
+  );
+
+  // Estado da fonte que a aba ativa mostra.
+  const fonte = modo === 'verificando'
+    ? { estado: 'carregando' as const, erro: null as unknown, doCache: false, tentarNovamente: reverificar }
+    : legado ? todas
+    : tabAtiva === 'filaProjetista' ? filaP
+    : tabAtiva === 'filaEngenharia' ? filaE
+    : buscaCompleta ? todas : hist;
+  const { estado: estadoDados, erro: erroDados, doCache, tentarNovamente } = fonte;
 
   // Navegação vinda de uma notificação: abre a aba certa e destaca o registro.
+  // No modo servidor o registro é lido sozinho (1 leitura) para escolher a aba.
   useEffect(() => {
     const st = location.state as { reutilizacaoId?: string; dispositivoId?: string } | null;
-    if (!st?.reutilizacaoId || estadoDados !== 'pronto') return;
-    const alvo = reutilizacoes.find(u => u.id === st.reutilizacaoId);
+    if (!st?.reutilizacaoId || modo === 'verificando') return;
+    if (legado && todas.estado !== 'pronto') return;
     setDestacarId(st.reutilizacaoId);
-    if (!alvo) return;
-    const s = statusDe(alvo);
-    if (FILA_PROJETISTA.includes(s) && (isProjetista || isAdmin)) setActiveTab('filaProjetista');
-    else if (FILA_ENGENHARIA.includes(s) && (isEngenharia || isAdmin)) setActiveTab('filaEngenharia');
-    else setActiveTab('historico');
+    const abrirAba = (alvo: Reutilizacao | null | undefined) => {
+      if (!alvo) return;
+      const s = statusDe(alvo);
+      if (FILA_PROJETISTA.includes(s) && (isProjetista || isAdmin)) setActiveTab('filaProjetista');
+      else if (FILA_ENGENHARIA.includes(s) && (isEngenharia || isAdmin)) setActiveTab('filaEngenharia');
+      else setActiveTab('historico');
+    };
+    if (legado) { abrirAba(reutilizacoes.find(u => u.id === st.reutilizacaoId)); return; }
+    let vivo = true;
+    obterReutilizacao(st.reutilizacaoId).then(a => { if (vivo) abrirAba(a); }).catch(() => { /* sem destino: fica na aba padrão */ });
+    return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state, estadoDados]);
+  }, [location.state, modo, todas.estado]);
 
   // ---------------- HISTÓRICO (tabela) ----------------
+  // No cliente (legado ou busca completa): filtros e paginação em memória.
   const historicoFiltrado = useMemo(() => {
+    if (!historicoNoCliente) return [];
+    const q = textoBusca.toLowerCase();
     return reutilizacoes.filter(u => {
       const matchPeca = filterDispId === '' || u.dispositivoId === filterDispId;
       const matchStatus = filterStatus === 'todos' || statusDe(u) === filterStatus;
-      const q = textoBusca.toLowerCase();
-      const matchText = textoBusca === '' ||
-        (u.descricaoAlteracao?.toLowerCase().includes(q)) ||
-        (u.responsavel?.toLowerCase().includes(q)) ||
-        (u.solicitanteNome?.toLowerCase().includes(q)) ||
-        (u.codigoPeca?.toLowerCase().includes(q)) ||
-        (u.numeroOs?.toLowerCase().includes(q)) ||
-        (u.descricaoPeca?.toLowerCase().includes(q));
+      const matchText = textoBusca === '' || casaTexto(u, q);
       return matchPeca && matchStatus && matchText;
-    });
-  }, [reutilizacoes, filterDispId, textoBusca, filterStatus]);
+    }).sort((a, b) => (chaveData(a) < chaveData(b) ? 1 : chaveData(a) > chaveData(b) ? -1 : 0));
+  }, [historicoNoCliente, reutilizacoes, filterDispId, textoBusca, filterStatus]);
 
   // Filtro mudou: volta à primeira página.
   useEffect(() => { setPagina(1); }, [filterDispId, textoBusca, filterStatus]);
-  const totalPaginas = Math.max(1, Math.ceil(historicoFiltrado.length / POR_PAGINA));
-  const paginaAtual = Math.min(pagina, totalPaginas);
-  const historicoPagina = useMemo(
-    () => historicoFiltrado.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA),
-    [historicoFiltrado, paginaAtual]
-  );
+  const totalPaginasCliente = Math.max(1, Math.ceil(historicoFiltrado.length / POR_PAGINA));
+  const paginaCliente = Math.min(pagina, totalPaginasCliente);
+
+  // No servidor: a página atual; o texto filtra só ela (aviso na tela).
+  const textoSoNaPagina = servidor && !buscaCompleta && textoBusca !== '';
+  const historicoPagina = useMemo(() => {
+    if (historicoNoCliente) return historicoFiltrado.slice((paginaCliente - 1) * POR_PAGINA, paginaCliente * POR_PAGINA);
+    if (!textoBusca) return hist.itens;
+    const q = textoBusca.toLowerCase();
+    return hist.itens.filter(u => casaTexto(u, q));
+  }, [historicoNoCliente, historicoFiltrado, paginaCliente, hist.itens, textoBusca]);
+
+  // Total, página e navegação do histórico, nos dois modos.
+  const totalHistorico: number | null = historicoNoCliente ? historicoFiltrado.length : hist.total;
+  const paginaAtual = historicoNoCliente ? paginaCliente : hist.pagina;
+  const totalPaginas = historicoNoCliente
+    ? totalPaginasCliente
+    : totalHistorico !== null ? Math.max(1, Math.ceil(totalHistorico / POR_PAGINA)) : null;
+  const temAnterior = paginaAtual > 1;
+  const temProxima = historicoNoCliente ? paginaCliente < totalPaginasCliente : hist.temMais;
+  const irAnterior = () => (historicoNoCliente ? setPagina(paginaCliente - 1) : hist.anterior());
+  const irProxima = () => (historicoNoCliente ? setPagina(paginaCliente + 1) : hist.proxima());
 
   // Nomes só dos dispositivos que aparecem na tela.
   const filaVisivel = tabAtiva === 'filaProjetista' ? filaProjetista : tabAtiva === 'filaEngenharia' ? filaEngenharia : [];
@@ -145,7 +234,7 @@ export function Reutilizacoes() {
   // ---------------- AÇÕES EM MASSA ----------------
   const bulkBusca = useDebouncedValue(bulkSearch, 200);
   const bulkFiltered = useMemo(() => {
-    if (!isBulkOpen) return [];
+    if (!isBulkOpen || todas.estado !== 'pronto') return [];
     if (!bulkBusca.trim()) return reutilizacoes;
     const q = bulkBusca.toLowerCase();
     return reutilizacoes.filter(u => {
@@ -158,7 +247,7 @@ export function Reutilizacoes() {
         disp?.nome?.toLowerCase().includes(q)
       );
     });
-  }, [isBulkOpen, reutilizacoes, bulkBusca, nomeDispositivo]);
+  }, [isBulkOpen, todas.estado, reutilizacoes, bulkBusca, nomeDispositivo]);
 
   const bulkItems: BulkItem[] = useMemo(() => bulkFiltered.map(u => {
     const disp = nomeDispositivo(u.dispositivoId);
@@ -208,6 +297,8 @@ export function Reutilizacoes() {
     } finally {
       setBulkLoading(false);
       closeBulk();
+      // Recontagem: total da aba Histórico e prontidão do acervo.
+      reverificar();
     }
   };
 
@@ -358,6 +449,17 @@ export function Reutilizacoes() {
         </button>
       </div>
 
+      {isAdmin && legado && contagens && documentosLegados(contagens) > 0 && (
+        <NormalizarReutilizacoes
+          legados={documentosLegados(contagens)}
+          total={contagens.total}
+          onConcluido={n => {
+            if (n > 0) announce(`${n.toLocaleString('pt-BR')} reutilizações antigas normalizadas.`);
+            reverificar();
+          }}
+        />
+      )}
+
       <Tabs tabs={tabs} active={tabAtiva} onChange={t => { setActiveTab(t); setLimiteCartoes(CARTOES_POR_VEZ); }} />
 
       {doCache && estadoDados === 'pronto' && (
@@ -368,7 +470,7 @@ export function Reutilizacoes() {
       {estadoDados === 'carregando' && tabAtiva !== 'historico' && (
         <div aria-busy="true"><SkeletonLista linhas={4} alturaLinha={74} /></div>
       )}
-      {estadoDados === 'erro' && (
+      {estadoDados === 'erro' && tabAtiva !== 'historico' && (
         <EstadoDados estado={classificarErro(erroDados)} onTentarNovamente={tentarNovamente} />
       )}
 
@@ -377,7 +479,8 @@ export function Reutilizacoes() {
         filaProjetista.length === 0 ? (
           <EmptyState message="Sem pendências no momento." />
         ) : (
-          <ListaCartoes itens={filaProjetista} limite={limiteCartoes} onMais={() => setLimiteCartoes(l => l + CARTOES_POR_VEZ)} render={cartaoFila} />
+          <ListaCartoes itens={filaProjetista} limite={limiteCartoes} onMais={() => setLimiteCartoes(l => l + CARTOES_POR_VEZ)} render={cartaoFila}
+            restantesServidor={servidor ? restantes(filaP) : undefined} />
         )
       )}
 
@@ -386,12 +489,14 @@ export function Reutilizacoes() {
         filaEngenharia.length === 0 ? (
           <EmptyState message="Sem pendências no momento." />
         ) : (
-          <ListaCartoes itens={filaEngenharia} limite={limiteCartoes} onMais={() => setLimiteCartoes(l => l + CARTOES_POR_VEZ)} render={cartaoFila} />
+          <ListaCartoes itens={filaEngenharia} limite={limiteCartoes} onMais={() => setLimiteCartoes(l => l + CARTOES_POR_VEZ)} render={cartaoFila}
+            restantesServidor={servidor ? restantes(filaE) : undefined} />
         )
       )}
 
       {/* ---------- ABA 3: HISTÓRICO GERAL (tabela) ---------- */}
-      {tabAtiva === 'historico' && estadoDados !== 'erro' && (
+      {/* Erro no histórico fica dentro do quadro: os filtros continuam à mão (ex.: trocar um filtro que falhou). */}
+      {tabAtiva === 'historico' && (
         <div style={{
           backgroundColor: 'var(--color-surface)',
           border: '1px solid var(--color-border)',
@@ -405,9 +510,13 @@ export function Reutilizacoes() {
             borderBottom: '1px solid var(--color-border)', backgroundColor: '#fafafa'
           }}>
             <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
-              {estadoDados === 'carregando' ? 'Carregando registros…' : <>{historicoFiltrado.length.toLocaleString('pt-BR')} {historicoFiltrado.length === 1 ? 'registro' : 'registros'}</>}
+              {estadoDados === 'erro' ? 'Registros indisponíveis'
+                : estadoDados === 'carregando' ? 'Carregando registros…'
+                : totalHistorico === null ? 'Contando registros…'
+                : <>{totalHistorico.toLocaleString('pt-BR')} {totalHistorico === 1 ? 'registro' : 'registros'}</>}
               {bulkSelected.size > 0 && <> · <span style={{ color: 'var(--color-primary)' }}>{bulkSelected.size.toLocaleString('pt-BR')} selecionado(s)</span></>}
-              {canExcluir && allVisibleSelected && historicoFiltrado.length > historicoPagina.length && bulkSelected.size < historicoFiltrado.length && (
+              {/* Selecionar o filtro inteiro só com a lista em memória (no servidor, pelas Ações em Massa). */}
+              {canExcluir && historicoNoCliente && allVisibleSelected && historicoFiltrado.length > historicoPagina.length && bulkSelected.size < historicoFiltrado.length && (
                 <> · <button type="button" className="btn-link" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-primary)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
                   onClick={() => setBulkSelected(new Set(historicoFiltrado.map(u => u.id)))}>
                   Selecionar todos os {historicoFiltrado.length.toLocaleString('pt-BR')} do filtro
@@ -440,7 +549,11 @@ export function Reutilizacoes() {
               placeholder="Buscar por descrição, peça, solicitante ou OS..."
               aria-label="Buscar no histórico"
               value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
+              onChange={(e) => {
+                setFilterText(e.target.value);
+                // Texto apagado: volta a ler só a página atual no servidor.
+                if (!e.target.value) setBuscaCompleta(false);
+              }}
             />
             <select
               className="input-field"
@@ -459,7 +572,27 @@ export function Reutilizacoes() {
             />
           </div>
 
-          {estadoDados === 'carregando' ? (
+          {/* Texto livre no modo servidor: só a página atual, ou a coleção inteira por clique. */}
+          {textoSoNaPagina && (
+            <div role="status" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', padding: '8px 16px', borderBottom: '1px solid var(--color-border)', background: '#fff7e6', color: '#5c4400', fontSize: '0.82rem' }}>
+              <span>A busca por texto está filtrando só os registros desta página ({hist.itens.length.toLocaleString('pt-BR')}).</span>
+              <button type="button" className="btn" style={{ padding: '4px 12px', minHeight: 28, fontSize: '0.78rem' }} onClick={() => setBuscaCompleta(true)}>
+                Buscar em todo o histórico{contagens ? ` (lê ${contagens.total.toLocaleString('pt-BR')} registros)` : ''}
+              </button>
+            </div>
+          )}
+          {servidor && buscaCompleta && (
+            <div role="status" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', padding: '8px 16px', borderBottom: '1px solid var(--color-border)', fontSize: '0.82rem', color: '#374151' }}>
+              <span>{todas.estado === 'carregando' ? 'Carregando todo o histórico…' : 'Buscando em todo o histórico.'}</span>
+              <button type="button" className="btn" style={{ padding: '4px 12px', minHeight: 28, fontSize: '0.78rem' }} onClick={() => setBuscaCompleta(false)}>
+                Buscar só na página atual
+              </button>
+            </div>
+          )}
+
+          {estadoDados === 'erro' ? (
+            <EstadoDados estado={classificarErro(erroDados)} onTentarNovamente={tentarNovamente} compacto />
+          ) : estadoDados === 'carregando' ? (
             <div aria-busy="true" style={{ padding: '12px 16px' }}><SkeletonTabela linhas={8} colunas={6} /></div>
           ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -553,12 +686,14 @@ export function Reutilizacoes() {
                     </React.Fragment>
                   );
                 })}
-                {historicoFiltrado.length === 0 && (
+                {historicoPagina.length === 0 && (
                   <tr>
                     <td colSpan={colunaCount} style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
-                      {reutilizacoes.length === 0
+                      {(historicoNoCliente ? reutilizacoes.length === 0 : totalGeral === 0)
                         ? 'Nenhuma reutilização registrada ainda.'
-                        : 'Nenhum registro encontrado para os filtros atuais.'}
+                        : textoSoNaPagina
+                          ? 'Nenhum registro desta página corresponde ao texto. Use "Buscar em todo o histórico" para procurar nos demais.'
+                          : 'Nenhum registro encontrado para os filtros atuais.'}
                     </td>
                   </tr>
                 )}
@@ -567,15 +702,16 @@ export function Reutilizacoes() {
           </div>
           )}
 
-          {estadoDados === 'pronto' && totalPaginas > 1 && (
+          {estadoDados === 'pronto' && (temAnterior || temProxima) && (
             <nav aria-label="Paginação do histórico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '10px 16px', borderTop: '1px solid var(--color-border)', fontSize: '0.83rem', flexWrap: 'wrap' }}>
               <span>
-                {((paginaAtual - 1) * POR_PAGINA + 1).toLocaleString('pt-BR')}–{Math.min(paginaAtual * POR_PAGINA, historicoFiltrado.length).toLocaleString('pt-BR')} de {historicoFiltrado.length.toLocaleString('pt-BR')}
+                {((paginaAtual - 1) * POR_PAGINA + 1).toLocaleString('pt-BR')}–{((paginaAtual - 1) * POR_PAGINA + (historicoNoCliente ? historicoPagina.length : hist.itens.length)).toLocaleString('pt-BR')}
+                {totalHistorico !== null && <> de {totalHistorico.toLocaleString('pt-BR')}</>}
               </span>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button type="button" className="btn" disabled={paginaAtual <= 1} onClick={() => setPagina(paginaAtual - 1)}>Anterior</button>
-                <span aria-live="polite">Página {paginaAtual} de {totalPaginas}</span>
-                <button type="button" className="btn" disabled={paginaAtual >= totalPaginas} onClick={() => setPagina(paginaAtual + 1)}>Próxima</button>
+                <button type="button" className="btn" disabled={!temAnterior} onClick={irAnterior}>Anterior</button>
+                <span aria-live="polite">Página {paginaAtual}{totalPaginas !== null && <> de {totalPaginas}</>}</span>
+                <button type="button" className="btn" disabled={!temProxima} onClick={irProxima}>Próxima</button>
               </div>
             </nav>
           )}
@@ -610,6 +746,11 @@ export function Reutilizacoes() {
         isLoading={bulkLoading}
         progress={bulkProgress}
         canDisable={false}
+        emptyMessage={todas.estado === 'carregando'
+          ? `Carregando todas as reutilizações${contagens ? ` (${contagens.total.toLocaleString('pt-BR')} registros)` : ''}…`
+          : todas.estado === 'erro'
+            ? mensagemDeErro(todas.erro, 'Não foi possível carregar as reutilizações. Feche e tente de novo.')
+            : undefined}
       />
       </Suspense>
       </LimiteDeErro>
@@ -621,15 +762,26 @@ export function Reutilizacoes() {
   );
 }
 
-function ListaCartoes({ itens, limite, onMais, render }: {
+/** Cartões da fila no servidor que ainda não vieram (null = há mais, total desconhecido). */
+const restantes = (f: { itens: Reutilizacao[]; temMais: boolean; total: number | null }): number | null =>
+  !f.temMais ? 0 : f.total !== null ? Math.max(1, f.total - f.itens.length) : null;
+
+/**
+ * Cartões das filas, `limite` por vez. No modo legado a lista está toda em
+ * memória; no servidor (`restantesServidor`) só os carregados, e "Mostrar
+ * mais" amplia o limite da consulta.
+ */
+function ListaCartoes({ itens, limite, onMais, render, restantesServidor }: {
   itens: Reutilizacao[]; limite: number; onMais: () => void; render: (u: Reutilizacao) => React.ReactNode;
+  restantesServidor?: number | null;
 }) {
+  const faltam = restantesServidor !== undefined ? restantesServidor : Math.max(0, itens.length - limite);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {itens.slice(0, limite).map(render)}
-      {itens.length > limite && (
+      {faltam !== 0 && (
         <button type="button" className="btn" onClick={onMais} style={{ alignSelf: 'center' }}>
-          Mostrar mais ({(itens.length - limite).toLocaleString('pt-BR')} restantes)
+          Mostrar mais{faltam !== null ? ` (${faltam.toLocaleString('pt-BR')} restantes)` : ''}
         </button>
       )}
     </div>

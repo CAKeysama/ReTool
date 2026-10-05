@@ -50,6 +50,21 @@ jest.mock('firebase/firestore', () => {
     orderBy: jest.fn((campo?: any, ..._args: any[]) => ({ tipo: 'orderBy', campo })),
     limit: jest.fn((n?: any) => ({ tipo: 'limit', n })),
     documentId: jest.fn(() => '__name__'),
+    where: jest.fn((campo?: any, op?: any, valor?: any) => ({ tipo: 'where', campo, op, valor })),
+    // count() aplica os where ('==', 'in', '>') anotados na consulta.
+    getCountFromServer: jest.fn(async (colRef: any) => {
+      const col = colRef.name as keyof typeof mockDbState;
+      const filtros: any[] = (colRef.restricoes || []).filter((r: any) => r?.tipo === 'where');
+      const passa = (item: any) => filtros.every(f => {
+        const v = item[f.campo];
+        if (f.op === '==') return v === f.valor;
+        if (f.op === 'in') return (f.valor as any[]).includes(v);
+        if (f.op === '>') return typeof v === typeof f.valor && v > f.valor;
+        return true;
+      });
+      const count = (mockDbState[col] || []).filter(passa).length;
+      return { data: () => ({ count }) };
+    }),
     startAfter: jest.fn((valor?: any) => ({ tipo: 'startAfter', valor })),
     serverTimestamp: jest.fn(() => ({
       __serverTimestampMock: true,
