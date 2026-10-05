@@ -327,7 +327,14 @@ export function Dispositivos() {
         ) : lista.estado === 'carregando' ? (
           <SkeletonLista linhas={Math.min(itemsPerPage, 6)} />
         ) : lista.itens.length === 0 ? (
-          filtrando
+          (lista.doCache || !navigator.onLine) ? (
+            <EstadoDados
+              estado="erro"
+              titulo="Sem conexão com o servidor"
+              descricao="Não foi possível carregar os dispositivos porque não há conexão com o servidor e não há dados em cache."
+              onTentarNovamente={lista.tentarNovamente}
+            />
+          ) : filtrando
             ? <EstadoDados estado="sem-resultados" descricao="Nenhum dispositivo corresponde à busca ou aos filtros." />
             : <EstadoDados estado="vazio" titulo="Nenhum dispositivo cadastrado" descricao="Cadastre um dispositivo ou importe uma planilha." />
         ) : (

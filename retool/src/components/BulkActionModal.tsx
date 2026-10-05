@@ -61,16 +61,37 @@ export function BulkActionModal({
   carregandoItens,
 }: BulkActionModalProps) {
   const dialogoRef = React.useRef<HTMLDivElement>(null);
+  const botaoCancelarRef = React.useRef<HTMLButtonElement>(null);
+
+  React.useEffect(() => {
+    if (isLoading) {
+      botaoCancelarRef.current?.focus();
+    }
+  }, [isLoading]);
+
   // Foco preso no diálogo (Tab/Shift+Tab circulam dentro dele) e Esc fecha
   // quando não há operação em andamento nem confirmação aberta.
   const aoTeclar = (e: React.KeyboardEvent) => {
     if (confirmAction) return;
-    if (e.key === 'Escape' && !isLoading) { e.stopPropagation(); onClose(); return; }
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      if (!isLoading) onClose();
+      return;
+    }
     if (e.key !== 'Tab' || !dialogoRef.current) return;
-    const focaveis = Array.from(dialogoRef.current.querySelectorAll<HTMLElement>(
+
+    // Quando estiver em execução (isLoading), o foco deve ficar restrito à camada de carregamento (A3)
+    const container = isLoading
+      ? (dialogoRef.current.querySelector<HTMLElement>('[data-loading-overlay]') || dialogoRef.current)
+      : dialogoRef.current;
+
+    const focaveis = Array.from(container.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )).filter(el => el.offsetParent !== null);
-    if (focaveis.length === 0) return;
+    if (focaveis.length === 0) {
+      e.preventDefault();
+      return;
+    }
     const primeiro = focaveis[0], ultimo = focaveis[focaveis.length - 1];
     if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
     else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
@@ -127,16 +148,20 @@ export function BulkActionModal({
         >
           {/* Loading overlay */}
           {isLoading && (
-            <div style={{
-              position: 'absolute', inset: 0,
-              backgroundColor: 'rgba(255,255,255,0.96)',
-              zIndex: 10,
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              gap: '20px',
-              borderRadius: 'var(--radius-lg)',
-              padding: '32px'
-            }}>
+            <div
+              data-loading-overlay
+              aria-busy="true"
+              style={{
+                position: 'absolute', inset: 0,
+                backgroundColor: 'rgba(255,255,255,0.96)',
+                zIndex: 10,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                gap: '20px',
+                borderRadius: 'var(--radius-lg)',
+                padding: '32px'
+              }}
+            >
               {progress ? (
                 // Barra de progresso real
                 <>
@@ -185,7 +210,12 @@ export function BulkActionModal({
               )}
               <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>Não feche esta janela</p>
               {progress && onCancelarExecucao && (
-                <button type="button" className="btn" onClick={onCancelarExecucao}>
+                <button
+                  ref={botaoCancelarRef}
+                  type="button"
+                  className="btn"
+                  onClick={onCancelarExecucao}
+                >
                   Cancelar (para depois do lote atual)
                 </button>
               )}
@@ -216,7 +246,8 @@ export function BulkActionModal({
             </div>
             <button
               className="btn btn-icon"
-              onClick={onClose}
+              onClick={isLoading ? undefined : onClose}
+              disabled={isLoading}
               aria-label="Fechar"
             >
               <X size={18} />
@@ -346,7 +377,8 @@ export function BulkActionModal({
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 className="btn"
-                onClick={onClose}
+                onClick={isLoading ? undefined : onClose}
+                disabled={isLoading}
                 style={{ padding: '0 16px', height: '36px' }}
               >
                 Cancelar
@@ -388,7 +420,7 @@ export function BulkActionModal({
       {/* Confirmação: Desativar */}
       <AccessibleModal
         isOpen={confirmAction === 'disable'}
-        onClose={() => onSetConfirmAction(null)}
+        onClose={() => { if (!isLoading) onSetConfirmAction(null); }}
         title="Desativar itens"
         maxWidth="420px"
       >
@@ -420,7 +452,7 @@ export function BulkActionModal({
       {/* Confirmação: Excluir */}
       <AccessibleModal
         isOpen={confirmAction === 'delete'}
-        onClose={() => onSetConfirmAction(null)}
+        onClose={() => { if (!isLoading) onSetConfirmAction(null); }}
         title="Excluir itens"
         maxWidth="420px"
       >

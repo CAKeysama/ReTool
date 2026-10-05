@@ -121,6 +121,7 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
     const t0 = performance.now();
     setEstadoServidor(s => (s === 'pronto' || s === 'atualizando' ? 'atualizando' : 'carregando'));
     setErro(null);
+    setDoCache(false);
     const depoisDe = cursores.current[pagina - 1] ?? null;
     // Sem cursor para esta página (não deveria acontecer: `proxima` só avança
     // com cursor): volta para a última página conhecida, nunca para a 1ª em silêncio.
@@ -145,20 +146,47 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
     const parar = onSnapshot(q, { includeMetadataChanges: true }, snap => {
       if (!vivo) return;
       // Aviso de cache só se o servidor não responder em 2,5 s (voltar a uma
-      // página já vista mostra o cache por um instante, o que é normal).
+      // página já vista mostra o cache por um instante, o que é normal),
+      // exceto se o navegador já estiver offline (A2).
       if (timerCache) { clearTimeout(timerCache); timerCache = null; }
-      if (snap.metadata.fromCache) timerCache = setTimeout(() => { if (vivo) setDoCache(true); }, 2500);
-      else setDoCache(false);
+      const docs = snap.docs.slice(0, tamanho);
+
+      if (snap.metadata.fromCache) {
+        if (!navigator.onLine) {
+          setDoCache(true);
+        } else {
+          timerCache = setTimeout(() => {
+            if (!vivo) return;
+            setDoCache(true);
+            if (snap.docs.length === 0) {
+              setItensServidor([]);
+              setEstadoServidor('pronto');
+            }
+          }, 2500);
+        }
+      } else {
+        setDoCache(false);
+      }
+
       const eraPrimeira = primeira;
       if (primeira) { registrarConsulta('dispositivos:pagina', snap.size, performance.now() - t0); primeira = false; }
       else registrarConsulta('dispositivos:pagina-mudanca', snap.docChanges().length, 0);
-      const docs = snap.docs.slice(0, tamanho);
+
       cursores.current[pagina] = docs.length ? docs[docs.length - 1].id : null;
       cursores.current.length = pagina + 1;
       paginasGuardadas.set(chaveAnterior.current, { pagina, cursores: [...cursores.current] });
-      setItensServidor(docs.map(d => ({ id: d.id, ...d.data() } as Dispositivo)));
-      setTemMaisServidor(snap.size > tamanho);
-      setEstadoServidor('pronto');
+
+      // Se veio do cache sem nenhum documento e o navegador está online,
+      // não marca imediatamente como 'pronto' para não piscar "Nenhum resultado"
+      // antes do servidor responder.
+      if (snap.metadata.fromCache && docs.length === 0 && navigator.onLine) {
+        setEstadoServidor('carregando');
+      } else {
+        setItensServidor(docs.map(d => ({ id: d.id, ...d.data() } as Dispositivo)));
+        setTemMaisServidor(snap.size > tamanho);
+        setEstadoServidor('pronto');
+      }
+
       // Documento entrou/saiu da página depois da primeira resposta: refaz a contagem.
       if (!eraPrimeira && snap.docChanges().some(c => c.type !== 'modified') && !snap.metadata.hasPendingWrites) setRevisaoDados(r => r + 1);
     }, e => {
@@ -167,7 +195,20 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
       setErro(e);
       setEstadoServidor('erro');
     });
-    return () => { vivo = false; if (timerCache) clearTimeout(timerCache); parar(); };
+
+    const aoMudarRede = () => {
+      if (!navigator.onLine) setDoCache(true);
+    };
+    window.addEventListener('online', aoMudarRede);
+    window.addEventListener('offline', aoMudarRede);
+
+    return () => {
+      vivo = false;
+      if (timerCache) clearTimeout(timerCache);
+      window.removeEventListener('online', aoMudarRede);
+      window.removeEventListener('offline', aoMudarRede);
+      parar();
+    };
   }, [usarIndice, pagina, tamanho, filtro.categoriaId, tentativa]);
 
   // Total no servidor (count): ao mudar o filtro e quando a página ganha/perde documentos.

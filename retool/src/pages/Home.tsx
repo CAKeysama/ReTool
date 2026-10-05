@@ -40,9 +40,16 @@ function useTotaisHome(revisao: number) {
     setTotais(t => ({ dispositivos: t.dispositivos === 'erro' ? null : t.dispositivos, reutilizacoes: t.reutilizacoes === 'erro' ? null : t.reutilizacoes }));
     contarDispositivos().then(n => vivo && setTotais(t => ({ ...t, dispositivos: n }))).catch(() => vivo && setTotais(t => ({ ...t, dispositivos: 'erro' })));
     reutilizacoesRepo.contar().then(n => vivo && setTotais(t => ({ ...t, reutilizacoes: n }))).catch(() => vivo && setTotais(t => ({ ...t, reutilizacoes: 'erro' })));
-    return () => { vivo = false; };
+
+    const aoReconectar = () => setTentativa(n => n + 1);
+    window.addEventListener('online', aoReconectar);
+
+    return () => {
+      vivo = false;
+      window.removeEventListener('online', aoReconectar);
+    };
   }, [revisao, tentativa]);
-  return { ...totais, tentarNovamente: () => setTentativa(n => n + 1) };
+  return totais;
 }
 
 export function Home() {
@@ -306,8 +313,8 @@ export function Home() {
         WebkitOverflowScrolling: 'touch' /* Suavidade no iOS */
       }}>
         <div className="home-cartoes" style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
-          <HomeCard count={totais.dispositivos} onTentarNovamente={totais.tentarNovamente} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
-          <HomeCard count={totais.reutilizacoes} onTentarNovamente={totais.tentarNovamente} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
+          <HomeCard count={totais.dispositivos} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
+          <HomeCard count={totais.reutilizacoes} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
           {(canCadastrar || canEditar) && (
             <HomeCard count={referenciasProntas ? categorias.length : null} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
           )}
@@ -446,7 +453,7 @@ export function Home() {
   );
 }
 
-function HomeCard({ count, label, colorType, icon, onClick, shortcut, onTentarNovamente }: { count: Total, onTentarNovamente?: () => void, label: string, colorType: 'pink' | 'teal' | 'yellow', icon: React.ReactNode, onClick: () => void, shortcut: string }) {
+function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count: Total, label: string, colorType: 'pink' | 'teal' | 'yellow', icon: React.ReactNode, onClick: () => void, shortcut: string }) {
   const isPink = colorType === 'pink';
   const isTeal = colorType === 'teal';
 
@@ -485,10 +492,13 @@ function HomeCard({ count, label, colorType, icon, onClick, shortcut, onTentarNo
 
       <div>
         <div style={{ fontSize: '1.5rem', fontWeight: 800, color: textColor, lineHeight: 1, minHeight: '1.5rem' }} aria-busy={count === null}>
-          {count === null ? <SkeletonLinha largura={56} altura={22} />
-            : count === 'erro'
-              ? <button type="button" className="btn" style={{ fontSize: '0.75rem', padding: '2px 8px', height: 'auto' }} title="Não foi possível carregar o total" onClick={e => { e.stopPropagation(); onTentarNovamente?.(); }}>Tentar de novo</button>
-              : count.toLocaleString('pt-BR')}
+          {count === null ? (
+            <SkeletonLinha largura={56} altura={22} />
+          ) : typeof count === 'number' ? (
+            count.toLocaleString('pt-BR')
+          ) : (
+            '—'
+          )}
         </div>
         <div style={{ fontSize: '0.8rem', color: textColor, fontWeight: 500, marginTop: '2px' }}>{label}</div>
       </div>
