@@ -103,16 +103,34 @@ com cota diária de operações do Firestore (~17 mil operações no uso do clie
 
 ### Custo em operações do Firestore
 
-- **Leituras** = nº de dispositivos existentes (1 por documento; páginas de
-  1.000 → ~14 consultas para 13.400).
-- **Escritas** = só registros **novos ou alterados** (+ categorias, famílias
-  e produtos novos). O tamanho do lote não muda o custo (cobrança por
-  documento), só o nº de idas ao servidor.
+- **Leituras**: com o catálogo de busca em dia (`entradas === count()`), os
+  existentes vêm do catálogo: 1 leitura da meta, as partes que mudaram desde
+  a última visita (no máximo uma por parte; 18 partes com ~13.400
+  dispositivos) e o `count()` (1 leitura a cada 1.000 documentos). Sem
+  catálogo, ou com catálogo divergente, a leitura é paginada: 1 por documento.
+- **Escritas**: só registros **novos ou alterados** (+ categorias, famílias e
+  produtos novos), mais, por lote, uma operação em cada parte do catálogo
+  tocada e a meta. Lotes de até 500 operações; o tamanho do lote encolhe para
+  caber as operações do catálogo.
 
-| Cenário (arquivo oficial, banco com ~13.400) | Antes | Agora |
+Medido pela tela, ponta a ponta, no emulador (build de produção, planilha de
+369.600 linhas e 15.400 combinações; banco com 13.400 dispositivos iguais):
+
+| Cenário | Leituras | Escritas | Tempo de gravação |
+|---|---|---|---|
+| Primeira importação: 13.400 iguais + 2.000 novos | 159 | 2.000 dispositivos + catálogo + 1 auditoria | 33 s |
+| Reimportar o mesmo arquivo (tudo igual) | 51 | 1 (auditoria) | 0,9 s |
+
+O processamento da planilha (no Worker) levou cerca de 7 s em cada rodada.
+
+Estimativa para o arquivo oficial (19.621 combinações) sobre o banco
+publicado (~13.400):
+
+| Cenário | Antes | Agora |
 |---|---|---|
-| Reimportar sobre banco já igual | 13.400 leituras + 19.621 escritas = **33.021** (estoura a cota) | 13.400 leituras + **0** escritas = **13.400** |
-| Banco com 13.400 iguais + 6.221 novos | 33.021 | 13.400 + 6.221 = **19.621** |
+| Reimportar sobre banco já igual | 13.400 leituras + 19.621 escritas = **33.021** (estoura a cota) | ~50 leituras + **0** escritas de dispositivos |
+| Banco com 13.400 iguais + 6.221 novos | 33.021 | ~160 leituras + 6.221 escritas + ~13 lotes × (até 19 operações do catálogo) |
+| Catálogo ausente ou divergente | 33.021 | 13.400 leituras + só os novos/alterados (+ reconstrução do catálogo: ~20 escritas) |
 
 ### Cota esgotada (`resource-exhausted`)
 

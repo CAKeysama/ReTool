@@ -952,6 +952,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       throw new Error('indice-alterado-durante-varredura');
     }
     await reconstruirIndice(todos);
+    // Telas que leram a meta uma vez (aviso "Criar índice") releem.
+    tocarDispositivos();
     announce(`Índice de busca atualizado com ${todos.length.toLocaleString('pt-BR')} dispositivos.`);
     return todos.length;
   };

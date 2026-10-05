@@ -116,7 +116,11 @@ function ResumoFinal({ resultado, enviados }: { resultado: ResultadoImportacaoLo
         {naoGravados > 0 && <li><strong>{fmt(naoGravados)}</strong> não gravados</li>}
         {resultado.erros > 0 && <li><strong>{fmt(resultado.erros)}</strong> com erro de gravação</li>}
         {resultado.documentosLidos !== undefined && (
-          <li style={{ color: 'var(--color-text-body)' }}>{fmt(resultado.documentosLidos)} dispositivos existentes lidos para comparar</li>
+          <li style={{ color: 'var(--color-text-body)' }}>
+            {resultado.documentosLidos === 0
+              ? 'Comparação feita com o catálogo de busca (nenhum dispositivo relido do banco)'
+              : `${fmt(resultado.documentosLidos)} dispositivos existentes lidos para comparar`}
+          </li>
         )}
       </ul>
       <p style={{ margin: '8px 0 0', fontSize: '0.85rem', color: 'var(--color-text-body)' }}>
