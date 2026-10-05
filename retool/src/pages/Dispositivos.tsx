@@ -2,13 +2,15 @@ import React from 'react';
 import { useDispositivosController } from '../presentation/hooks/useDispositivosController';
 import { FocusableList } from '../components/FocusableList';
 import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
-import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks } from 'lucide-react';
+import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks, CopyX } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
 import { ImportModal } from '../components/ImportModal';
+import { DuplicadosModal } from '../components/DuplicadosModal';
 import { usePermissions } from '../hooks/usePermissions';
 
 export function Dispositivos() {
-  const { canCadastrar, canEditar, canExcluir } = usePermissions();
+  const { canCadastrar, canEditar, canExcluir, isAdmin } = usePermissions();
+  const [isDuplicadosOpen, setIsDuplicadosOpen] = React.useState(false);
   const {
     categorias,
     familias,
@@ -90,6 +92,18 @@ export function Dispositivos() {
               >
                 <Upload size={18} />
                 <span className="hide-on-mobile">Importar</span>
+              </button>
+            )}
+
+            {isAdmin && (
+              <button
+                className="btn hide-on-mobile"
+                onClick={() => setIsDuplicadosOpen(true)}
+                aria-label="Verificar dispositivos duplicados"
+                style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <CopyX size={18} />
+                <span className="hide-on-mobile">Duplicados</span>
               </button>
             )}
 
@@ -276,6 +290,7 @@ export function Dispositivos() {
       </div>
 
       <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />
+      <DuplicadosModal isOpen={isDuplicadosOpen} onClose={() => setIsDuplicadosOpen(false)} />
 
       {/* Modal de Ações em Massa */}
       <BulkActionModal

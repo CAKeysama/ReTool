@@ -1,4 +1,4 @@
-import { IDispositivosRepository } from '../../domain/repositories/IDispositivosRepository';
+import { IDispositivosRepository, ResultadoImportacaoLote } from '../../domain/repositories/IDispositivosRepository';
 import { Dispositivo } from '../../domain/entities/dispositivo';
 import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
@@ -15,7 +15,7 @@ export class ImportarLoteUseCase {
     categoriasExistentes: Categoria[],
     familiasExistentes: Familia[],
     produtosExistentes: Produto[]
-  ): Promise<{ sucesso: number; erros: number }> {
+  ): Promise<ResultadoImportacaoLote> {
     return this.dispositivosRepository.importarLote(
       novosDispositivos,
       newCategoriasNomes,

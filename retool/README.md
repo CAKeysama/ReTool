@@ -14,7 +14,7 @@ Centralizar o conhecimento mecânico e elétrico numa plataforma que abraça o p
 - **Gestão Aberta:** Cadastros ultra-flexíveis para Dispositivos (sensores, válvulas, CLPs) onde a falta de campo não trava o operador.
 - **Histórico e Rastreio:** Registro de "Utilizações e Ocorrências" acopladas ao dispositivo, formando uma "Linha do tempo" de quebras, revisões ou modificações.
 - **Eficiência e Acessibilidade:** Uso fabril em chão de fábrica exige rapidez. O sistema é operável **100% pelo teclado** através de atalhos globais, permitindo inserções rápidas com luvas (uso sem mouse).
-- **Importação Inteligente em Lote:** Permite importar planilhas Excel/CSV mapeando e criando classificações (Categorias, Famílias de Produtos e Produtos) de forma automática e **livre de duplicidades** (com algoritmo de prevenção de duplicados insensível à capitalização e espaços extras).
+- **Importação Inteligente em Lote:** Permite importar planilhas Excel/CSV mapeando e criando classificações (Categorias, Famílias de Produtos e Produtos) de forma automática e **livre de duplicidades**: cada combinação **Código + Dispositivo** vira um único registro, sem fundir combinações diferentes (detalhes em [docs/IMPORTACAO_DISPOSITIVOS.md](./docs/IMPORTACAO_DISPOSITIVOS.md)).
 - **Notificações Fluidas:** Sistema de *Toasts* embutido para dar clareza às interações na interface dinâmica.
 - **Design Industrial Premium:** Construído em variáveis puras CSS acompanhando a paleta oficial Baldan (Vermelho e Cinza Aço).
 

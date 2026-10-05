@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Categoria, Tipo } from '../domain/entities/categoria';
 import { Familia } from '../domain/entities/familia';
 import { Produto } from '../domain/entities/produto';
-import { Dispositivo, calcularPropagacaoImagens, normalizarNumeroPeca } from '../domain/entities/dispositivo';
+import { Dispositivo, calcularPropagacaoImagens, normalizarNumeroPeca, planejarLimpezaDuplicados } from '../domain/entities/dispositivo';
 import { Reutilizacao, ReutilizacaoStatus, transicaoReutilizacaoPermitida } from '../domain/entities/reutilizacao';
 import { AuditLog } from '../domain/entities/auditLog';
 
@@ -14,6 +14,7 @@ import { FirestoreProdutosRepository } from '../data/repositories/FirestoreProdu
 import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 import { ImportarLoteUseCase } from '../application/usecases/ImportarLoteUseCase';
+import { ResultadoImportacaoLote } from '../domain/repositories/IDispositivosRepository';
 import { idNotificacao } from '../domain/entities/notificacao';
 import { useAuth } from './AuthContext';
 
@@ -53,8 +54,9 @@ interface ReToolContextType {
   transicionarReutilizacao: (id: string, para: ReutilizacaoStatus, opts?: { motivo?: string; numeroOs?: string }) => Promise<void>;
   updateReutilizacao: (id: string, data: Partial<Reutilizacao>) => Promise<void>;
   deleteReutilizacao: (id: string, silent?: boolean) => Promise<void>;
-  importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<{ sucesso: number, erros: number }>;
+  importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[]) => Promise<ResultadoImportacaoLote>;
   deleteAllData: () => Promise<void>;
+  limparDispositivosDuplicados: (ids: string[]) => Promise<{ excluidos: number; erros: number; falhas: string[] }>;
   announce: (message: string, showToast?: boolean) => void;
   announcement: string;
   isDispFormOpen: boolean;
@@ -570,21 +572,57 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         familias,
         produtos
       );
+      const inseridos = result.inseridos ?? result.sucesso;
+      const atualizados = result.atualizados ?? 0;
       await registrarAuditoria(
         'importacao',
         'dispositivo',
         'importacao-lote',
         'Importação em lote',
-        `Importação em lote: ${result.sucesso} registro(s) inserido(s)/atualizado(s), ${result.erros} erro(s)`,
-        { enviados: novosDispositivos.length, sucesso: result.sucesso, erros: result.erros }
+        `Importação em lote: ${inseridos} inserido(s), ${atualizados} atualizado(s), ${result.erros} erro(s) de ${novosDispositivos.length} enviado(s)`,
+        { enviados: novosDispositivos.length, sucesso: result.sucesso, inseridos, atualizados, erros: result.erros }
       );
-      announce(`Importação concluída! ${result.sucesso} registros inseridos ou atualizados.`);
+      if (result.erros > 0) {
+        announce(`Importação parcial: ${result.sucesso} de ${novosDispositivos.length} registros gravados, ${result.erros} com erro. Importe o arquivo novamente para gravar os restantes.`);
+      } else {
+        announce(`Importação concluída! ${inseridos} inseridos e ${atualizados} atualizados (${result.sucesso} de ${novosDispositivos.length}).`);
+      }
       return result;
     } catch (error) {
       console.error('Erro na importação em lote:', error);
       announce('Erro ao processar importação em lote.');
-      return { sucesso: 0, erros: novosDispositivos.length };
+      return { sucesso: 0, erros: novosDispositivos.length, falhas: [error instanceof Error ? error.message : String(error)] };
     }
+  };
+
+  /**
+   * Remove documentos repetidos (mesma combinação Código + Dispositivo) já
+   * revisados pela administradora em DuplicadosModal. A lista vem de
+   * planejarLimpezaDuplicados(), que nunca inclui documentos com vínculos;
+   * aqui conferimos de novo contra o estado atual antes de apagar.
+   */
+  const limparDispositivosDuplicados = async (ids: string[]) => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras podem remover dispositivos duplicados.');
+      return { excluidos: 0, erros: 0, falhas: ['acesso negado'] };
+    }
+    const idsComReutilizacao = new Set(reutilizacoes.map(u => u.dispositivoId));
+    const plano = planejarLimpezaDuplicados(dispositivos, idsComReutilizacao);
+    const seguros = new Set(plano.grupos.flatMap(g => g.remover.map(d => d.id)));
+    const alvo = ids.filter(id => seguros.has(id));
+    const result = await dispositivosRepo.excluirEmLote(alvo);
+    await registrarAuditoria(
+      'exclusao',
+      'dispositivo',
+      'limpeza-duplicados',
+      'Dispositivos duplicados',
+      `Limpeza de duplicados Código + Dispositivo: ${result.excluidos} removido(s), ${result.erros} erro(s)`,
+      { solicitados: ids.length, removidos: result.excluidos, erros: result.erros, ids: alvo }
+    );
+    announce(result.erros > 0
+      ? `Limpeza parcial: ${result.excluidos} duplicados removidos, ${result.erros} com erro. Rode a verificação de novo.`
+      : `${result.excluidos} dispositivos duplicados removidos.`);
+    return result;
   };
 
   const deleteAllData = async () => {
@@ -648,7 +686,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       addProduto, updateProduto, deleteProduto,
       addReutilizacao, updateReutilizacao, deleteReutilizacao,
       solicitarReutilizacao, transicionarReutilizacao,
-      importarDispositivosEmLote, deleteAllData,
+      importarDispositivosEmLote, deleteAllData, limparDispositivosDuplicados,
       announce, announcement,
       isDispFormOpen, editingDispId, openDispForm, closeDispForm
     }}>

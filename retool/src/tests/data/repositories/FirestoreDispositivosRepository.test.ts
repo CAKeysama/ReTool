@@ -5,7 +5,7 @@ import { Categoria } from '../../../domain/entities/categoria';
 import { Familia } from '../../../domain/entities/familia';
 import { Produto } from '../../../domain/entities/produto';
 import { Dispositivo } from '../../../domain/entities/dispositivo';
-import { describe, beforeEach, test, expect } from '@jest/globals';
+import { describe, beforeEach, test, expect, jest } from '@jest/globals';
 
 describe('FirestoreDispositivosRepository', () => {
   let repository: FirestoreDispositivosRepository;
@@ -148,5 +148,98 @@ describe('FirestoreDispositivosRepository', () => {
     expect(mockDbState.categorias).toHaveLength(1); // Should only create 1 new category instead of 2
     expect(mockDbState.familias).toHaveLength(1);
     expect(mockDbState.produtos).toHaveLength(1);
+  });
+
+  describe('importarLote — chave Código + Dispositivo', () => {
+    const importar = (lista: Partial<Dispositivo>[]) => repository.importarLote(lista, [], [], [], [], [], []);
+
+    test('mesmo Código com Dispositivo diferente de um registro existente cria novo documento (não sobrescreve)', async () => {
+      mockDbState.dispositivos.push({ id: 'disp1', codigo: 'ABC', nome: 'D01', imagemPeca: 'img.png' });
+
+      const result = await importar([
+        { codigo: 'ABC', nome: 'D02' },
+        { codigo: 'ABC', nome: 'D03' },
+        { codigo: 'XYZ', nome: 'D01' },
+      ]);
+
+      expect(result).toMatchObject({ sucesso: 3, inseridos: 3, atualizados: 0, erros: 0 });
+      expect(mockDbState.dispositivos).toHaveLength(4);
+      expect(mockDbState.dispositivos.find(d => d.id === 'disp1')).toMatchObject({ codigo: 'ABC', nome: 'D01' });
+    });
+
+    test('mesma combinação (ignorando caixa/espaços) atualiza o existente e preserva imagens', async () => {
+      mockDbState.dispositivos.push({ id: 'disp1', codigo: 'ABC', nome: 'D01', descricao: 'antiga', imagemPeca: 'img.png' });
+
+      const result = await importar([{ codigo: ' abc ', nome: 'd01', descricao: 'nova', imagemPeca: '', imagemDispositivo: '' }]);
+
+      expect(result).toMatchObject({ sucesso: 1, inseridos: 0, atualizados: 1 });
+      expect(mockDbState.dispositivos).toHaveLength(1);
+      expect(mockDbState.dispositivos[0]).toMatchObject({ id: 'disp1', descricao: 'nova', imagemPeca: 'img.png' });
+    });
+
+    test('combinação repetida na própria lista reaproveita o mesmo documento', async () => {
+      await importar([{ codigo: 'A', nome: '1' }, { codigo: 'a', nome: '1 ' }, { codigo: 'A', nome: '2' }]);
+      expect(mockDbState.dispositivos).toHaveLength(2);
+      for (const d of mockDbState.dispositivos) expect(d).toEqual(expect.objectContaining({ id: expect.any(String), dataCriacao: expect.any(String) }));
+    });
+
+    test('reprocessar o mesmo arquivo não duplica nem perde registros', async () => {
+      const lista = Array.from({ length: 1200 }, (_, i) => ({ codigo: `C${i % 400}`, nome: `D${Math.floor(i / 400)}` }));
+      const primeira = await importar(lista);
+      const segunda = await importar(lista);
+      expect(primeira).toMatchObject({ inseridos: 1200, atualizados: 0, erros: 0 });
+      expect(segunda).toMatchObject({ inseridos: 0, atualizados: 1200, erros: 0 });
+      expect(mockDbState.dispositivos).toHaveLength(1200);
+    });
+
+    test('grava todos os lotes de 500, inclusive o último incompleto', async () => {
+      const { writeBatch } = jest.requireMock('firebase/firestore') as { writeBatch: jest.Mock };
+      writeBatch.mockClear();
+      const lista = Array.from({ length: 1234 }, (_, i) => ({ codigo: `C${i}`, nome: 'D' }));
+      const result = await importar(lista);
+      expect(result).toMatchObject({ sucesso: 1234, erros: 0 });
+      expect(mockDbState.dispositivos).toHaveLength(1234);
+      const commits = writeBatch.mock.results
+        .map(r => (r.value as { commit: jest.Mock }).commit.mock.calls.length)
+        .reduce((a, b) => a + b, 0);
+      expect(commits).toBe(3); // 500 + 500 + 234
+    });
+
+    test('falha num lote é reportada em erros (sem perda silenciosa) e os demais lotes continuam', async () => {
+      const firestore = jest.requireMock('firebase/firestore') as { writeBatch: jest.Mock };
+      const original = firestore.writeBatch.getMockImplementation()!;
+      let chamadas = 0;
+      firestore.writeBatch.mockImplementation((...args: unknown[]) => {
+        const batch = original(...args) as { commit: jest.Mock };
+        chamadas++;
+        if (chamadas === 2) batch.commit.mockImplementation(async () => { throw new Error('DEADLINE_EXCEEDED'); });
+        return batch;
+      });
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      try {
+        const lista = Array.from({ length: 1100 }, (_, i) => ({ codigo: `C${i}`, nome: 'D' }));
+        const result = await importar(lista);
+        expect(result).toMatchObject({ sucesso: 600, erros: 500, falhas: ['DEADLINE_EXCEEDED'] });
+        expect(mockDbState.dispositivos).toHaveLength(600);
+
+        // Reimportar grava só o que faltou.
+        firestore.writeBatch.mockImplementation(original);
+        const retry = await importar(lista);
+        expect(retry).toMatchObject({ inseridos: 500, atualizados: 600, erros: 0 });
+        expect(mockDbState.dispositivos).toHaveLength(1100);
+      } finally {
+        firestore.writeBatch.mockImplementation(original);
+        (console.error as jest.Mock).mockRestore();
+      }
+    });
+  });
+
+  test('excluirEmLote remove todos os ids em lotes de 500 (inclusive o último)', async () => {
+    for (let i = 0; i < 1203; i++) mockDbState.dispositivos.push({ id: `d${i}`, codigo: 'A', nome: String(i) });
+    const ids = Array.from({ length: 1201 }, (_, i) => `d${i}`);
+    const result = await repository.excluirEmLote(ids);
+    expect(result).toEqual({ excluidos: 1201, erros: 0, falhas: [] });
+    expect(mockDbState.dispositivos.map(d => d.id)).toEqual(['d1201', 'd1202']);
   });
 });

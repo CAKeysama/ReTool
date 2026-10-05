@@ -1,8 +1,9 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, test, expect } from '@jest/globals';
 import {
   Dispositivo,
   calcularPropagacaoImagens,
-  normalizarNumeroPeca
+  normalizarNumeroPeca,
+  planejarLimpezaDuplicados
 } from '../../../domain/entities/dispositivo';
 
 const disp = (id: string, codigo: string | undefined, imagens: Partial<Dispositivo> = {}): Dispositivo => ({
@@ -93,5 +94,41 @@ describe('Propagação de imagens por Número da Peça', () => {
     const linha = [disp('b', 'ABC-1', { imagemDispositivo: 'https://storage/x.png' })];
     const patches = calcularPropagacaoImagens(linha, 'a', 'ABC-1', {}, false);
     expect(patches).toHaveLength(0);
+  });
+});
+
+describe('planejarLimpezaDuplicados', () => {
+  const d = (id: string, codigo: string, nome: string, extra: Record<string, unknown> = {}) =>
+    ({ id, codigo, nome, dataCriacao: `2026-01-0${id.slice(-1)}`, ...extra });
+
+  test('sem repetidos não planeja nada', () => {
+    const plano = planejarLimpezaDuplicados([d('a1', 'A', '1'), d('a2', 'A', '2')], new Set());
+    expect(plano).toMatchObject({ grupos: [], totalDocumentos: 2, combinacoesDistintas: 2, totalRemover: 0 });
+  });
+
+  test('mantém o mais antigo e remove só repetidos sem vínculo (caixa/espaços iguais)', () => {
+    const plano = planejarLimpezaDuplicados([d('x3', 'A', '1'), d('x1', 'a ', '1'), d('x2', 'A', '1'), d('y1', 'B', '1')], new Set());
+    expect(plano.grupos).toHaveLength(1);
+    expect(plano.grupos[0].manter.id).toBe('x1');
+    expect(plano.grupos[0].remover.map(r => r.id)).toEqual(['x2', 'x3']);
+    expect(plano).toMatchObject({ totalDocumentos: 4, combinacoesDistintas: 2, totalRemover: 2, totalRevisar: 0 });
+  });
+
+  test('documentos com reutilização, imagem, anexo ou observação nunca são removidos', () => {
+    const plano = planejarLimpezaDuplicados(
+      [
+        d('x1', 'A', '1'),
+        d('x2', 'A', '1'),
+        d('x3', 'A', '1', { imagemPeca: 'img.png' }),
+        d('x4', 'A', '1', { anexos: [{ id: 'f' }] }),
+        d('x5', 'A', '1', { observacoes: 'ver' }),
+        d('x6', 'A', '1'),
+      ] as never,
+      new Set(['x2'])
+    );
+    const g = plano.grupos[0];
+    expect(g.manter.id).toBe('x2'); // primeiro com vínculo
+    expect(g.remover.map(r => r.id)).toEqual(['x1', 'x6']);
+    expect(g.revisar.map(r => r.id)).toEqual(['x3', 'x4', 'x5']);
   });
 });
