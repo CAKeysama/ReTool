@@ -4,6 +4,7 @@ import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
 import { Produto } from '../../domain/entities/produto';
 import { useAsyncAction } from '../../hooks/useAsyncAction';
+import { gravarComPrazo } from '../../utils/tempo';
 import { mensagemDeErro } from '../../components/feedback/EstadoDados';
 
 export type Registro = { id: string; nome?: string; ativo?: boolean };
@@ -30,13 +31,13 @@ function useEntidadeClassificacao<T extends Registro>({ add, update, remove }: O
   const [reativandoIds, setReativandoIds] = useState<Set<string>>(() => new Set());
 
   const salvar = useAsyncAction(async (id: string | null, valor: string) => {
-    if (id) await update(id, { nome: valor } as Partial<T>);
-    else await add({ nome: valor });
+    if (id) await gravarComPrazo(update(id, { nome: valor } as Partial<T>));
+    else await gravarComPrazo(add({ nome: valor }));
   });
 
   const acaoConfirm = useAsyncAction(async (tipo: 'alternar' | 'excluir', item: T) => {
-    if (tipo === 'excluir') await remove(item.id);
-    else await update(item.id, { ativo: item.ativo === false } as Partial<T>);
+    if (tipo === 'excluir') await gravarComPrazo(remove(item.id));
+    else await gravarComPrazo(update(item.id, { ativo: item.ativo === false } as Partial<T>));
   });
 
   const openForm = useCallback((id?: string, currentName?: string) => {

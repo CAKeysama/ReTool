@@ -314,7 +314,7 @@ export function Home() {
       </div>
 
       {/* Texto de Atalho Footer */}
-      <div style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#d1d5db', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#6b7280', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
         Pressione <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#6b7280', fontWeight: 600 }}>/</span> para focar a busca de qualquer tela
       </div>
 
@@ -491,7 +491,7 @@ function HomeCard({ count, label, colorType, icon, onClick, shortcut, onTentarNo
         <div style={{ fontSize: '0.8rem', color: textColor, fontWeight: 500, marginTop: '2px' }}>{label}</div>
       </div>
 
-      <div style={{ position: 'absolute', bottom: '12px', right: '12px', fontSize: '0.6rem', color: textColor, opacity: 0.5, fontWeight: 'bold' }}>
+      <div style={{ position: 'absolute', bottom: '12px', right: '12px', fontSize: '0.6rem', color: textColor, opacity: 0.85, fontWeight: 'bold' }}>
         {shortcut}
       </div>
     </div>

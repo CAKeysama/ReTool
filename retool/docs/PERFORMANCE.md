@@ -188,6 +188,7 @@ Nada de autorização foi movido para o cliente. As regras novas
 | Catálogo de busca | 1.000 partes × ~750 itens ≈ 750 mil dispositivos | muito além do previsto; a tela sugere "Atualizar índice" quando as partes ficam cheias demais |
 | Download do catálogo na primeira busca | cresce com o total (≈ 1 leitura a cada 750 dispositivos) | aceitável até centenas de milhares; depois, busca no servidor (próximos passos) |
 | Reutilizações | a tela ainda assina a coleção inteira (301 leituras no teste) | paginar no servidor depois de migrar os status antigos (ver abaixo) |
+| Gravação de importações grandes | o SDK do Firestore processa cada lote de ~480 documentos de uma vez: com CPU 4x mais lenta, tarefas de até ~1,3 s durante a gravação (processar a planilha não trava) | lotes menores reduziriam as pausas, mas cada lote também grava as partes do catálogo (+~19 escritas por lote), o que pesa na cota; mantido |
 | Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras, então faça num dia sem importação |
 
 ## Publicação

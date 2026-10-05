@@ -242,7 +242,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
           {/* Linha 1: Nº Dispositivo e Código Peça */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
               <label htmlFor="inputNumeroDispositivo" className="input-label">Nº dispositivo</label>
               <input 
@@ -270,7 +270,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
           </div>
 
           {/* Linha 2: Família do Produto (com Inline Creation) e Produto */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <label htmlFor="selectFamilia" className="input-label" style={{ margin: 0 }}>Família do Produto</label>
@@ -403,7 +403,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
           </div>
 
           {/* Linha 3: Categoria (com Inline Creation) e Peso dispositivo */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <label htmlFor="selectCategoria" className="input-label" style={{ margin: 0 }}>CATEGORIA</label>
@@ -537,7 +537,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
               Arquivos Físicos e Fotos (Firebase Storage)
             </h4>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
               {/* IMAGEM PEÇA Dropzone */}
               <FileUploadDropzone
                 categoria="imagem_peca"

@@ -54,6 +54,21 @@ export function BulkActionModal({
   canDisable = true,
   emptyMessage,
 }: BulkActionModalProps) {
+  const dialogoRef = React.useRef<HTMLDivElement>(null);
+  // Foco preso no diálogo (Tab/Shift+Tab circulam dentro dele) e Esc fecha
+  // quando não há operação em andamento nem confirmação aberta.
+  const aoTeclar = (e: React.KeyboardEvent) => {
+    if (confirmAction) return;
+    if (e.key === 'Escape' && !isLoading) { e.stopPropagation(); onClose(); return; }
+    if (e.key !== 'Tab' || !dialogoRef.current) return;
+    const focaveis = Array.from(dialogoRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter(el => el.offsetParent !== null);
+    if (focaveis.length === 0) return;
+    const primeiro = focaveis[0], ultimo = focaveis[focaveis.length - 1];
+    if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
   const [textoConfirmacao, setTextoConfirmacao] = React.useState('');
   React.useEffect(() => { if (confirmAction !== 'delete') setTextoConfirmacao(''); }, [confirmAction]);
   if (!isOpen) return null;
@@ -85,6 +100,8 @@ export function BulkActionModal({
         onClick={isLoading ? undefined : onClose}
       >
         <div
+          ref={dialogoRef}
+          onKeyDown={aoTeclar}
           role="dialog"
           aria-modal="true"
           aria-labelledby="bulk-modal-title"
@@ -366,7 +383,7 @@ export function BulkActionModal({
           <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
             <AlertTriangle size={22} color="var(--various04)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <p style={{ color: 'var(--color-text-dark)', lineHeight: 1.6 }}>
-              Você está prestes a <strong>desativar {selected.size.toLocaleString('pt-BR')} item{selected.size > 1 ? 's' : ''}</strong>.
+              Você está prestes a <strong>desativar {selected.size.toLocaleString('pt-BR')} {selected.size > 1 ? 'itens' : 'item'}</strong>.
               Eles não serão excluídos, mas ficarão inativos no sistema.
             </p>
           </div>
@@ -398,7 +415,7 @@ export function BulkActionModal({
           <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
             <AlertTriangle size={22} color="var(--color-danger)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <p style={{ color: 'var(--color-text-dark)', lineHeight: 1.6 }}>
-              Você está prestes a <strong>excluir permanentemente {selected.size.toLocaleString('pt-BR')} item{selected.size > 1 ? 's' : ''}</strong>.
+              Você está prestes a <strong>excluir permanentemente {selected.size.toLocaleString('pt-BR')} {selected.size > 1 ? 'itens' : 'item'}</strong>.
               Esta ação <strong>não pode ser desfeita</strong>.
             </p>
           </div>

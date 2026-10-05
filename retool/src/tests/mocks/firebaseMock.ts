@@ -93,13 +93,15 @@ jest.mock('firebase/firestore', () => {
         mockDbState[col] = mockDbState[col].filter((item: any) => item.id !== docRef.id);
       }
     }),
-    onSnapshot: jest.fn((colRef: any, callback: any) => {
+    onSnapshot: jest.fn((colRef: any, ...args: any[]) => {
+      // Aceita a forma com opções (onSnapshot(ref, { includeMetadataChanges }, cb)).
+      const callback = args.find(a => typeof a === 'function');
       const col = colRef.name as keyof typeof mockDbState;
       const docs = (mockDbState[col] || []).map(item => ({
         id: item.id,
         data: () => item
       }));
-      callback({ docs });
+      callback({ docs, metadata: { fromCache: false } });
       return () => {}; // return unsubscribe function
     }),
     getDocs: jest.fn(async (colRef: any) => {

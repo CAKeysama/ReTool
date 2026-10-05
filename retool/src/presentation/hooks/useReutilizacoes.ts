@@ -13,17 +13,29 @@ const repo = new FirestoreReutilizacoesRepository();
 export function useReutilizacoes() {
   const [itens, setItens] = useState<Reutilizacao[] | null>(null);
   const [erro, setErro] = useState<unknown>(null);
+  const [doCache, setDoCache] = useState(false);
   const [tentativa, setTentativa] = useState(0);
 
   useEffect(() => {
     setErro(null);
-    const parar = repo.subscribeAll(lista => { setItens(lista); setErro(null); }, e => setErro(e));
-    return () => parar();
+    let confirmado = false;
+    // Sem resposta do servidor em 12 s: erro de conexão (não "sem pendências").
+    const prazo = setTimeout(() => { if (!confirmado) setErro({ code: 'unavailable' }); }, 12_000);
+    const parar = repo.subscribeAll((lista, cache) => {
+      setDoCache(cache);
+      // Lista só do cache local antes da 1ª resposta do servidor pode estar
+      // vazia ou incompleta: continua "carregando".
+      if (cache && !confirmado) return;
+      confirmado = true;
+      setItens(lista);
+      setErro(null);
+    }, e => setErro(e));
+    return () => { clearTimeout(prazo); parar(); };
   }, [tentativa]);
 
   const tentarNovamente = useCallback(() => setTentativa(t => t + 1), []);
   const estado: 'carregando' | 'pronto' | 'erro' = erro && !itens ? 'erro' : itens ? 'pronto' : 'carregando';
-  return { itens: itens || [], estado, erro, tentarNovamente };
+  return { itens: itens || [], estado, erro, doCache: doCache && !!itens, tentarNovamente };
 }
 
 /** Nomes já resolvidos nesta sessão (id → nome/código), compartilhados entre telas. */

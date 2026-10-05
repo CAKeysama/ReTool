@@ -110,12 +110,17 @@ export function Dispositivos() {
     restaurouRolagem.current = true;
     if (rolagemGuardada > 0) requestAnimationFrame(() => window.scrollTo(0, rolagemGuardada));
   }, [lista.estado]);
-  React.useEffect(() => () => { rolagemGuardada = window.scrollY; }, []);
+  // Guarda enquanto rola (ao desmontar a página já encolheu e a rolagem foi zerada).
+  React.useEffect(() => {
+    const guardar = () => { if (restaurouRolagem.current) rolagemGuardada = window.scrollY; };
+    window.addEventListener('scroll', guardar, { passive: true });
+    return () => window.removeEventListener('scroll', guardar);
+  }, []);
 
   const botaoFiltrosRef = React.useRef<HTMLButtonElement>(null);
   const filtrando = !!(filterQuery.trim() || filterCategoria || filterProcesso);
   const carregandoPrimeira = lista.estado === 'carregando' || lista.estado === 'preparando-busca';
-  const subtitulo = lista.total === null
+  const subtitulo = buscaPendente ? 'Buscando…' : lista.total === null
     ? (carregandoPrimeira ? 'Carregando dispositivos…' : '')
     : `${fmt(lista.total)} dispositivo${lista.total === 1 ? '' : 's'} ${filtrando ? 'encontrado' + (lista.total === 1 ? '' : 's') : 'cadastrado' + (lista.total === 1 ? '' : 's')}`;
 
@@ -400,7 +405,7 @@ export function Dispositivos() {
         )}
 
         {/* Modal confirmação exclusão individual */}
-        <AccessibleModal isOpen={!!dispToDelete} onClose={() => setDispToDelete(null)} title="Confirmar exclusão">
+        <AccessibleModal isOpen={!!dispToDelete} onClose={() => { if (!isDeleting) setDispToDelete(null); }} title="Confirmar exclusão">
           <p>Tem certeza que deseja remover este dispositivo?</p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
             <button className="btn" onClick={() => setDispToDelete(null)} disabled={isDeleting}>Cancelar</button>

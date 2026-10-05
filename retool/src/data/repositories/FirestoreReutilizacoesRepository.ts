@@ -16,12 +16,14 @@ export class FirestoreReutilizacoesRepository implements IReutilizacoesRepositor
    * (filas de trabalho), enquanto ela estiver aberta; a coleção é pequena
    * (registros manuais). Ver PERFORMANCE.md para o limite de revisão.
    */
-  subscribeAll(callback: (reutilizacoes: Reutilizacao[]) => void, onError?: (e: unknown) => void): () => void {
+  subscribeAll(callback: (reutilizacoes: Reutilizacao[], doCache: boolean) => void, onError?: (e: unknown) => void): () => void {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     let primeira = true;
-    return onSnapshot(collection(db, 'reutilizacoes'), (snapshot) => {
-      if (primeira && typeof performance !== 'undefined') { registrarConsulta('reutilizacoes:todas', snapshot.docs.length, performance.now() - t0); primeira = false; }
-      callback(snapshot.docs.map(normalizar));
+    // Com metadados: o app sabe quando a lista veio só do cache local (sem
+    // conexão) e não a mostra como "sem pendências".
+    return onSnapshot(collection(db, 'reutilizacoes'), { includeMetadataChanges: true }, (snapshot) => {
+      if (primeira && !snapshot.metadata.fromCache && typeof performance !== 'undefined') { registrarConsulta('reutilizacoes:todas', snapshot.docs.length, performance.now() - t0); primeira = false; }
+      callback(snapshot.docs.map(normalizar), snapshot.metadata.fromCache);
     }, (e) => {
       registrarConsulta('reutilizacoes:todas', 0, 0, e);
       onError?.(e);
@@ -29,9 +31,9 @@ export class FirestoreReutilizacoesRepository implements IReutilizacoesRepositor
   }
 
   /** Reutilizações de um dispositivo em tempo real (tela de detalhes). */
-  subscribeDoDispositivo(dispositivoId: string, callback: (r: Reutilizacao[]) => void, onError?: (e: unknown) => void): () => void {
+  subscribeDoDispositivo(dispositivoId: string, callback: (r: Reutilizacao[], doCache: boolean) => void, onError?: (e: unknown) => void): () => void {
     const q = query(collection(db, 'reutilizacoes'), where('dispositivoId', '==', dispositivoId));
-    return onSnapshot(q, s => callback(s.docs.map(normalizar)), e => onError?.(e));
+    return onSnapshot(q, { includeMetadataChanges: true }, s => callback(s.docs.map(normalizar), s.metadata.fromCache), e => onError?.(e));
   }
 
   async listarDoDispositivo(dispositivoId: string): Promise<Reutilizacao[]> {

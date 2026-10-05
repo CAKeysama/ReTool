@@ -237,7 +237,7 @@ function SidebarLink({ to, icon, label, shortcut }: { to: string, icon: React.Re
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: '4px',
             backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-border)',
-            color: isActive ? 'white' : '#9ca3af',
+            color: isActive ? 'white' : '#4b5563',
             fontWeight: 700
           }}>
             {shortcut}

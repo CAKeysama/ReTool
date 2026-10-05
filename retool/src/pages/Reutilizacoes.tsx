@@ -34,7 +34,7 @@ const FILA_ENGENHARIA: ReutilizacaoStatus[] = ['Em análise (Engenharia)', 'Reut
 
 export function Reutilizacoes() {
   const { deleteReutilizacao, transicionarReutilizacao, announce } = useReTool();
-  const { itens: reutilizacoes, estado: estadoDados, erro: erroDados, tentarNovamente } = useReutilizacoes();
+  const { itens: reutilizacoes, estado: estadoDados, erro: erroDados, doCache, tentarNovamente } = useReutilizacoes();
   const { canExcluir, isProjetista, isEngenharia, isAdmin, currentRole } = usePermissions();
   const BULK_THRESHOLD = 20;
   const { progress: bulkProgress, runWithProgress } = useBulkProgress();
@@ -200,8 +200,11 @@ export function Reutilizacoes() {
     const ids = Array.from(bulkSelected);
     const useSilent = ids.length > BULK_THRESHOLD;
     try {
-      await runWithProgress(ids, id => deleteReutilizacao(id, useSilent));
+      await runWithProgress(ids, id => gravarComPrazo(deleteReutilizacao(id, useSilent)));
       if (useSilent) announce(`${ids.length} reutilizações excluídas com sucesso`);
+    } catch (e) {
+      console.error(e);
+      announce(mensagemDeErro(e, 'Não foi possível excluir todas as reutilizações selecionadas. Confira a lista e tente de novo.'));
     } finally {
       setBulkLoading(false);
       closeBulk();
@@ -357,6 +360,11 @@ export function Reutilizacoes() {
 
       <Tabs tabs={tabs} active={tabAtiva} onChange={t => { setActiveTab(t); setLimiteCartoes(CARTOES_POR_VEZ); }} />
 
+      {doCache && estadoDados === 'pronto' && (
+        <div role="status" style={{ background: '#fff7e6', border: '1px solid #f0c36d', color: '#5c4400', borderRadius: 'var(--radius)', padding: '8px 12px', marginBottom: '8px', fontSize: '0.85rem' }}>
+          Sem conexão com o servidor: mostrando os dados da última atualização, que podem estar desatualizados.
+        </div>
+      )}
       {estadoDados === 'carregando' && tabAtiva !== 'historico' && (
         <div aria-busy="true"><SkeletonLista linhas={4} alturaLinha={74} /></div>
       )}

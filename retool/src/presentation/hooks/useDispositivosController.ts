@@ -4,6 +4,8 @@ import { useReTool } from '../../context/ReToolContext';
 import { useHotkeys } from '../../hooks/useHotkeys';
 import { BulkProgress } from '../../hooks/useBulkProgress';
 import { useAvisoAoSair } from '../../hooks/useAvisoAoSair';
+import { gravarComPrazo } from '../../utils/tempo';
+import { mensagemDeErro } from '../../components/feedback/EstadoDados';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useListaDispositivos } from './useListaDispositivos';
 import { useIndiceBusca } from './useIndiceBusca';
@@ -65,6 +67,7 @@ export function useDispositivosController() {
 
   const [dispToDelete, setDispToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  useAvisoAoSair(isDeleting);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isNukeModalOpen, setIsNukeModalOpen] = useState(false);
 
@@ -153,11 +156,11 @@ export function useDispositivosController() {
     if (!dispToDelete || isDeleting) return;
     setIsDeleting(true);
     try {
-      await deleteDispositivo(dispToDelete);
+      await gravarComPrazo(deleteDispositivo(dispToDelete));
       setDispToDelete(null);
     } catch (e) {
       console.error(e);
-      announce('Não foi possível excluir o dispositivo. Tente novamente.');
+      announce(mensagemDeErro(e, 'Não foi possível excluir o dispositivo. Tente novamente.'));
     } finally {
       setIsDeleting(false);
     }

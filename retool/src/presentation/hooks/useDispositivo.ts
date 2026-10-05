@@ -36,11 +36,19 @@ export function useReutilizacoesDoDispositivo(dispositivoId: string | undefined)
     if (!dispositivoId) { setEstado('pronto'); setReutilizacoes([]); return; }
     setEstado('carregando');
     setErro(null);
-    return reutilizacoesRepo.subscribeDoDispositivo(
+    let confirmado = false;
+    // Só do cache local (sem conexão) não conta como "nenhuma reutilização".
+    const prazo = setTimeout(() => { if (!confirmado) { setErro({ code: 'unavailable' }); setEstado('erro'); } }, 12_000);
+    const parar = reutilizacoesRepo.subscribeDoDispositivo(
       dispositivoId,
-      l => { setReutilizacoes(l); setEstado('pronto'); },
+      (l, cache) => {
+        if (cache && !confirmado) return;
+        confirmado = true;
+        setReutilizacoes(l); setEstado('pronto');
+      },
       e => { setErro(e); setEstado('erro'); }
     );
+    return () => { clearTimeout(prazo); parar(); };
   }, [dispositivoId, tentativa]);
 
   return { reutilizacoes, estado, erro, tentarNovamente: () => setTentativa(t => t + 1) };

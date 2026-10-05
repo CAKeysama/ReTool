@@ -150,7 +150,8 @@ export function filtrarEntradas(
   filtro: FiltroBusca,
   limite = Infinity
 ): EntradaIndice[] {
-  const q = normalizarBusca(filtro.texto).trim();
+  // Espaços repetidos ("barra  porta") contam como um só.
+  const q = normalizarBusca(filtro.texto).replace(/\s+/g, ' ').trim();
   const proc = normalizarBusca(filtro.processo).trim();
   const cat = filtro.categoriaId || '';
   const out: EntradaIndice[] = [];

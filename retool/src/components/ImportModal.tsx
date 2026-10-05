@@ -369,13 +369,15 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
             <p style={{ color: 'var(--color-text-body)', fontSize: '0.9rem', marginBottom: 'var(--spacing-md)' }}>
               As colunas devem seguir o padrão: Familia_do_Produto, PRODUTO, CATEGORIA, etc.
             </p>
-            <label className="btn btn-primary" style={{ cursor: ocupado ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: ocupado ? 0.6 : 1 }}>
+            <label className="btn btn-primary seletor-arquivo" style={{ cursor: ocupado ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: ocupado ? 0.6 : 1 }}>
               Buscar Arquivo
               <input
                 type="file"
                 accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                 onChange={handleFileChange}
-                style={{ display: 'none' }}
+                // Escondido só visualmente: continua alcançável por Tab e Enter/Espaço.
+                className="sr-only"
+                aria-label="Buscar arquivo da planilha (.csv ou .xlsx)"
                 disabled={ocupado}
               />
             </label>

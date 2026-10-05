@@ -69,7 +69,7 @@ export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem
               borderRadius: 'var(--radius)',
               cursor: onItemAction ? 'pointer' : 'default',
               backgroundColor: 'var(--color-surface)',
-              outline: isFocused ? '2px solid rgba(228, 13, 44, 0.1)' : 'none',
+              outline: isFocused ? '2px solid var(--color-primary)' : 'none',
               outlineOffset: '2px',
               transition: 'all 0.15s ease',
               display: 'flex',
