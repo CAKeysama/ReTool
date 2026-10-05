@@ -114,8 +114,8 @@ describe('buscaDispositivos', () => {
     expect(partesParaTotal(0)).toBe(4);
     expect(partesParaTotal(13400)).toBe(18);
     expect(partesParaTotal(19621)).toBe(27);
-    expect(partesParaTotal(500000)).toBe(667);
-    expect(partesParaTotal(10_000_000)).toBe(1000);
+    expect(partesParaTotal(100000)).toBe(134);
+    expect(partesParaTotal(10_000_000)).toBe(200);
     // Medido: ~200 bytes por entrada × 750 ≈ 150 KB por parte.
   });
 });

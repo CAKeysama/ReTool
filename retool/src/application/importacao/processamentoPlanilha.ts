@@ -37,19 +37,7 @@ export function executarProcessamentoPlanilha(
   return processarPlanilhaDispositivos(abas, ctx, onProgresso);
 }
 
-/**
- * Copia só o que o processamento usa (id e nome) — o contexto vai por
- * `postMessage` (structured clone) e não precisa levar o resto das entidades.
- */
-export function contextoSerializavel(ctx: ContextoProcessamento): ContextoProcessamento {
-  const enxuto = (lista: { id: string; nome?: string }[]) => lista.map(({ id, nome }) => ({ id, nome }));
-  return {
-    categorias: enxuto(ctx.categorias),
-    familias: enxuto(ctx.familias),
-    produtos: enxuto(ctx.produtos),
-    defaultCategoriaId: ctx.defaultCategoriaId,
-  };
-}
+export { contextoSerializavel } from './contextoPlanilha';
 
 /** Trata um pedido recebido pelo Worker, enviando progresso e o resultado por `responder`. */
 export function tratarPedidoPlanilha(

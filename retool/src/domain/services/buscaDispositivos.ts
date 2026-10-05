@@ -182,8 +182,14 @@ export function parteDoId(id: string, partes: number): number {
  * ~150 KB, com folga de ~6x até o limite de 1 MiB por documento.
  */
 export const ITENS_POR_PARTE = 750;
-/** Teto de partes aceito pelo app e pelas regras (protege contra meta adulterada). */
-export const MAX_PARTES = 1000;
+/** Estimativa conservadora do tamanho de um item numa parte (UTF-8 com acentos + overhead do campo). */
+export const bytesDoItem = (id: string, valor: string) => id.length + valor.length * 1.2 + 16;
+/**
+ * Teto de partes aceito pelo app e pelas regras. 200 partes comportam ~150
+ * mil dispositivos pela contagem (muito além do que o plano gratuito consegue
+ * reconstruir) e limitam o estrago de uma meta adulterada a 200 leituras.
+ */
+export const MAX_PARTES = 200;
 export function partesParaTotal(total: number): number {
   return Math.min(MAX_PARTES, Math.max(4, Math.ceil(total / ITENS_POR_PARTE)));
 }

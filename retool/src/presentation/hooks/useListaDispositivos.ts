@@ -3,6 +3,9 @@ import { onSnapshot, query, collection, where, orderBy, documentId, startAfter, 
 import { db } from '../../data/datasources/firebase';
 import { Dispositivo } from '../../domain/entities/dispositivo';
 import { EntradaIndice, ITENS_POR_PARTE } from '../../domain/services/buscaDispositivos';
+
+/** ~60% do limite de 1 MiB por documento: avisa com folga para continuar gravando até alguém atualizar o índice. */
+const BYTES_ALERTA_PARTE = 600_000;
 import { contarDispositivos, CursorDispositivo, TAMANHO_PAGINA_MAX } from '../../data/repositories/FirestoreDispositivosConsultas';
 import { registrarConsulta } from '../../data/observabilidade/metricas';
 import { MetaIndice, lerMetaIndiceDoServidor } from '../../data/repositories/FirestoreIndiceDispositivos';
@@ -254,8 +257,10 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
     progressoIndice: null,
     indiceAusente: !!metaAtual && metaAtual.meta === null,
     // Total diferente do banco (gravação fora do app) ou partes cheias demais
-    // (cresceu muito desde a última reconstrução): sugere "Atualizar índice".
-    indiceDesatualizado: !!metaAtual?.meta && totalServidor !== null && !filtro.categoriaId
-      && (metaAtual.meta.total !== totalServidor || metaAtual.meta.total > metaAtual.meta.partes * ITENS_POR_PARTE * 2),
+    // (cresceu muito desde a última reconstrução, em itens ou em bytes; cada
+    // parte é um documento de no máximo 1 MiB): sugere "Atualizar índice".
+    indiceDesatualizado: (!!metaAtual?.meta && totalServidor !== null && !filtro.categoriaId
+      && (metaAtual.meta.total !== totalServidor || metaAtual.meta.total > metaAtual.meta.partes * ITENS_POR_PARTE * 2))
+      || indice.maiorParteBytes > BYTES_ALERTA_PARTE,
   };
 }

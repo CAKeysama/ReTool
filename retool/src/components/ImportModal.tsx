@@ -4,7 +4,7 @@ import { AccessibleModal } from './AccessibleModal';
 import { useReTool } from '../context/ReToolContext';
 import { Dispositivo } from '../domain/entities/dispositivo';
 import type { ProgressoPlanilha, ResumoImportacao } from '../application/importacao/planilhaDispositivos';
-import { contextoSerializavel } from '../application/importacao/processamentoPlanilha';
+import { contextoSerializavel } from '../application/importacao/contextoPlanilha';
 import {
   ProcessamentoCancelado, TarefaPlanilha, processarPlanilhaNoWorker,
 } from '../application/importacao/processarPlanilhaNoWorker';

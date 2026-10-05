@@ -152,7 +152,7 @@ export function Dispositivos() {
                 onClick={atualizarIndice}
                 disabled={!!indiceProgresso}
                 aria-label="Atualizar o índice de busca de dispositivos"
-                title={lista.indiceAusente ? 'A busca por trecho precisa do índice. Criá-lo lê todos os dispositivos uma vez.' : 'O índice de busca difere do banco (alguém gravou fora do app). Atualizar lê todos os dispositivos uma vez.'}
+                title={lista.indiceAusente ? 'A busca por trecho precisa do índice. Criá-lo lê todos os dispositivos uma vez.' : 'O índice de busca difere do banco ou cresceu muito desde a última atualização. Atualizar lê todos os dispositivos uma vez.'}
                 style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
               >
                 <RefreshCw size={18} className={indiceProgresso ? 'spin' : undefined} />

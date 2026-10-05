@@ -1,4 +1,4 @@
-import { EntradaIndice, MAX_PARTES, desserializarEntrada, parteDoId } from '../../domain/services/buscaDispositivos';
+import { EntradaIndice, MAX_PARTES, bytesDoItem, desserializarEntrada, parteDoId } from '../../domain/services/buscaDispositivos';
 import { MetaIndice, assinarMetaIndice, lerParteIndice } from './FirestoreIndiceDispositivos';
 import { lerCache, gravarCache } from '../cache/cacheLocal';
 import { registrarConsulta } from '../observabilidade/metricas';
@@ -24,6 +24,13 @@ export interface SnapshotIndice {
   erro: string | null;
   /** Incrementa a cada atualização de dados (para memoização nos hooks). */
   revisao: number;
+  /**
+   * Tamanho estimado (bytes) da maior parte carregada. Cada documento do
+   * Firestore aceita até 1 MiB e as partes só são redivididas quando o
+   * catálogo é reconstruído: perto do limite, gravar dispositivos daquela
+   * parte falharia. A tela sugere "Atualizar índice" bem antes disso.
+   */
+  maiorParteBytes: number;
 }
 
 type Ouvinte = (s: SnapshotIndice) => void;
@@ -38,7 +45,7 @@ const ceder = () => new Promise<void>(r => setTimeout(r, 0));
 const chaveCache = (n: number) => `indice:${(db as { app?: { options?: { projectId?: string } } })?.app?.options?.projectId || 'retool'}:${n}`;
 
 class IndiceBusca {
-  private snap: SnapshotIndice = { estado: 'inativo', entradas: [], meta: null, progresso: null, erro: null, revisao: 0 };
+  private snap: SnapshotIndice = { estado: 'inativo', entradas: [], meta: null, progresso: null, erro: null, revisao: 0, maiorParteBytes: 0 };
   private ouvintes = new Set<Ouvinte>();
   private pararMeta: (() => void) | null = null;
   private partes = new Map<number, ParteCache>();
@@ -140,7 +147,7 @@ class IndiceBusca {
     if (this.timerParar) { clearTimeout(this.timerParar); this.timerParar = null; }
     this.metaPendente = null;
     this.partes.clear();
-    this.snap = { estado: 'inativo', entradas: [], meta: null, progresso: null, erro: null, revisao: this.snap.revisao + 1 };
+    this.snap = { estado: 'inativo', entradas: [], meta: null, progresso: null, erro: null, revisao: this.snap.revisao + 1, maiorParteBytes: 0 };
     for (const o of this.ouvintes) o(this.snap);
   }
 
@@ -157,7 +164,7 @@ class IndiceBusca {
       this.emitir({ estado: 'ausente', meta: null, entradas: [], progresso: null, revisao: this.snap.revisao + 1 });
       return;
     }
-    if (!Number.isInteger(meta.partes) || meta.partes < 1 || meta.partes > MAX_PARTES) {
+    if (!Number.isInteger(meta.partes) || meta.partes < 1 || meta.partes > MAX_PARTES || !(meta.total >= 0)) {
       this.emitir({ estado: this.snap.entradas.length ? 'pronto' : 'erro', erro: 'indice-invalido' });
       return;
     }
@@ -199,8 +206,11 @@ class IndiceBusca {
       let desdeCeder = 0;
       let msCpu = 0;
       let t = performance.now();
+      let maiorParteBytes = 0;
       for (const [n, parte] of this.partes) {
+        let bytesParte = 0;
         for (const id in parte.itens) {
+          bytesParte += bytesDoItem(id, parte.itens[id]);
           if (parteDoId(id, meta.partes) !== n) continue;
           entradas.push(desserializarEntrada(id, parte.itens[id]));
           if (++desdeCeder >= FATIA_MONTAGEM) {
@@ -210,12 +220,13 @@ class IndiceBusca {
             t = performance.now();
           }
         }
+        if (bytesParte > maiorParteBytes) maiorParteBytes = bytesParte;
       }
       entradas.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
       msCpu += performance.now() - t;
       registrarConsulta('cpu:indice-montagem', entradas.length, msCpu);
       void t0;
-      this.emitir({ estado: 'pronto', meta, entradas, progresso: null, erro: null, revisao: this.snap.revisao + 1 });
+      this.emitir({ estado: 'pronto', meta, entradas, progresso: null, erro: null, revisao: this.snap.revisao + 1, maiorParteBytes });
     } catch (e) {
       this.emitir({ estado: this.snap.entradas.length ? 'pronto' : 'erro', erro: String((e as { code?: string })?.code || e) });
     }

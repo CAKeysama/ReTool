@@ -56,6 +56,8 @@ export interface IndiceBuscaApi {
   totalNoIndice: number;
   metaTotal: number | null;
   metaPartes: number | null;
+  /** Tamanho estimado da maior parte carregada (0 se não carregou). */
+  maiorParteBytes: number;
   /** O catálogo está sendo acompanhado em tempo real. */
   acompanhando: boolean;
   revisao: number;
@@ -112,6 +114,7 @@ export function useIndiceBusca(ativo = true): IndiceBuscaApi {
     totalNoIndice: snap.entradas.length,
     metaTotal: snap.meta?.total ?? null,
     metaPartes: snap.meta?.partes ?? null,
+    maiorParteBytes: snap.maiorParteBytes,
     acompanhando: indiceBusca.acompanhando(),
     revisao: snap.revisao,
     buscar,

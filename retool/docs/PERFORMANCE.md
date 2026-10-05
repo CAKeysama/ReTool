@@ -76,10 +76,17 @@ mantém um catálogo compacto em `indices/dispositivos`:
   atualizadoEm}`.
 - **Partes** (`indices/dispositivos/partes/{n}`): `{itens: {id: entrada}}`,
   com nome, código, descrição, categoria, processo e status de cada
-  dispositivo. Cada id vai para uma parte fixa (hash FNV-1a do id). Hoje são
-  cerca de 750 itens por parte (até 1.000 partes) e a reconstrução mira em
-  cerca de 250 KB por parte, longe do limite de 1 MiB por documento. Campos
-  longos são cortados em 2.000 caracteres.
+  dispositivo. Cada id vai para uma parte fixa (hash FNV-1a do id). A
+  reconstrução divide em cerca de 750 itens por parte (até 200 partes) e
+  mira em cerca de 250 KB por parte, longe do limite de 1 MiB por documento.
+  Campos longos são cortados em 2.000 caracteres. **As partes só são
+  redivididas quando o catálogo é reconstruído**: entre reconstruções, novos
+  dispositivos engordam as partes existentes. Por isso a tela de Dispositivos
+  sugere "Atualizar índice" quando uma parte passa de ~600 KB (medido no
+  navegador ao montar o catálogo) ou de 1.500 itens; toda importação que lê o
+  banco já refaz o catálogo no fim, sem leituras extras. Sem nenhuma
+  reconstrução, as gravações começariam a falhar perto de 90 mil
+  dispositivos (com 18 partes).
 - **Gravação junto**: criar, editar, excluir, desativar em massa e importar
   atualizam a parte correspondente no **mesmo writeBatch** do dispositivo
   (uma operação por parte tocada, mais a meta). Se a meta não puder ser lida,
@@ -93,7 +100,10 @@ mantém um catálogo compacto em `indices/dispositivos`:
   os dispositivos uma vez (cerca de 13.400 leituras e 20 escritas hoje). Se
   alguém gravar fora do app, a tela compara `meta.total` com o `count()` e
   oferece **"Atualizar índice"**. A reconstrução confere as versões antes e
-  depois e desiste se alguém gravou no meio.
+  depois da leitura e desiste se alguém gravou no meio; se alguém gravar
+  enquanto as partes novas estão sendo escritas (poucos segundos), o catálogo
+  novo é publicado e a tela pede para atualizar de novo, porque essa
+  alteração pode ter ficado de fora.
 
 Custo da busca: 1 leitura da meta + as partes que mudaram desde a última
 visita (18 partes na primeira vez em um navegador, com 13.400 dispositivos).
@@ -112,6 +122,13 @@ o app volta a ler as coleções e quem pode editar o recria.
 - Status nas notificações: só ao abrir o painel, só das notificações listadas.
 - Nomes de dispositivos em Reutilizações: catálogo ou leitura por id das
   linhas visíveis.
+- Notificações: as 50 mais recentes da pessoa (índice composto
+  `destinatarioUid` + `dataHora`).
+- Propagação de imagens por Número da Peça: consulta `codigo in [original,
+  sem espaços, MAIÚSCULAS, minúsculas]` (até 500); se o catálogo de busca já
+  estiver carregado na sessão, ele também aponta grafias mistas ("Abc",
+  " abc "), lidas por id. Sem catálogo carregado, uma grafia mista não
+  recebe a imagem automaticamente.
 - Lista de usuárias: só depois do login.
 
 ### Renderização
@@ -128,8 +145,10 @@ o app volta a ler as coleções e quem pode editar o recria.
 Detalhes em [IMPORTACAO_DISPOSITIVOS.md](IMPORTACAO_DISPOSITIVOS.md). Resumo:
 
 - leitura do .xlsx num Web Worker, com progresso real e cancelamento;
-- existentes vêm do catálogo de busca quando ele está em dia
-  (`entradas === count()`); senão, leitura paginada;
+- existentes sempre lidos do servidor, em páginas de 1.000 (1 leitura por
+  dispositivo); o catálogo não é usado como fonte, porque é gravável por
+  quem edita e não prova o conteúdo atual de cada documento;
+- no fim, o catálogo é refeito a partir dessa leitura (sem leituras extras);
 - linhas iguais ao banco não são regravadas;
 - catálogo atualizado lote a lote, no mesmo writeBatch;
 - para no primeiro lote recusado por cota (`resource-exhausted`) e pode ser
@@ -176,8 +195,17 @@ Nada de autorização foi movido para o cliente. As regras novas
 
 - `indices/dispositivos`: leitura para quem está logado; criar e alterar
   para quem pode editar, com validação dos campos da meta (`partes` inteiro
-  entre 1 e 1.000, `versoes` mapa, `total` inteiro, sem campos extras);
-  excluir só Administradora. Partes: só o campo `itens`.
+  entre 1 e 200, `versoes` mapa com até 200 chaves, `total` inteiro >= 0,
+  sem campos extras); excluir só Administradora. Partes: id numérico menor
+  que 200, só o campo `itens`, até 5.000 itens.
+- Limite conhecido: as regras não medem o conteúdo de cada item. Quem pode
+  editar dispositivos consegue gravar um catálogo inútil ou pesado; o
+  estrago máximo é cada navegador baixar até 200 partes uma vez (200
+  leituras) e a busca mostrar dados errados até alguém clicar em "Atualizar
+  índice". Os dispositivos em si não são afetados, e nenhuma decisão de
+  permissão usa o catálogo. Fechar isso exige Cloud Functions (plano pago).
+- O catálogo e a lista de usuárias são legíveis por qualquer conta logada,
+  como já eram as coleções de origem.
 - `indices/classificacoes`: mesmas permissões, só os campos `categorias`,
   `familias`, `produtos` e `atualizadoEm`.
 
@@ -185,11 +213,13 @@ Nada de autorização foi movido para o cliente. As regras novas
 
 | Situação | Limite | O que fazer |
 |---|---|---|
-| Catálogo de busca | 1.000 partes × ~750 itens ≈ 750 mil dispositivos | muito além do previsto; a tela sugere "Atualizar índice" quando as partes ficam cheias demais |
-| Download do catálogo na primeira busca | cresce com o total (≈ 1 leitura a cada 750 dispositivos) | aceitável até centenas de milhares; depois, busca no servidor (próximos passos) |
+| Reconstruir o catálogo ("Atualizar índice") | lê todos os dispositivos: 1 leitura por dispositivo | no plano gratuito (~50 mil leituras/dia) só cabe até cerca de 40 mil dispositivos, num dia sem importação. Acima disso, Cloud Functions no plano Blaze |
+| Tamanho das partes | 1 MiB por documento; partes só são redivididas na reconstrução | a tela sugere "Atualizar índice" a partir de ~600 KB numa parte ou 1.500 itens por parte; toda importação refaz o catálogo |
+| Download do catálogo na primeira busca | cresce com o total (≈ 1 leitura a cada 750 dispositivos; 18 partes hoje) | aceitável até dezenas de milhares; acima disso, busca no servidor (próximos passos) |
+| Custo de uma edição | 1 escrita do dispositivo + 1 da parte + 1 da meta + 1 da auditoria; até 2 leituras (meta e, com imagem, a linha do mesmo Número da Peça) | antes eram 2 escritas, mas abrir o app lia a coleção inteira |
 | Reutilizações | a tela ainda assina a coleção inteira (301 leituras no teste) | paginar no servidor depois de migrar os status antigos (ver abaixo) |
 | Gravação de importações grandes | o SDK do Firestore processa cada lote de ~480 documentos de uma vez: com CPU 4x mais lenta, tarefas de até ~1,3 s durante a gravação (processar a planilha não trava) | lotes menores reduziriam as pausas, mas cada lote também grava as partes do catálogo (+~19 escritas por lote), o que pesa na cota; mantido |
-| Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras, então faça num dia sem importação |
+| Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras e reimportar também (os existentes são lidos do servidor), então não faça os dois no mesmo dia |
 
 ## Publicação
 

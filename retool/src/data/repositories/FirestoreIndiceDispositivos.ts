@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { Dispositivo } from '../../domain/entities/dispositivo';
-import { parteDoId, partesParaTotal, serializarEntrada } from '../../domain/services/buscaDispositivos';
+import { bytesDoItem, parteDoId, partesParaTotal, serializarEntrada } from '../../domain/services/buscaDispositivos';
 import { medirConsulta } from '../observabilidade/metricas';
 
 /**
@@ -95,13 +95,23 @@ export function registrarNoIndice(
  */
 const BYTES_ALVO_POR_PARTE = 250_000;
 
-export async function reconstruirIndice(dispositivos: Dispositivo[]): Promise<MetaIndice> {
+/**
+ * `esperado`: a meta lida antes de ler os dispositivos. Se, ao terminar de
+ * gravar as partes, a meta no servidor já não for a mesma, alguém gravou
+ * dispositivos no meio: o catálogo novo é publicado mesmo assim (as partes já
+ * foram substituídas) e `alteradoNoMeio` avisa que a alteração concorrente
+ * pode ter ficado de fora (basta atualizar o índice de novo).
+ */
+export async function reconstruirIndice(
+  dispositivos: Dispositivo[],
+  esperado?: MetaIndice | null
+): Promise<{ meta: MetaIndice; alteradoNoMeio: boolean }> {
   const serializados = dispositivos.map(d => serializarEntrada(d));
   // Partes pelo volume e pelo tamanho real: cada documento do Firestore tem
-  // limite de 1 MiB, então o alvo é ~400 KB por parte (folga para crescer
+  // limite de 1 MiB, então o alvo é ~250 KB por parte (folga para crescer
   // entre reconstruções). Bytes estimados com folga para acentos em UTF-8.
   let bytes = 0;
-  for (let i = 0; i < dispositivos.length; i++) bytes += dispositivos[i].id.length + serializados[i].length * 1.2 + 16;
+  for (let i = 0; i < dispositivos.length; i++) bytes += bytesDoItem(dispositivos[i].id, serializados[i]);
   const partes = Math.max(partesParaTotal(dispositivos.length), Math.ceil(bytes / BYTES_ALVO_POR_PARTE));
   const itensPorParte: Record<string, string>[] = Array.from({ length: partes }, () => ({}));
   dispositivos.forEach((d, i) => { itensPorParte[parteDoId(d.id, partes)][d.id] = serializados[i]; });
@@ -120,8 +130,14 @@ export async function reconstruirIndice(dispositivos: Dispositivo[]): Promise<Me
     for (let n = i; n < Math.min(partes, i + 4); n++) b.set(parteRef(n), { itens: itensPorParte[n] });
     await b.commit();
   }
+  let alteradoNoMeio = false;
+  if (esperado !== undefined) {
+    const agora = await lerMetaIndiceDoServidor();
+    alteradoNoMeio = (agora?.geracao ?? null) !== (esperado?.geracao ?? null)
+      || JSON.stringify(agora?.versoes ?? null) !== JSON.stringify(esperado?.versoes ?? null);
+  }
   const b = writeBatch(db);
   b.set(metaRef(), meta);
   await b.commit();
-  return meta;
+  return { meta, alteradoNoMeio };
 }

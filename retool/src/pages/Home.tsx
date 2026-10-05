@@ -196,7 +196,8 @@ export function Home() {
               e.target.style.boxShadow = '0 6px 12px rgba(228, 13, 44, 0.08)';
               e.target.style.borderColor = 'var(--color-primary)';
               setShowSuggestions(true);
-              setBuscaUsada(true);
+              // O catálogo só é aberto ao digitar: o campo recebe foco sozinho
+              // ao abrir a Home e isso não deve custar leituras.
             }}
             onBlur={(e) => {
               e.target.style.boxShadow = '0 4px 6px rgba(0,0,0,0.02)';

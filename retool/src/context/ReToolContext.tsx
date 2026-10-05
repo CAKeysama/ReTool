@@ -383,6 +383,21 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     const temImagem = !!(payload.imagemPeca || payload.imagemDispositivo);
     if (!temImagem && !isNew) return; // nada a propagar (evita a consulta)
     const linha = (await obterDispositivosPorCodigo(codigo || '')).filter(d => normalizarNumeroPeca(d.codigo) === chave);
+    // A consulta acima só acha as grafias exatas (original, sem espaços,
+    // MAIÚSCULA, minúscula). Se o catálogo de busca já está carregado nesta
+    // sessão, ele aponta também as grafias mistas ("Abc", " abc ") sem custo
+    // extra de consulta; os documentos que faltarem são lidos por id.
+    const snapIndice = indiceBusca.obter();
+    if (indiceBusca.acompanhando() && snapIndice.estado === 'pronto') {
+      const conhecidos = new Set(linha.map(d => d.id));
+      const faltantes = snapIndice.entradas
+        .filter(e => !conhecidos.has(e.id) && normalizarNumeroPeca(e.codigo) === chave)
+        .map(e => e.id);
+      if (faltantes.length) {
+        const extras = await obterDispositivosPorIds(faltantes);
+        linha.push(...extras.filter(d => normalizarNumeroPeca(d.codigo) === chave));
+      }
+    }
     const patches = calcularPropagacaoImagens(linha, origemId, codigo, payload, isNew);
     if (patches.length === 0) return;
 
@@ -819,29 +834,13 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return { sucesso: 0, erros: novosDispositivos.length };
     }
     try {
-      // Fonte dos existentes: o catálogo de busca, quando ele está sincronizado
-      // e tem exatamente o mesmo total do banco (count, ~1 leitura por 1.000).
-      // Assim uma reimportação custa dezenas de leituras em vez de 1 por
-      // dispositivo. Se não der para confiar no catálogo, lê o banco.
+      // Os existentes são sempre lidos do banco (paginado, 1 leitura por
+      // dispositivo). O catálogo de busca não serve de fonte: ele pode estar
+      // diferente do banco com o mesmo total (edição pelo Console, abas com
+      // versão antiga do app) e a importação pularia atualizações achando
+      // que "já estavam iguais". A economia continua nas escritas: só o que
+      // mudou é gravado.
       const metaInicial = await lerMetaIndiceDoServidor();
-      let existentesConhecidos: Partial<Dispositivo>[] | undefined;
-      let catalogoConfere = false;
-      if (metaInicial) {
-        indiceBusca.usar();
-        try {
-          opcoes?.onProgresso?.({ etapa: 'lendo-existentes', feitos: 0, total: 0 });
-          const [entradas, totalBanco] = await Promise.all([
-            indiceBusca.aguardarSincronizado(metaInicial),
-            contarDispositivos(),
-          ]);
-          if (entradas && entradas.length === totalBanco) {
-            existentesConhecidos = entradas.map(e => ({ ...e }));
-            catalogoConfere = true;
-          }
-        } finally {
-          indiceBusca.liberar();
-        }
-      }
       const result = await importarLoteUseCase.execute(
         novosDispositivos,
         newCategoriasNomes,
@@ -850,7 +849,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         categorias,
         familias,
         produtos,
-        { ...opcoes, existentesConhecidos, indice: metaInicial, catalogoClassificacoes: catalogoClassifAtivo.current }
+        { ...opcoes, indice: metaInicial, catalogoClassificacoes: catalogoClassifAtivo.current }
       );
       const inseridos = result.inseridos ?? result.sucesso;
       const atualizados = result.atualizados ?? 0;
@@ -862,18 +861,21 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         `Importação em lote: ${inseridos} inserido(s), ${atualizados} atualizado(s), ${result.erros} erro(s) de ${novosDispositivos.length} enviado(s)`,
         { enviados: novosDispositivos.length, sucesso: result.sucesso, inseridos, atualizados, erros: result.erros, ignoradosSemAlteracao: result.ignoradosSemAlteracao ?? 0, interrompido: result.interrompido ?? null }
       );
-      // Cada lote já atualizou o catálogo. Só reconstrói (a partir do estado
-      // final que a importação acabou de ler, sem leitura extra) quando o
-      // catálogo não existia ou estava diferente do banco, e apenas se
-      // ninguém gravou no catálogo durante a importação (senão a reconstrução
-      // apagaria essas alterações).
-      if (!catalogoConfere && result.documentosFinais && !result.interrompido && result.documentosLidos) {
+      // Cada lote já atualizou o catálogo. Depois, o catálogo é refeito a
+      // partir do estado que a importação acabou de ler do banco (sem leitura
+      // extra; ~1 escrita por parte), o que também corrige divergências
+      // antigas. Só se ninguém gravou no catálogo durante a importação (senão
+      // a reconstrução apagaria essas alterações).
+      if (result.documentosFinais && !result.interrompido && result.documentosLidos) {
         try {
           const metaAgora = await lerMetaIndiceDoServidor();
           const versoesSomadas = (m: MetaIndice | null) => Object.values(m?.versoes || {}).reduce((a, b) => a + b, 0);
           const tocadoSoPorEsta = !metaInicial || (metaAgora && metaAgora.geracao === metaInicial.geracao
             && versoesSomadas(metaAgora) - versoesSomadas(metaInicial) === (result.documentosGravados ?? 0));
-          if (tocadoSoPorEsta) await reconstruirIndice(result.documentosFinais);
+          if (tocadoSoPorEsta) {
+            const { alteradoNoMeio } = await reconstruirIndice(result.documentosFinais, metaAgora);
+            if (alteradoNoMeio) console.warn('Índice de busca: houve gravação durante a reconstrução; atualize o índice para incluí-la.');
+          }
         } catch (e) {
           console.warn('Falha ao atualizar o índice de busca após a importação:', e);
         }
@@ -951,10 +953,14 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Dispositivos foram alterados durante a atualização do índice. Tente de novo em instantes.');
       throw new Error('indice-alterado-durante-varredura');
     }
-    await reconstruirIndice(todos);
+    const { alteradoNoMeio } = await reconstruirIndice(todos, depois);
     // Telas que leram a meta uma vez (aviso "Criar índice") releem.
     tocarDispositivos();
-    announce(`Índice de busca atualizado com ${todos.length.toLocaleString('pt-BR')} dispositivos.`);
+    if (alteradoNoMeio) {
+      announce('Índice atualizado, mas alguém gravou dispositivos enquanto ele era gravado. Atualize o índice de novo para incluir essa alteração.');
+    } else {
+      announce(`Índice de busca atualizado com ${todos.length.toLocaleString('pt-BR')} dispositivos.`);
+    }
     return todos.length;
   };
 

@@ -161,16 +161,22 @@ service cloud.firestore {
     // com a mesma regra de leitura. Servem para buscar por trecho e abrir o
     // app sem baixar coleções inteiras. Quem escreve é quem pode cadastrar/
     // editar (as escritas acompanham as da coleção no mesmo lote). Formato
-    // validado: um catálogo adulterado não consegue forçar milhares de
-    // leituras nos clientes (teto de partes) nem guardar outros campos.
+    // validado (campos, tipos, total >= 0, teto de 200 partes, até 5.000
+    // itens por parte). Limite conhecido: as regras não medem o conteúdo de
+    // cada item, então quem pode editar ainda consegue gravar um catálogo
+    // inútil ou pesado (até 200 partes = 200 leituras por cliente, uma vez,
+    // depois vem do cache). O catálogo é derivado: "Atualizar índice" o
+    // refaz a partir da coleção. Validar item a item exigiria Cloud
+    // Functions (plano pago).
 
     // Meta do índice de busca de dispositivos.
     match /indices/dispositivos {
       function metaValida() {
         let d = request.resource.data;
         return d.keys().hasOnly(['partes', 'versoes', 'total', 'geracao', 'atualizadoEm'])
-          && d.partes is int && d.partes >= 1 && d.partes <= 1000
-          && d.versoes is map && d.total is int;
+          && d.partes is int && d.partes >= 1 && d.partes <= 200
+          && d.versoes is map && d.versoes.size() <= 200
+          && d.total is int && d.total >= 0;
       }
       allow get: if signedIn();
       allow create, update: if canEditar() && metaValida();
@@ -180,8 +186,10 @@ service cloud.firestore {
       match /partes/{parteId} {
         allow get, list: if signedIn();
         allow create, update: if canEditar()
+          && parteId.matches('^[0-9]{1,3}$') && int(parteId) < 200
           && request.resource.data.keys().hasOnly(['itens'])
-          && request.resource.data.itens is map;
+          && request.resource.data.itens is map
+          && request.resource.data.itens.size() <= 5000;
         allow delete: if isAdmin();
       }
     }
