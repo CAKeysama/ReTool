@@ -4,7 +4,8 @@ import { mockDbState, resetMockDb } from '../../mocks/firebaseMock';
 import { Categoria } from '../../../domain/entities/categoria';
 import { Familia } from '../../../domain/entities/familia';
 import { Produto } from '../../../domain/entities/produto';
-import { Dispositivo } from '../../../domain/entities/dispositivo';
+import { Dispositivo, chaveCodigoDispositivo } from '../../../domain/entities/dispositivo';
+import { prepararChavesImportacao, contarComChave } from '../../../data/repositories/importacaoDispositivosFirestore';
 import { ProgressoImportacao } from '../../../domain/repositories/IDispositivosRepository';
 import { describe, beforeEach, test, expect, jest } from '@jest/globals';
 
@@ -33,6 +34,22 @@ describe('FirestoreDispositivosRepository', () => {
 
     expect(mockDbState.dispositivos[0].nome).toBe('Updated Name');
     expect(mockDbState.dispositivos[0].codigo).toBe('COD1');
+  });
+
+  test('chave Código + Dispositivo acompanha o cadastro e a edição', async () => {
+    const id = await repository.add({ nome: ' Disp  A ', codigo: 'C1' } as any);
+    const salvo = () => mockDbState.dispositivos.find((d: any) => d.id === id);
+    expect(salvo().chaveCD).toBe(chaveCodigoDispositivo('c1', 'disp a'));
+
+    // Com o documento atual: a chave é recalculada.
+    await repository.update(id, { nome: 'Disp B' }, { ...salvo() });
+    expect(salvo().chaveCD).toBe(chaveCodigoDispositivo('C1', 'Disp B'));
+    // Alterar outro campo não mexe na chave; uma chave enviada pela tela é ignorada.
+    await repository.update(id, { peso: '2', chaveCD: 'forjada' } as any, { ...salvo() });
+    expect(salvo().chaveCD).toBe(chaveCodigoDispositivo('C1', 'Disp B'));
+    // Sem o documento atual não dá para calcular: a chave sai (a importação volta a ler tudo).
+    await repository.update(id, { codigo: 'C2' });
+    expect(salvo().chaveCD).toBeUndefined();
   });
 
   test('should delete a device', async () => {
@@ -274,33 +291,82 @@ describe('FirestoreDispositivosRepository', () => {
       expect(eventos[eventos.length - 1]).toEqual({ etapa: 'concluido', feitos: 1234, total: 1234 });
     });
 
-    test('arquivo pequeno sobre banco grande: lê só os candidatos e o plano sai igual', async () => {
+    // Documentos antigos (gravados antes da chave), com grafias que a busca exata por código não acha.
+    const antigos = () => [
+      { id: 'antigo-num', codigo: 12345, nome: 'D' },
+      { id: 'antigo-caixa', codigo: 'abc-1', nome: 'Disp X' },
+      { id: 'antigo-vazio', codigo: '', nome: 'Sem Código' },
+      { id: 'antigo-espacos', codigo: '  X  1 ', nome: 'A' },
+    ];
+    const arquivoPequeno = () => [
+      ...lista(10),                                      // iguais ao banco
+      { codigo: '12345', nome: 'D', peso: '1' },         // mesmo que o código numérico
+      { codigo: ' ABC-1 ', nome: 'disp  x', peso: '1' }, // mesma chave, outra grafia
+      { codigo: '', nome: 'SEM CÓDIGO', peso: '1' },     // código vazio
+      { codigo: 'x 1', nome: 'a', peso: '1' },           // espaços nas pontas e repetidos
+      ...Array.from({ length: 5 }, (_, i) => ({ codigo: `NOVO${i}`, nome: 'D', peso: '1' })),
+    ];
+    const conferirSemDuplicar = (r: any) => {
+      expect(r).toMatchObject({ inseridos: 5, ignoradosSemAlteracao: 10, erros: 0 });
+      expect(mockDbState.dispositivos).toHaveLength(3004 + 5);
+      // As linhas com outra grafia atualizaram os documentos antigos (peso novo), sem duplicar.
+      for (const a of antigos()) {
+        expect(mockDbState.dispositivos.find((d: any) => d.id === a.id)).toMatchObject({ peso: '1' });
+      }
+    };
+
+    test('arquivo pequeno com dispositivos ainda sem a chave: lê o banco inteiro e não duplica', async () => {
       await repository.importarLote(lista(3000), [], [], [], [], [], []);
-      // Grafias antigas: código numérico, caixa e espaços diferentes da planilha.
-      mockDbState.dispositivos.push(
-        { id: 'antigo-num', codigo: 12345, nome: 'D' },
-        { id: 'antigo-caixa', codigo: 'abc-1', nome: 'Disp X' },
-      );
+      mockDbState.dispositivos.push(...antigos());
+      const r = await repository.importarLote(arquivoPequeno(), [], [], [], [], [], []);
+
+      expect(r.leituraParcial).toBeFalsy();
+      expect(r.documentosLidos).toBe(3004);
+      conferirSemDuplicar(r);
+    });
+
+    test('arquivo pequeno com todos preparados: lê só os candidatos pela chave e não duplica', async () => {
+      await repository.importarLote(lista(3000), [], [], [], [], [], []);
+      mockDbState.dispositivos.push(...antigos());
+      const prep = await prepararChavesImportacao(null, () => undefined);
+      expect(prep).toMatchObject({ lidos: 3004, gravados: 4 });
+      expect(prep.interrompido).toBeUndefined();
+
       const fs = jest.requireMock('firebase/firestore') as { getDocsFromServer: jest.Mock<any> };
       fs.getDocsFromServer.mockClear();
-      const arquivo = [
-        ...lista(10),                                     // iguais ao banco
-        { codigo: '12345', nome: 'D', peso: '1' },        // mesmo que o código numérico
-        { codigo: ' ABC-1 ', nome: 'disp  x', peso: '1' }, // mesma chave, outra grafia
-        ...Array.from({ length: 5 }, (_, i) => ({ codigo: `NOVO${i}`, nome: 'D', peso: '1' })),
-      ];
-      const r = await repository.importarLote(arquivo, [], [], [], [], [], []);
+      const r = await repository.importarLote(arquivoPequeno(), [], [], [], [], [], []);
 
       expect(r.leituraParcial).toBe(true);
       expect(r.documentosFinais).toBeUndefined();
-      // Só os candidatos (mesmo código do arquivo), não os 3.002.
+      // Só os candidatos (19 chaves = 1 consulta 'in'), não os 3.004.
       expect(fs.getDocsFromServer.mock.calls.length).toBeLessThan(5);
-      expect(r.documentosLidos).toBe(12);
-      expect(r).toMatchObject({ inseridos: 5, ignoradosSemAlteracao: 10, erros: 0 });
-      expect(mockDbState.dispositivos).toHaveLength(3002 + 5);
-      // As duas linhas com outra grafia atualizaram os documentos antigos (peso novo), sem duplicar.
-      expect(mockDbState.dispositivos.find((d: any) => d.id === 'antigo-num')).toMatchObject({ peso: '1' });
-      expect(mockDbState.dispositivos.find((d: any) => d.id === 'antigo-caixa')).toMatchObject({ peso: '1' });
+      expect(r.documentosLidos).toBe(14);
+      conferirSemDuplicar(r);
+      // Os novos já nascem com a chave: a próxima importação continua rápida.
+      expect(mockDbState.dispositivos.every((d: any) => typeof d.chaveCD === 'string')).toBe(true);
+    });
+
+    test('preparo da chave: grava só os que faltam, retoma de onde parou e respeita o cancelamento', async () => {
+      await repository.importarLote(lista(2500), [], [], [], [], [], []);
+      // Sem chave e com chave desatualizada (nome alterado por uma versão antiga do app).
+      for (const d of mockDbState.dispositivos.slice(0, 1200)) delete d.chaveCD;
+      mockDbState.dispositivos[2400].nome = 'Renomeado';
+
+      const ctl = new AbortController();
+      const parcial = await prepararChavesImportacao(null, p => { if (p.lidos >= 1000) ctl.abort(); }, ctl.signal);
+      expect(parcial).toMatchObject({ interrompido: 'cancelado', lidos: 1000 });
+      expect(parcial.ultimoId).not.toBeNull();
+
+      const resto = await prepararChavesImportacao(parcial.ultimoId, () => undefined);
+      expect(resto.interrompido).toBeUndefined();
+      expect(resto.lidos).toBe(1500);
+      expect(parcial.gravados + resto.gravados).toBe(1201);
+      for (const d of mockDbState.dispositivos) {
+        expect(d.chaveCD).toBe(chaveCodigoDispositivo(d.codigo, d.nome));
+      }
+      expect(await contarComChave()).toBe(2500);
+      // Rodar de novo não grava nada.
+      expect(await prepararChavesImportacao(null, () => undefined)).toMatchObject({ lidos: 2500, gravados: 0 });
     });
 
     test('leitura dos existentes incompleta: lê de novo; se ainda faltar, não grava nada', async () => {

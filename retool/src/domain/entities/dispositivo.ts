@@ -16,6 +16,12 @@ export interface Dispositivo {
   anexos?: FileAttachment[];
   dataCriacao?: string;
   ativo?: boolean;
+  /**
+   * Chave Código + Dispositivo normalizada (`chaveCodigoDispositivo`),
+   * gravada pelo app em toda criação/alteração. Permite à importação
+   * consultar só as combinações do arquivo (`where chaveCD in`).
+   */
+  chaveCD?: string;
 }
 
 export type CampoImagemDispositivo = 'imagemPeca' | 'imagemDispositivo';

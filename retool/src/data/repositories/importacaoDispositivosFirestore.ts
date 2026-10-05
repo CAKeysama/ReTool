@@ -4,7 +4,7 @@ import {
   where, QueryConstraint,
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { Dispositivo, INVISIVEIS } from '../../domain/entities/dispositivo';
+import { Dispositivo, chaveCodigoDispositivo } from '../../domain/entities/dispositivo';
 import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
 import { Produto } from '../../domain/entities/produto';
@@ -36,46 +36,46 @@ const contarDispositivosNoServidor = async (): Promise<number> => {
   }
 };
 
-/** Grafias com que um valor da planilha pode estar gravado (a chave ignora caixa, espaços e invisíveis). */
-export function variantesDoValor(valor: unknown): (string | number)[] {
-  if (valor === null || valor === undefined) return [];
-  const bruto = String(valor);
-  const limpo = bruto.normalize('NFC').replace(INVISIVEIS, '').replace(/\s+/g, ' ').trim();
-  const out = new Set<string | number>([bruto, bruto.trim(), limpo, limpo.toUpperCase(), limpo.toLowerCase()]);
-  // Código gravado como número em dados antigos: "123" e 123 têm a mesma chave.
-  if (/^\d{1,15}$/.test(limpo)) out.add(Number(limpo));
-  out.delete('');
-  return Array.from(out);
-}
-
-/** Valores para `where(campo, 'in', ...)`: variantes de todos os valores, sem repetir. */
-function valoresParaConsulta(valores: unknown[]): (string | number)[] {
-  const out = new Set<string | number>();
-  for (const v of valores) for (const x of variantesDoValor(v)) out.add(x);
-  return Array.from(out);
-}
-
 const MAX_IN_CONSULTA = 30;
 
+/** Chaves Código + Dispositivo do arquivo, sem repetir. */
+const chavesDoArquivo = (linhas: Partial<Dispositivo>[]) =>
+  Array.from(new Set(linhas.map(l => chaveCodigoDispositivo(l.codigo, l.nome))));
+
+/** Quantas consultas `in` a leitura por candidatos faria (cada uma custa ao menos 1 leitura). */
+export function consultasDeCandidatos(linhas: Partial<Dispositivo>[]): number {
+  return Math.ceil(chavesDoArquivo(linhas).length / MAX_IN_CONSULTA);
+}
+
 /**
- * Leitura só dos candidatos: dispositivos cujo Código aparece na planilha
- * (em qualquer das grafias de `variantesDoValor`: original, sem espaços nas
- * pontas, sem invisíveis, MAIÚSCULAS, minúsculas e número). Só esses podem ter
- * a mesma chave Código + Dispositivo de uma linha do arquivo, então o plano
- * de gravação sai igual ao da leitura completa, com leituras na ordem do
- * tamanho do arquivo e não do banco. Limite: um código antigo gravado em
- * caixa mista diferente da planilha (ex.: "Dmp11" no banco, "DMP11" no
- * arquivo) não é encontrado e a linha vira um registro novo; os códigos do
- * acervo são numéricos, e a verificação de Duplicados acha esses casos.
+ * Quantos documentos têm `chaveCD` (a chave normalizada que o app grava).
+ * Só quando TODOS têm, a leitura por candidatos é exata; documentos antigos
+ * ou gravados fora do app fazem a importação ler o banco inteiro.
+ */
+export async function contarComChave(): Promise<number> {
+  try {
+    return (await getCountFromServer(query(collection(db, 'dispositivos'), where('chaveCD', '>', '')))).data().count;
+  } catch (erro) {
+    if (ehErroDeCota(erro)) throw new InterrupcaoImportacao('cota', erro);
+    throw erro;
+  }
+}
+
+/**
+ * Leitura só dos candidatos: documentos cuja `chaveCD` é a chave Código +
+ * Dispositivo de alguma linha do arquivo (`where chaveCD in`, blocos de 30).
+ * A chave é a mesma normalização usada no plano de gravação, então o plano
+ * sai igual ao da leitura completa, com leituras na ordem do tamanho do
+ * arquivo. Só é usada quando todos os documentos têm a chave.
  */
 async function lerCandidatos(
   linhas: Partial<Dispositivo>[],
   sinal: AbortSignal | undefined,
   avisar: (feitos: number, total: number) => void
 ): Promise<Map<string, Dispositivo>> {
-  const consultas: (string | number)[][] = [];
-  const valores = valoresParaConsulta(linhas.map(l => l.codigo));
-  for (let i = 0; i < valores.length; i += MAX_IN_CONSULTA) consultas.push(valores.slice(i, i + MAX_IN_CONSULTA));
+  const chaves = chavesDoArquivo(linhas);
+  const consultas: string[][] = [];
+  for (let i = 0; i < chaves.length; i += MAX_IN_CONSULTA) consultas.push(chaves.slice(i, i + MAX_IN_CONSULTA));
   const existentes = new Map<string, Dispositivo>();
   let feitas = 0;
   avisar(0, consultas.length);
@@ -85,7 +85,7 @@ async function lerCandidatos(
     let snaps;
     try {
       snaps = await Promise.all(consultas.slice(i, i + 3).map(c =>
-        getDocsFromServer(query(collection(db, 'dispositivos'), where('codigo', 'in', c)))));
+        getDocsFromServer(query(collection(db, 'dispositivos'), where('chaveCD', 'in', c)))));
     } catch (erro) {
       if (ehErroDeCota(erro)) throw new InterrupcaoImportacao('cota', erro);
       throw erro;
@@ -95,11 +95,6 @@ async function lerCandidatos(
     avisar(feitas, consultas.length);
   }
   return existentes;
-}
-
-/** Quantas consultas `in` a leitura por candidatos faria (cada uma custa ao menos 1 leitura). */
-export function consultasDeCandidatos(linhas: Partial<Dispositivo>[]): number {
-  return Math.ceil(valoresParaConsulta(linhas.map(l => l.codigo)).length / MAX_IN_CONSULTA);
 }
 
 /**
@@ -273,9 +268,12 @@ export async function importarLoteFirestore(
       progresso({ etapa: 'lendo-existentes', feitos: 0, total: 0 });
       const noBanco = await contarDispositivosNoServidor();
       // Arquivo pequeno perto do banco: lê só os candidatos (custo pelo
-      // tamanho do arquivo). Senão, a leitura completa conferida sai mais barata.
+      // tamanho do arquivo), desde que todos os documentos tenham a chave
+      // normalizada. Senão, a leitura completa conferida (exata e, para
+      // arquivo grande, mais barata).
       const consultas = consultasDeCandidatos(novosDispositivos);
-      leituraParcial = consultas * 2 + novosDispositivos.length < noBanco / 2;
+      const compensa = consultas * 2 + novosDispositivos.length < noBanco / 2;
+      leituraParcial = compensa && (await contarComChave()) === noBanco;
       existentes = leituraParcial
         ? await lerCandidatos(novosDispositivos, sinal, (feitas, total) => progresso({ etapa: 'lendo-existentes', feitos: feitas, total }))
         : await lerExistentesConferido(sinal, (lidos, total) => progresso({ etapa: 'lendo-existentes', feitos: lidos, total }), noBanco);
@@ -386,4 +384,55 @@ export async function importarLoteFirestore(
   resultado.documentosFinais = leituraParcial ? undefined : Array.from(finais.values());
   progresso({ etapa: 'concluido', feitos: total, total });
   return resultado;
+}
+
+export interface ResultadoPreparoChaves {
+  lidos: number;
+  gravados: number;
+  /** Último id processado (para retomar depois de cota ou cancelamento). */
+  ultimoId: string | null;
+  /** 'erro': falha de rede ou permissão; `falha` traz a mensagem. */
+  interrompido?: 'cancelado' | 'cota' | 'erro';
+  falha?: string;
+}
+
+/**
+ * Grava `chaveCD` nos dispositivos que ainda não a têm (ou têm uma
+ * desatualizada), para a importação poder ler só as combinações do arquivo.
+ * Lê em páginas de 1.000 pelo id (a partir de `depoisDe`, para retomar) e
+ * grava só o campo `chaveCD` dos que precisam, página a página: se a cota
+ * acabar ou alguém cancelar, o que já foi gravado fica e a próxima rodada
+ * continua de onde parou.
+ */
+export async function prepararChavesImportacao(
+  depoisDe: string | null,
+  avisar: (p: { lidos: number; gravados: number }) => void,
+  sinal?: AbortSignal
+): Promise<ResultadoPreparoChaves> {
+  const r: ResultadoPreparoChaves = { lidos: 0, gravados: 0, ultimoId: depoisDe };
+  for (;;) {
+    if (sinal?.aborted) return { ...r, interrompido: 'cancelado' };
+    const restricoes: QueryConstraint[] = [orderBy(documentId()), limit(TAMANHO_PAGINA_LEITURA)];
+    if (r.ultimoId) restricoes.push(startAfter(r.ultimoId));
+    try {
+      const pagina = await getDocsFromServer(query(collection(db, 'dispositivos'), ...restricoes));
+      const faltando = pagina.docs
+        .map(d => ({ id: d.id, atual: d.data().chaveCD, chave: chaveCodigoDispositivo(d.data().codigo, d.data().nome) }))
+        .filter(x => x.atual !== x.chave);
+      for (const lote of emLotes(faltando, 500)) {
+        const b = writeBatch(db);
+        for (const x of lote) b.update(doc(db, 'dispositivos', x.id), { chaveCD: x.chave });
+        await b.commit();
+        r.gravados += lote.length;
+      }
+      r.lidos += pagina.docs.length;
+      if (pagina.docs.length) r.ultimoId = pagina.docs[pagina.docs.length - 1].id;
+      avisar({ lidos: r.lidos, gravados: r.gravados });
+      if (pagina.docs.length < TAMANHO_PAGINA_LEITURA) return r;
+    } catch (erro) {
+      if (ehErroDeCota(erro)) return { ...r, interrompido: 'cota' };
+      // Devolve em vez de lançar: quem chama guarda `ultimoId` para retomar.
+      return { ...r, interrompido: 'erro', falha: erro instanceof Error ? erro.message : String(erro) };
+    }
+  }
 }

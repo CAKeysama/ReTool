@@ -66,6 +66,7 @@ jest.mock('firebase/firestore', () => {
       return { data: () => ({ count }) };
     }),
     startAfter: jest.fn((valor?: any) => ({ tipo: 'startAfter', valor })),
+    deleteField: jest.fn(() => ({ __deleteField: true })),
     serverTimestamp: jest.fn(() => ({
       __serverTimestampMock: true,
       toDate: () => new Date('2026-01-02T03:04:05.000Z')
@@ -99,6 +100,7 @@ jest.mock('firebase/firestore', () => {
         const item = mockDbState[col].find((item: any) => item.id === docRef.id);
         if (item) {
           Object.assign(item, data);
+          for (const [k, v] of Object.entries(data)) if ((v as any)?.__deleteField) delete item[k];
         }
       }
     }),

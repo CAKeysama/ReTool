@@ -1,7 +1,7 @@
 import { db } from '../datasources/firebase';
-import { doc, writeBatch, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, writeBatch, setDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { Dispositivo } from '../../domain/entities/dispositivo';
+import { Dispositivo, chaveCodigoDispositivo } from '../../domain/entities/dispositivo';
 import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
 import { Produto } from '../../domain/entities/produto';
@@ -19,6 +19,24 @@ const apagarPastaDoDispositivo = async (id: string) => {
 export const ITENS_POR_LOTE_EM_MASSA = 150;
 
 /**
+ * Recalcula `chaveCD` quando código ou dispositivo mudam (ou quando o
+ * documento ainda não a tem). Sem o documento atual e com só um dos dois
+ * campos, a chave não pode ser calculada: é apagada, e a importação volta a
+ * ler o banco inteiro até "Preparar importação rápida" (nunca uma chave errada).
+ */
+function comChaveAtualizada(data: Partial<Dispositivo>, atual: Dispositivo | null): Partial<Dispositivo> {
+  const { chaveCD: _ignorada, ...resto } = data;
+  void _ignorada;
+  const mexeNaChave = 'codigo' in resto || 'nome' in resto;
+  if (atual) {
+    const chave = chaveCodigoDispositivo(resto.codigo ?? atual.codigo, resto.nome ?? atual.nome);
+    return mexeNaChave || atual.chaveCD !== chave ? { ...resto, chaveCD: chave } : resto;
+  }
+  if ('codigo' in resto && 'nome' in resto) return { ...resto, chaveCD: chaveCodigoDispositivo(resto.codigo, resto.nome) };
+  return mexeNaChave ? { ...resto, chaveCD: deleteField() as unknown as string } : resto;
+}
+
+/**
  * Escrita de dispositivos. Quando o catálogo de busca existe (`meta`), o
  * documento e sua entrada no catálogo são gravados no MESMO writeBatch.
  * Leituras ficam em FirestoreDispositivosConsultas.ts.
@@ -26,7 +44,7 @@ export const ITENS_POR_LOTE_EM_MASSA = 150;
 export class FirestoreDispositivosRepository implements IDispositivosRepository {
   async add(data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }, meta: MetaIndice | null = null): Promise<string> {
     const id = data.id || uuidv4();
-    const newDevice = { ...data, id, dataCriacao: new Date().toISOString() };
+    const newDevice = { ...data, id, chaveCD: chaveCodigoDispositivo(data.codigo, data.nome), dataCriacao: new Date().toISOString() };
     if (!meta) {
       await setDoc(doc(db, 'dispositivos', id), newDevice);
       return id;
@@ -39,7 +57,8 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
   }
 
   /** `atual` (documento antes da alteração) é necessário para manter o catálogo completo. */
-  async update(id: string, data: Partial<Dispositivo>, atual: Dispositivo | null = null, meta: MetaIndice | null = null): Promise<void> {
+  async update(id: string, dataOriginal: Partial<Dispositivo>, atual: Dispositivo | null = null, meta: MetaIndice | null = null): Promise<void> {
+    const data = comChaveAtualizada(dataOriginal, atual);
     if (!meta || !atual) {
       await updateDoc(doc(db, 'dispositivos', id), data);
       return;

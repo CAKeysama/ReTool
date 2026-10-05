@@ -10,6 +10,8 @@ import {
 } from '../application/importacao/processarPlanilhaNoWorker';
 import type { ProgressoImportacao, ResultadoImportacaoLote } from '../domain/repositories/IDispositivosRepository';
 import { BarraProgresso } from './feedback';
+import { PreparoImportacaoRapida } from './PreparoImportacaoRapida';
+import { usePermissions } from '../hooks/usePermissions';
 import { Upload, AlertCircle, CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
 
 interface ImportModalProps {
@@ -139,6 +141,7 @@ function ResumoFinal({ resultado, enviados }: { resultado: ResultadoImportacaoLo
 
 export function ImportModal({ isOpen, onClose }: ImportModalProps) {
   const { categorias, familias, produtos, importarDispositivosEmLote } = useReTool();
+  const { isAdmin } = usePermissions();
   const [file, setFile] = useState<File | null>(null);
   const [fase, setFase] = useState<Fase>('selecao');
   useAvisoAoSair(fase === 'processando' || fase === 'importando');
@@ -345,6 +348,8 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
   return (
     <AccessibleModal isOpen={isOpen} onClose={handleClose} title="Importação em Lote" maxWidth="800px">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+
+        {isAdmin && fase === 'selecao' && !file && <PreparoImportacaoRapida />}
 
         {(fase === 'selecao' || fase === 'processando') && (
           <div

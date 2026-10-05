@@ -19,6 +19,7 @@ import {
   obterDispositivo, obterDispositivosPorIds, obterDispositivosPorCodigo, varrerDispositivos, varrerColecao, ProgressoVarredura, contarDispositivos
 } from '../data/repositories/FirestoreDispositivosConsultas';
 import { ITENS_POR_PARTE } from '../domain/services/buscaDispositivos';
+import { contarComChave, prepararChavesImportacao, ResultadoPreparoChaves } from '../data/repositories/importacaoDispositivosFirestore';
 import { MetaIndice, lerMetaIndiceDoServidor, reconstruirIndice, metaRef, parteRef } from '../data/repositories/FirestoreIndiceDispositivos';
 import { indiceBusca } from '../data/repositories/IndiceBuscaStore';
 import {
@@ -96,6 +97,10 @@ interface ReToolContextType {
   ) => Promise<{ excluidos: number; erros: number; falhas: string[]; cancelado?: boolean }>;
   /** Recria o catálogo de busca lendo a coleção em páginas (ação administrativa explícita). */
   reconstruirIndiceBusca: (onProgresso?: (p: ProgressoVarredura) => void, sinal?: AbortSignal) => Promise<number>;
+  /** Quantos dispositivos existem e quantos já têm a chave da importação rápida (2 count()). */
+  estadoImportacaoRapida: () => Promise<{ total: number; comChave: number }>;
+  /** Grava a chave Código + Dispositivo nos que faltam (Administração; retoma de onde parou). */
+  prepararImportacaoRapida: (onProgresso?: (p: { lidos: number; gravados: number }) => void, sinal?: AbortSignal) => Promise<ResultadoPreparoChaves>;
   announce: (message: string, showToast?: boolean) => void;
   isDispFormOpen: boolean;
   editingDispId: string | null;
@@ -1014,6 +1019,38 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     return result;
   };
 
+  const estadoImportacaoRapida = async () => {
+    const [total, comChave] = await Promise.all([contarDispositivos(), contarComChave()]);
+    return { total, comChave };
+  };
+
+  // Retomada guardada neste navegador (só o último id processado, nada de conteúdo).
+  const chaveRetomada = `retool:preparo-chaves:${(db as { app?: { options?: { projectId?: string } } })?.app?.options?.projectId || 'retool'}`;
+  const prepararImportacaoRapida = async (onProgresso?: (p: { lidos: number; gravados: number }) => void, sinal?: AbortSignal) => {
+    if (currentRole !== 'admin') {
+      announce('Apenas Administradoras podem preparar a importação rápida.');
+      return { lidos: 0, gravados: 0, ultimoId: null };
+    }
+    let depoisDe: string | null = null;
+    try { depoisDe = localStorage.getItem(chaveRetomada); } catch { depoisDe = null; }
+    const r = await prepararChavesImportacao(depoisDe, p => onProgresso?.(p), sinal);
+    try {
+      if (r.interrompido && r.ultimoId) localStorage.setItem(chaveRetomada, r.ultimoId);
+      else localStorage.removeItem(chaveRetomada);
+    } catch { /* sem armazenamento local: a próxima rodada recomeça do início */ }
+    await registrarAuditoria('edicao', 'dispositivo', 'chave-importacao', 'Chave da importação rápida',
+      `Preparo da importação rápida: ${r.gravados} dispositivo(s) receberam a chave Código + Dispositivo`,
+      { lidos: r.lidos, gravados: r.gravados, interrompido: r.interrompido ?? null });
+    announce(r.interrompido === 'erro'
+      ? `Preparo interrompido por uma falha: ${r.gravados} dispositivos preparados. Rode de novo para continuar de onde parou.`
+      : r.interrompido === 'cota'
+      ? `Cota diária atingida: ${r.gravados} dispositivos preparados. Rode de novo amanhã para continuar de onde parou.`
+      : r.interrompido === 'cancelado'
+        ? `Preparo cancelado: ${r.gravados} dispositivos preparados; rodar de novo continua de onde parou.`
+        : `Importação rápida pronta: ${r.gravados} dispositivos receberam a chave.`);
+    return r;
+  };
+
   const reconstruirIndiceBusca = async (onProgresso?: (p: ProgressoVarredura) => void, sinal?: AbortSignal) => {
     if (currentRole !== 'admin' && currentRole !== 'projetista') {
       announce('Apenas Administradoras e Projetistas podem atualizar o índice de busca.');
@@ -1105,6 +1142,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     addReutilizacao, updateReutilizacao, deleteReutilizacao,
     solicitarReutilizacao, transicionarReutilizacao,
     importarDispositivosEmLote, deleteAllData, limparDispositivosDuplicados, reconstruirIndiceBusca,
+    estadoImportacaoRapida, prepararImportacaoRapida,
     announce,
     isDispFormOpen, editingDispId, openDispForm, closeDispForm
     // eslint-disable-next-line react-hooks/exhaustive-deps

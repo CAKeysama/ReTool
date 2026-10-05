@@ -35,7 +35,9 @@ ponta e de Reutilizações, não (com 4x, a gravação do arquivo oficial levou
 | Processar a planilha oficial (472.976 linhas) | 33,3 s com a tela travada | 11,8 s em segundo plano, maior bloqueio da tela 33 ms |
 | Reimportar planilha igual ao banco (369.600 linhas, 15.400 combinações) | 1 leitura por dispositivo + regravava tudo | 15.445 leituras, 0 dispositivos regravados, 7 a 9 s |
 | Importar 2.000 novos sobre 13.400 iguais | idem | 13.440 leituras, 2.000 gravações, 16,7 s |
-| Importar planilha de 50 linhas (40 iguais, 10 novas) sobre 15.400 | 15.400 leituras + 50 gravações | 75 leituras, 10 gravações, 10,5 s |
+| Importar planilha de 50 linhas (40 iguais, 10 novas) sobre 15.400, depois de "Preparar importação rápida" | 15.400 leituras + 50 gravações | 90 leituras no total (40 documentos de dispositivos), 10 gravações, 5,9 s |
+| Mesma planilha antes do preparo (dispositivos sem a chave) | idem | 15.462 leituras, 0 gravações, 8,2 s (lê tudo, não arrisca duplicar) |
+| "Preparar importação rápida" (uma vez, 15.400 sem a chave) | não existia | 15.458 leituras, 15.400 gravações, 38 s; cancelável e retomável |
 | Abrir Reutilizações (3.000 registros, acervo normalizado) | 3.000 leituras | 64 leituras |
 
 Os números da importação ponta a ponta estão em
@@ -276,7 +278,7 @@ Nada de autorização foi movido para o cliente. As regras novas
 | Custo de uma edição | 1 escrita do dispositivo + 1 da parte + 1 da meta + 1 da auditoria; até 2 leituras (meta e, com imagem, a linha do mesmo Número da Peça) | antes eram 2 escritas, mas abrir o app lia a coleção inteira |
 | Reutilizações | modo legado lê a coleção inteira até a normalização | uma Administradora clica em "Normalizar" uma vez (1 leitura e no máximo 1 escrita por registro) |
 | Gravação de importações grandes | o SDK do Firestore processa cada lote de ~480 documentos de uma vez: com CPU 4x mais lenta, tarefas de até ~1,3 s durante a gravação (processar a planilha não trava) | lotes menores reduziriam as pausas, mas cada lote também grava as partes do catálogo (+~19 escritas por lote), o que pesa na cota; mantido |
-| Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras e reimportar um arquivo grande também, então não faça os dois no mesmo dia. Arquivos pequenos custam leituras na ordem do número de linhas |
+| Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras e reimportar um arquivo grande também, então não faça os dois no mesmo dia. Arquivos pequenos custam leituras na ordem do número de linhas depois de "Preparar importação rápida" (uma vez: ~1 leitura e 1 gravação por dispositivo; com 13.400 dispositivos, ~26.800 operações, então rode em dois dias ou num dia sem outra carga: ele continua de onde parou) |
 | Leitura completa (importação grande, "Atualizar índice", Duplicados) | 1 leitura por dispositivo; acima de ~45 mil dispositivos não cabe nas 50 mil leituras diárias do Spark | crescer além disso exige o plano Blaze (ou Cloud Functions); arquivos pequenos continuam funcionando |
 | Total do catálogo (`meta.total`) | somado com `increment`; um commit reenviado pelo SDK depois de perder a confirmação pode contar duas vezes (visto uma vez pelo validador, +419 com 60 mil) | a tela compara com o `count()` e oferece "Atualizar índice"; a próxima importação grande também corrige |
 | Usuárias | a lista de usuárias é assinada inteira depois do login (já era assim) | pequena (dezenas); revisar se passar de algumas centenas |

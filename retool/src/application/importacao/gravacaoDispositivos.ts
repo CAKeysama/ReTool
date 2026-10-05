@@ -24,7 +24,8 @@ export const TAMANHO_LOTE_DISPOSITIVOS = 500;
 export const TAMANHO_PAGINA_LEITURA = 1000;
 
 /** Campos que a importação compara para decidir se um documento existente mudou. */
-const CAMPOS_IGNORADOS_NA_COMPARACAO = new Set(['id', 'dataCriacao']);
+// chaveCD é derivada de código + dispositivo: não justifica regravar um documento igual.
+const CAMPOS_IGNORADOS_NA_COMPARACAO = new Set(['id', 'dataCriacao', 'chaveCD']);
 
 /** Valor normalizado para comparação: vazio, null, undefined e [] são equivalentes. */
 function comparavel(valor: unknown): string {
@@ -45,14 +46,15 @@ export function dadosParaGravar(
   id: string,
   agora: string
 ): Partial<Dispositivo> {
+  const chaveCD = chaveCodigoDispositivo(disp.codigo, disp.nome);
   if (existente) {
-    const dados: Partial<Dispositivo> = { ...disp };
+    const dados: Partial<Dispositivo> = { ...disp, chaveCD };
     for (const campo of CAMPOS_IMAGEM_DISPOSITIVO) {
       if (!dados[campo]) delete dados[campo];
     }
     return dados;
   }
-  return { ...disp, id, dataCriacao: agora };
+  return { ...disp, chaveCD, id, dataCriacao: agora };
 }
 
 /**

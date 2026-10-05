@@ -113,18 +113,38 @@ com cota diária de operações do Firestore (~17 mil operações no uso do clie
 ### Custo em operações do Firestore
 
 - **Leituras**: sempre do servidor, mais o `count()` (1 a cada 1.000
-  documentos). Quando o arquivo é pequeno perto do banco (consultas × 2 +
-  linhas < metade do banco), só os dispositivos com os mesmos códigos do
-  arquivo são lidos (`codigo in [...]` em blocos de 30, nas grafias original,
-  sem espaços/invisíveis, MAIÚSCULAS, minúsculas e número): o custo segue o
-  tamanho do arquivo. Senão, 1 por dispositivo existente, conferido com o
-  `count()`. Limite da leitura por candidatos: um código antigo gravado em
-  caixa mista diferente da planilha (ex.: "Dmp11" e "DMP11") não é achado e
-  a linha vira registro novo; os códigos do acervo são numéricos e a
-  verificação de Duplicados encontra esses casos. O catálogo de busca
-  não é usado como fonte: ele pode ser gravado por quem edita e não prova o
-  conteúdo atual de cada documento, e um engano ali vira duplicata ou
-  sobrescrita no banco.
+  documentos). Por padrão, 1 por dispositivo existente, conferido com o
+  `count()`.
+- **Importação rápida (arquivo pequeno)**: cada dispositivo guarda
+  `chaveCD`, a mesma chave Código + Dispositivo normalizada que a importação
+  usa para comparar (`chaveCodigoDispositivo`: espaços nas pontas e
+  repetidos, invisíveis, NFC e maiúsculas/minúsculas não contam; código
+  vazio e código numérico também têm chave). Quando **todos** os
+  dispositivos têm a chave (`count()` de `chaveCD > ''` igual ao total) e o
+  arquivo é pequeno perto do banco (consultas × 2 + linhas < metade do
+  banco), só são lidos os documentos com as chaves do arquivo
+  (`chaveCD in [...]`, blocos de 30): o custo segue o tamanho do arquivo e
+  a comparação é exatamente a mesma da leitura completa. Se faltar a chave
+  em um único documento, a importação lê o banco inteiro (nunca arrisca
+  duplicar).
+  - Quem grava a chave: cadastro, edição (recalculada quando Código ou
+    Dispositivo mudam; sem o documento atual ela é removida, o que só volta
+    a forçar a leitura completa) e a própria importação. Uma chave enviada
+    pela tela é ignorada.
+  - **Preparar importação rápida** (Administração, na tela de importação):
+    grava a chave nos dispositivos antigos. Custa ~1 leitura por dispositivo
+    e 1 gravação por dispositivo sem a chave (ou com chave desatualizada),
+    uma vez. Pode ser cancelado; se a cota acabar, continua de onde parou
+    na próxima vez (o último id fica guardado no navegador). Depois de
+    publicar esta versão, rode uma vez num dia com cota livre.
+  - Limite: as regras do Firestore não conseguem recalcular a chave
+    (normalização Unicode), então quem tem permissão de editar pode gravar
+    uma chave errada direto na API. O efeito seria o mesmo de cadastrar um
+    duplicado (algo que essa pessoa já pode fazer), e a verificação de
+    Duplicados encontra o caso; rodar "Preparar" de novo corrige chaves
+    desatualizadas.
+  - O catálogo de busca não é usado como fonte: ele pode ser gravado por
+    quem edita e não prova o conteúdo atual de cada documento.
 - **Escritas**: só registros **novos ou alterados** (+ categorias, famílias e
   produtos novos), mais, por lote, uma operação em cada parte do catálogo
   tocada e a meta. Lotes de até 500 operações; o tamanho do lote encolhe para
@@ -137,7 +157,9 @@ Medido pela tela, ponta a ponta, no emulador (build de produção, planilha de
 |---|---|---|---|
 | Primeira importação: 13.400 iguais + 2.000 novos | 13.440 | 2.000 dispositivos + catálogo por lote + reconstrução (~22) + 1 auditoria | 16,7 s |
 | Reimportar o mesmo arquivo (tudo igual), 4 rodadas | 15.435 a 15.445 | 1 (auditoria) | 7,1 a 8,6 s |
-| Planilha de 50 linhas (40 iguais + 10 novas) sobre 15.400 | 75 | 10 dispositivos + catálogo + 1 auditoria | 10,5 s |
+| Planilha de 50 linhas (40 iguais + 10 novas) sobre 15.400, todos com a chave | 90 (40 documentos de dispositivos + contagens e telas) | 10 dispositivos + catálogo + 1 auditoria | 5,9 s |
+| A mesma planilha com os dispositivos ainda sem a chave | 15.462 | 1 (auditoria) | 8,2 s |
+| "Preparar importação rápida" sobre 15.400 sem a chave | 15.458 | 15.400 (só o campo `chaveCD`) + 1 auditoria | 38 s |
 
 O processamento da planilha (no Worker) levou de 9 a 11 s em cada rodada.
 
