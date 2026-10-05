@@ -134,6 +134,9 @@ export function DispositivoDetails() {
     return c === 0 ? 'badge badge-pink' : c === 1 ? 'badge badge-teal' : c === 2 ? 'badge badge-yellow' : 'badge badge-blue';
   };
 
+  // Enquanto as reutilizações não chegaram (ou falharam), o resumo mostra "…"/"—" em vez de zeros.
+  const resumoPronto = estadoReu === 'pronto';
+  const resumoVazio = estadoReu === 'erro' ? '—' : '…';
   const totalHardSaving = dispReutilizacoes.reduce((acc, curr) => acc + (curr.hardSaving || 0), 0);
   const sortedReutilizacoes = [...dispReutilizacoes].sort((a, b) => new Date(b.data || b.dataCriacao || '').getTime() - new Date(a.data || a.dataCriacao || '').getTime());
 
@@ -371,25 +374,25 @@ export function DispositivoDetails() {
           
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Reutilizações</span>
-            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{dispReutilizacoes.length}</span>
+            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{resumoPronto ? dispReutilizacoes.length : resumoVazio}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Hard Saving Total</span>
-            <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>R$ {totalHardSaving.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>{resumoPronto ? `R$ ${totalHardSaving.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : resumoVazio}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Primeira Reutilização</span>
             <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.85rem' }}>
-              {primeiraReutilizacao ? formatDisplayDate(primeiraReutilizacao.data || primeiraReutilizacao.dataCriacao || '') : 'N/A'}
+              {!resumoPronto ? resumoVazio : primeiraReutilizacao ? formatDisplayDate(primeiraReutilizacao.data || primeiraReutilizacao.dataCriacao || '') : 'N/A'}
             </span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Última Reutilização</span>
             <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.85rem' }}>
-              {ultimaReutilizacao ? formatDisplayDate(ultimaReutilizacao.data || ultimaReutilizacao.dataCriacao || '') : 'N/A'}
+              {!resumoPronto ? resumoVazio : ultimaReutilizacao ? formatDisplayDate(ultimaReutilizacao.data || ultimaReutilizacao.dataCriacao || '') : 'N/A'}
             </span>
           </div>
           
