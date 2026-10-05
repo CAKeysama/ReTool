@@ -356,7 +356,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
           {users.length > 0 && (
             <div style={{ position: 'relative', marginBottom: '12px' }}>
               <label htmlFor="filtro-usuarios" className="sr-only">Filtrar usuários por nome ou e-mail</label>
-              <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', pointerEvents: 'none' }} />
+              <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
               <input
                 id="filtro-usuarios"
                 type="search"

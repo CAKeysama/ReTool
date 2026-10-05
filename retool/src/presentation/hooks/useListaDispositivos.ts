@@ -14,7 +14,8 @@ import { useIndiceBusca } from './useIndiceBusca';
  * documentos). Reaproveitadas por até 1 minuto ou até uma gravação feita
  * aqui mesmo; a lista em tempo real refaz a contagem quando a página muda.
  */
-const cacheContagem = new Map<string, { n: number; em: number }>();
+const paginasGuardadas = new Map<string, { pagina: number; cursores: (string | null)[] }>();
+const cacheContagem = new Map<string, { n: number; em: number; rev: number }>();
 const VALIDADE_CONTAGEM_MS = 60_000;
 
 /**
@@ -58,6 +59,8 @@ export interface ListaDispositivos {
   indiceAusente: boolean;
   /** Total do catálogo difere do banco (alguém gravou fora do app). */
   indiceDesatualizado: boolean;
+  /** Página vinda do cache do aparelho (sem conexão): pode estar incompleta. */
+  doCache: boolean;
 }
 
 const entradaParaDispositivo = (e: EntradaIndice): Dispositivo => ({
@@ -77,9 +80,20 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
   const indice = useIndiceBusca(usarIndice || prepararBusca);
   const { revisaoDispositivos } = useReTool();
 
-  const [pagina, setPagina] = useState(1);
-  // cursores[i] = último documento da página i (página i+1 começa depois dele)
-  const cursores = useRef<(CursorDispositivo | null)[]>([null]);
+  // Filtros/tamanho mudaram: volta à primeira página.
+  const chaveFiltro = `${usarIndice ? 'i' : 's'}|${filtro.texto}|${filtro.categoriaId}|${filtro.processo}|${tamanho}`;
+  // Página e cursores guardados por filtro: voltar dos detalhes reabre a mesma página.
+  const guardado = paginasGuardadas.get(chaveFiltro);
+  const [pagina, setPaginaBruta] = useState(guardado?.pagina ?? 1);
+  // cursores[i] = id do último documento da página i (página i+1 começa depois dele)
+  const cursores = useRef<(string | null)[]>(guardado ? [...guardado.cursores] : [null]);
+  const setPagina = useCallback((p: number | ((a: number) => number)) => {
+    setPaginaBruta(atual => {
+      const nova = typeof p === 'function' ? p(atual) : p;
+      paginasGuardadas.set(chaveAnterior.current, { pagina: nova, cursores: [...cursores.current] });
+      return nova;
+    });
+  }, []);
   const [itensServidor, setItensServidor] = useState<Dispositivo[] | null>(null);
   const [temMaisServidor, setTemMaisServidor] = useState(false);
   const [estadoServidor, setEstadoServidor] = useState<'carregando' | 'atualizando' | 'pronto' | 'erro'>('carregando');
@@ -88,14 +102,14 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
   const [tentativa, setTentativa] = useState(0);
   const [revisaoDados, setRevisaoDados] = useState(0);
 
-  // Filtros/tamanho mudaram: volta à primeira página.
-  const chaveFiltro = `${usarIndice ? 'i' : 's'}|${filtro.texto}|${filtro.categoriaId}|${filtro.processo}|${tamanho}`;
   const chaveAnterior = useRef(chaveFiltro);
   if (chaveAnterior.current !== chaveFiltro) {
     chaveAnterior.current = chaveFiltro;
-    cursores.current = [null];
-    if (pagina !== 1) setPagina(1);
+    const g = paginasGuardadas.get(chaveFiltro);
+    cursores.current = g ? [...g.cursores] : [null];
+    if (pagina !== (g?.pagina ?? 1)) setPaginaBruta(g?.pagina ?? 1);
   }
+  const [doCache, setDoCache] = useState(false);
 
   // ---------- Modo servidor: página atual em tempo real ----------
   useEffect(() => {
@@ -105,7 +119,14 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
     setEstadoServidor(s => (s === 'pronto' || s === 'atualizando' ? 'atualizando' : 'carregando'));
     setErro(null);
     const depoisDe = cursores.current[pagina - 1] ?? null;
-    if (pagina > 1 && !depoisDe) { setPagina(1); return; }
+    // Sem cursor para esta página (não deveria acontecer: `proxima` só avança
+    // com cursor): volta para a última página conhecida, nunca para a 1ª em silêncio.
+    if (pagina > 1 && !depoisDe) {
+      let ultima = pagina - 1;
+      while (ultima > 1 && !cursores.current[ultima - 1]) ultima--;
+      setPagina(ultima);
+      return;
+    }
     const q = query(
       collection(db, 'dispositivos'),
       ...(filtro.categoriaId ? [where('categoriaId', '==', filtro.categoriaId)] : []),
@@ -120,8 +141,10 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
       if (primeira) { registrarConsulta('dispositivos:pagina', snap.size, performance.now() - t0); primeira = false; }
       else registrarConsulta('dispositivos:pagina-mudanca', snap.docChanges().length, 0);
       const docs = snap.docs.slice(0, tamanho);
-      cursores.current[pagina] = docs.length ? docs[docs.length - 1] : null;
+      cursores.current[pagina] = docs.length ? docs[docs.length - 1].id : null;
       cursores.current.length = pagina + 1;
+      paginasGuardadas.set(chaveAnterior.current, { pagina, cursores: [...cursores.current] });
+      setDoCache(snap.metadata.fromCache);
       setItensServidor(docs.map(d => ({ id: d.id, ...d.data() } as Dispositivo)));
       setTemMaisServidor(snap.size > tamanho);
       setEstadoServidor('pronto');
@@ -146,13 +169,14 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
       && ultimaChaveContagem.current !== marca;
     ultimaChaveContagem.current = marca;
     const emCache = cacheContagem.get(chave);
-    if (!mudouAlgo && revisaoDados === 0 && emCache && Date.now() - emCache.em < VALIDADE_CONTAGEM_MS) {
+    // Só vale se nenhuma gravação do app aconteceu depois (rev) e tem menos de 60 s.
+    if (!mudouAlgo && revisaoDados === 0 && emCache && emCache.rev === revisaoDispositivos && Date.now() - emCache.em < VALIDADE_CONTAGEM_MS) {
       setTotalServidor(emCache.n);
       return;
     }
     let vivo = true;
     contarDispositivos(filtro.categoriaId || undefined)
-      .then(n => { cacheContagem.set(chave, { n, em: Date.now() }); if (vivo) setTotalServidor(n); })
+      .then(n => { cacheContagem.set(chave, { n, em: Date.now(), rev: revisaoDispositivos }); if (vivo) setTotalServidor(n); })
       .catch(() => { if (vivo) setTotalServidor(null); });
     return () => { vivo = false; };
   }, [usarIndice, filtro.categoriaId, revisaoDados, tentativa, revisaoDispositivos]);
@@ -182,9 +206,10 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
     return resultadoIndice.slice(ini, ini + tamanho).map(entradaParaDispositivo);
   }, [resultadoIndice, pagina, tamanho]);
 
-  const proxima = useCallback(() => setPagina(p => p + 1), []);
-  const anterior = useCallback(() => setPagina(p => Math.max(1, p - 1)), []);
-  const irParaInicio = useCallback(() => { cursores.current = [null]; setPagina(1); }, []);
+  // Só avança quando a página atual já tem cursor (clique duplo não pula páginas).
+  const proxima = useCallback(() => setPagina(p => (usarIndice || cursores.current[p] ? p + 1 : p)), [usarIndice, setPagina]);
+  const anterior = useCallback(() => setPagina(p => Math.max(1, p - 1)), [setPagina]);
+  const irParaInicio = useCallback(() => { cursores.current = [null]; setPagina(1); }, [setPagina]);
   const tentarNovamente = useCallback(() => { if (usarIndice) indice.reiniciar(); setTentativa(t => t + 1); }, [usarIndice, indice]);
 
   if (usarIndice) {
@@ -206,6 +231,7 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
       progressoIndice: indice.progresso,
       indiceAusente: indice.estado === 'ausente',
       indiceDesatualizado: false,
+      doCache: false,
     };
   }
 
@@ -224,6 +250,7 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
     temProxima: temMaisServidor,
     proxima, anterior, irParaInicio, tentarNovamente,
     modo: 'servidor',
+    doCache,
     progressoIndice: null,
     indiceAusente: !!metaAtual && metaAtual.meta === null,
     // Total diferente do banco (gravação fora do app) ou partes cheias demais

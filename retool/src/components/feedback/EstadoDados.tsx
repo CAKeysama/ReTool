@@ -101,7 +101,11 @@ export function classificarErro(e: unknown): 'erro' | 'timeout' | 'sem-permissao
 export function mensagemDeErro(e: unknown, fallback = 'Não foi possível concluir a operação.'): string {
   switch (classificarErro(e)) {
     case 'sem-permissao': return 'Você não tem permissão para esta operação.';
-    case 'timeout': return 'O servidor demorou a responder. Verifique a conexão e tente novamente.';
+    case 'timeout': {
+      // ErroTimeout com mensagem própria (ex.: gravação pendente) mantém a mensagem.
+      const msg = (e as { name?: string; message?: string })?.name === 'ErroTimeout' ? (e as Error).message : '';
+      return msg && msg !== 'A operação demorou mais que o esperado.' ? msg : 'O servidor demorou a responder. Verifique a conexão e tente novamente.';
+    }
     case 'cancelado': return 'A operação foi cancelada.';
     default: {
       const msg = e instanceof Error ? e.message : '';

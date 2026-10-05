@@ -3,6 +3,8 @@ import { useState, useCallback } from 'react';
 export interface BulkProgress {
   done: number;
   total: number;
+  /** Nome da etapa atual (ex.: "Lendo dados atuais", "Gravando lote 2 de 9"). */
+  etapa?: string;
 }
 
 /**

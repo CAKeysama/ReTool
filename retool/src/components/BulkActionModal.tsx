@@ -5,6 +5,8 @@ import { BulkProgress } from '../hooks/useBulkProgress';
 import { VirtualList } from './VirtualList';
 
 const ALTURA_LINHA = 46;
+/** Acima disto, excluir exige digitar EXCLUIR (evita apagar milhares com um clique). */
+const LIMITE_CONFIRMACAO_DIGITADA = 50;
 
 export interface BulkItem {
   id: string;
@@ -52,7 +54,19 @@ export function BulkActionModal({
   canDisable = true,
   emptyMessage,
 }: BulkActionModalProps) {
+  const [textoConfirmacao, setTextoConfirmacao] = React.useState('');
+  React.useEffect(() => { if (confirmAction !== 'delete') setTextoConfirmacao(''); }, [confirmAction]);
   if (!isOpen) return null;
+
+  const exigeDigitar = selected.size > LIMITE_CONFIRMACAO_DIGITADA;
+  const podeExcluir = !exigeDigitar || textoConfirmacao.trim().toUpperCase() === 'EXCLUIR';
+  // Selecionados que não aparecem na busca atual (ainda serão afetados).
+  let visiveisSelecionados = 0;
+  for (const it of items) if (selected.has(it.id)) visiveisSelecionados++;
+  const foraDaBusca = search.trim() ? selected.size - visiveisSelecionados : 0;
+  const avisoForaDaBusca = foraDaBusca > 0
+    ? <p style={{ color: 'var(--color-text-dark)', fontSize: '0.85rem', margin: 0 }}>Inclui <strong>{foraDaBusca.toLocaleString('pt-BR')}</strong> selecionado{foraDaBusca > 1 ? 's' : ''} que não aparece{foraDaBusca > 1 ? 'm' : ''} na busca atual.</p>
+    : null;
 
   const allSelected = items.length > 0 && selected.size >= items.length && items.every(d => selected.has(d.id));
   const someSelected = selected.size > 0;
@@ -104,13 +118,11 @@ export function BulkActionModal({
                 // Barra de progresso real
                 <>
                   <div style={{ width: '100%', maxWidth: '340px', textAlign: 'center' }}>
-                    <p style={{ fontWeight: 700, color: 'var(--color-text-dark)', fontSize: '1rem', margin: '0 0 6px' }}>
-                      {progress.done < progress.total
-                        ? `Processando itens...`
-                        : `Concluído!`}
+                    <p style={{ fontWeight: 700, color: 'var(--color-text-dark)', fontSize: '1rem', margin: '0 0 6px' }} aria-live="polite">
+                      {progress.etapa || (progress.done < progress.total ? 'Processando itens…' : 'Finalizando…')}
                     </p>
-                    <p style={{ fontSize: '0.82rem', color: '#9ca3af', margin: '0 0 16px' }}>
-                      {progress.done} de {progress.total} {progress.total === 1 ? 'item' : 'itens'}
+                    <p style={{ fontSize: '0.82rem', color: '#4b5563', margin: '0 0 16px' }}>
+                      {progress.done.toLocaleString('pt-BR')} de {progress.total.toLocaleString('pt-BR')} {progress.total === 1 ? 'item' : 'itens'}
                     </p>
                     {/* Track */}
                     <div style={{
@@ -148,7 +160,7 @@ export function BulkActionModal({
                   </p>
                 </>
               )}
-              <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: 0 }}>Não feche esta janela</p>
+              <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>Não feche esta janela</p>
             </div>
           )}
           {/* Header */}
@@ -169,7 +181,7 @@ export function BulkActionModal({
                 <h2 id="bulk-modal-title" style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
                   Ações em Massa
                 </h2>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: '#9ca3af' }}>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: '#6b7280' }}>
                   Selecione itens e aplique uma ação
                 </p>
               </div>
@@ -200,10 +212,13 @@ export function BulkActionModal({
           </div>
 
           {/* Select All */}
-          <div
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={allSelected ? true : items.some(d => selected.has(d.id)) ? 'mixed' : false}
             style={{
               display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '10px 24px',
+              padding: '10px 24px', width: '100%', border: 'none', textAlign: 'left', font: 'inherit',
               borderBottom: '1px solid var(--color-border)',
               backgroundColor: allSelected ? 'rgba(228,13,44,0.04)' : '#fafafa',
               cursor: 'pointer',
@@ -216,13 +231,13 @@ export function BulkActionModal({
               : <Square size={18} color="#9ca3af" />
             }
             <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--color-text-dark)' }}>
-              Selecionar todos ({items.length})
+              Selecionar todos ({items.length.toLocaleString('pt-BR')})
             </span>
-          </div>
+          </button>
 
           {/* Lista virtualizada: só as linhas visíveis existem no DOM */}
           {items.length === 0 ? (
-            <div style={{ flex: 1, textAlign: 'center', padding: '32px', color: '#9ca3af', fontSize: '0.9rem' }}>
+            <div style={{ flex: 1, textAlign: 'center', padding: '32px', color: '#6b7280', fontSize: '0.9rem' }}>
               {emptyMessage || 'Nenhum item encontrado'}
             </div>
           ) : (
@@ -232,6 +247,7 @@ export function BulkActionModal({
               chave={item => item.id}
               ariaLabel="Itens para ações em massa. Use as setas para navegar e Espaço para marcar."
               onAtivar={item => onToggleItem(item.id)}
+              marcado={item => selected.has(item.id)}
               className="custom-scrollbar"
               style={{ flex: 1, minHeight: Math.min(items.length, 6) * ALTURA_LINHA, padding: 0 }}
               renderItem={(item, _i, ativo) => {
@@ -262,7 +278,7 @@ export function BulkActionModal({
                           {item.label}
                         </span>
                         {item.sublabel && (
-                          <span style={{ fontSize: '0.78rem', color: '#9ca3af', flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <span style={{ fontSize: '0.78rem', color: '#6b7280', flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {item.sublabel}
                           </span>
                         )}
@@ -293,7 +309,7 @@ export function BulkActionModal({
           }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280', fontWeight: 500 }}>
               {selected.size > 0
-                ? <><strong style={{ color: 'var(--color-text-dark)' }}>{selected.size}</strong> selecionado{selected.size > 1 ? 's' : ''}</>
+                ? <><strong style={{ color: 'var(--color-text-dark)' }}>{selected.size.toLocaleString('pt-BR')}</strong> selecionado{selected.size > 1 ? 's' : ''}</>
                 : 'Nenhum selecionado'
               }
             </span>
@@ -350,10 +366,11 @@ export function BulkActionModal({
           <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
             <AlertTriangle size={22} color="var(--various04)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <p style={{ color: 'var(--color-text-dark)', lineHeight: 1.6 }}>
-              Você está prestes a <strong>desativar {selected.size} item{selected.size > 1 ? 's' : ''}</strong>.
+              Você está prestes a <strong>desativar {selected.size.toLocaleString('pt-BR')} item{selected.size > 1 ? 's' : ''}</strong>.
               Eles não serão excluídos, mas ficarão inativos no sistema.
             </p>
           </div>
+          {avisoForaDaBusca}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
             <button className="btn" onClick={() => onSetConfirmAction(null)} disabled={isLoading}>
               Cancelar
@@ -364,7 +381,7 @@ export function BulkActionModal({
               onClick={onDisable}
               disabled={isLoading}
             >
-              {isLoading ? 'Processando...' : `Desativar ${selected.size}`}
+              {isLoading ? 'Processando…' : `Desativar ${selected.size.toLocaleString('pt-BR')}`}
             </button>
           </div>
         </div>
@@ -381,10 +398,25 @@ export function BulkActionModal({
           <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
             <AlertTriangle size={22} color="var(--color-danger)" style={{ flexShrink: 0, marginTop: '2px' }} />
             <p style={{ color: 'var(--color-text-dark)', lineHeight: 1.6 }}>
-              Você está prestes a <strong>excluir permanentemente {selected.size} item{selected.size > 1 ? 's' : ''}</strong>.
+              Você está prestes a <strong>excluir permanentemente {selected.size.toLocaleString('pt-BR')} item{selected.size > 1 ? 's' : ''}</strong>.
               Esta ação <strong>não pode ser desfeita</strong>.
             </p>
           </div>
+          {avisoForaDaBusca}
+          {exigeDigitar && (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem', color: 'var(--color-text-dark)' }}>
+              Para confirmar, digite EXCLUIR
+              <input
+                className="form-control"
+                value={textoConfirmacao}
+                onChange={e => setTextoConfirmacao(e.target.value)}
+                autoComplete="off"
+                aria-describedby="bulk-excluir-ajuda"
+                disabled={isLoading}
+              />
+              <span id="bulk-excluir-ajuda" style={{ color: '#4b5563' }}>Exigido para mais de {LIMITE_CONFIRMACAO_DIGITADA} itens.</span>
+            </label>
+          )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
             <button className="btn" onClick={() => onSetConfirmAction(null)} disabled={isLoading}>
               Cancelar
@@ -393,9 +425,9 @@ export function BulkActionModal({
               className="btn btn-primary"
               style={{ backgroundColor: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
               onClick={onDelete}
-              disabled={isLoading}
+              disabled={isLoading || !podeExcluir}
             >
-              {isLoading ? 'Excluindo...' : `Excluir ${selected.size}`}
+              {isLoading ? 'Excluindo…' : `Excluir ${selected.size.toLocaleString('pt-BR')}`}
             </button>
           </div>
         </div>

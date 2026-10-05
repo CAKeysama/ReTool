@@ -1,4 +1,5 @@
 import React, { Suspense, lazy } from 'react';
+import { LimiteDeErro, CarregandoModal } from '../components/LimiteDeErro';
 import { TAMANHOS_PAGINA, useDispositivosController } from '../presentation/hooks/useDispositivosController';
 import { FocusableList } from '../components/FocusableList';
 import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks, CopyX, RefreshCw } from 'lucide-react';
@@ -14,6 +15,9 @@ const BulkActionModal = lazy(() => import('../components/BulkActionModal').then(
 
 const fmt = (n: number) => n.toLocaleString('pt-BR');
 
+/** Posição de rolagem da lista ao sair (para voltar no mesmo ponto). */
+let rolagemGuardada = 0;
+
 export function Dispositivos() {
   const { canCadastrar, canEditar, canExcluir, isAdmin } = usePermissions();
   const [isDuplicadosOpen, setIsDuplicadosOpen] = React.useState(false);
@@ -28,6 +32,7 @@ export function Dispositivos() {
     // Filtros
     filterQuery,
     handleSearchChange,
+    limparBusca,
     setBuscaFocada,
     buscaPendente,
     filterCategoria,
@@ -90,6 +95,24 @@ export function Dispositivos() {
     }
   };
 
+  // Busca preparando há muito tempo (rede lenta): oferece voltar para a lista.
+  const [preparoLento, setPreparoLento] = React.useState(false);
+  React.useEffect(() => {
+    if (lista.estado !== 'preparando-busca') { setPreparoLento(false); return; }
+    const t = setTimeout(() => setPreparoLento(true), 10_000);
+    return () => clearTimeout(t);
+  }, [lista.estado]);
+
+  // Volta dos detalhes na mesma posição da lista.
+  const restaurouRolagem = React.useRef(false);
+  React.useEffect(() => {
+    if (restaurouRolagem.current || lista.estado !== 'pronto') return;
+    restaurouRolagem.current = true;
+    if (rolagemGuardada > 0) requestAnimationFrame(() => window.scrollTo(0, rolagemGuardada));
+  }, [lista.estado]);
+  React.useEffect(() => () => { rolagemGuardada = window.scrollY; }, []);
+
+  const botaoFiltrosRef = React.useRef<HTMLButtonElement>(null);
   const filtrando = !!(filterQuery.trim() || filterCategoria || filterProcesso);
   const carregandoPrimeira = lista.estado === 'carregando' || lista.estado === 'preparando-busca';
   const subtitulo = lista.total === null
@@ -120,7 +143,7 @@ export function Dispositivos() {
 
             {canEditar && (lista.indiceAusente || lista.indiceDesatualizado || indiceProgresso) && (
               <button
-                className="btn hide-on-mobile"
+                className="btn"
                 onClick={atualizarIndice}
                 disabled={!!indiceProgresso}
                 aria-label="Atualizar o índice de busca de dispositivos"
@@ -138,7 +161,7 @@ export function Dispositivos() {
 
             {isAdmin && (
               <button
-                className="btn hide-on-mobile"
+                className="btn"
                 onClick={() => setIsDuplicadosOpen(true)}
                 aria-label="Verificar dispositivos duplicados"
                 style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -150,7 +173,7 @@ export function Dispositivos() {
 
             {canExcluir && (
               <button
-                className="btn hide-on-mobile"
+                className="btn"
                 onClick={() => setIsBulkModalOpen(true)}
                 aria-label="Ações em massa"
                 style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -190,16 +213,24 @@ export function Dispositivos() {
             />
           </div>
 
-          <div style={{ position: 'relative' }}>
+          <div
+            style={{ position: 'relative' }}
+            onKeyDown={e => {
+              if (e.key === 'Escape' && showFilters) { e.stopPropagation(); setShowFilters(false); botaoFiltrosRef.current?.focus(); }
+            }}
+          >
             <button 
+              ref={botaoFiltrosRef}
               className="btn" 
               style={{ height: '44px', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-body)' }}
               onClick={() => setShowFilters(!showFilters)}
+              aria-expanded={showFilters}
+              aria-controls="painel-filtros"
             >
               <Filter size={16} /> Filtros <ChevronDown size={14} />
             </button>
             {showFilters && (
-              <div style={{
+              <div id="painel-filtros" role="group" aria-label="Filtros" style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 20,
                 backgroundColor: 'white', padding: 'var(--spacing-md)', borderRadius: 'var(--radius)',
                 boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-border)', width: '250px',
@@ -237,6 +268,11 @@ export function Dispositivos() {
         <div style={{ display: 'flex', justifyContent: 'flex-end', minHeight: '20px', marginBottom: '4px' }}>
           <IndicadorAtualizacao ativo={buscaPendente || lista.estado === 'atualizando'} texto={buscaPendente ? 'Buscando…' : 'Atualizando…'} />
         </div>
+        {lista.doCache && lista.itens.length > 0 && (
+          <div role="status" style={{ background: '#fff7e6', border: '1px solid #f0c36d', color: '#5c4400', borderRadius: 'var(--radius)', padding: '8px 12px', marginBottom: '8px', fontSize: '0.85rem' }}>
+            Sem conexão com o servidor: mostrando dados guardados neste navegador, que podem estar incompletos ou desatualizados.
+          </div>
+        )}
         {lista.estado === 'erro' && lista.itens.length === 0 ? (
           <EstadoDados estado={classificarErro(lista.erro)} onTentarNovamente={lista.tentarNovamente} />
         ) : lista.estado === 'preparando-busca' ? (
@@ -256,9 +292,14 @@ export function Dispositivos() {
                   feitos={lista.progressoIndice.partes}
                   total={lista.progressoIndice.total}
                   rotulo="Preparando a busca"
-                  detalhe="Primeiro acesso neste navegador: as próximas buscas serão imediatas."
+                  detalhe={preparoLento
+                    ? 'A conexão está lenta. A busca continua baixando; você pode limpar a busca para voltar à lista.'
+                    : 'Primeiro acesso neste navegador: as próximas buscas serão imediatas.'}
                 />
               ) : null}
+              {preparoLento && (
+                <button type="button" className="btn" style={{ marginTop: '8px' }} onClick={limparBusca}>Limpar busca e voltar à lista</button>
+              )}
             </div>
             {!lista.indiceAusente && <SkeletonLista linhas={Math.min(itemsPerPage, 6)} />}
           </div>
@@ -286,7 +327,7 @@ export function Dispositivos() {
                 <div style={{ 
                   width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', 
                   backgroundColor: 'var(--color-hover)', display: 'flex', 
-                  alignItems: 'center', justifyContent: 'center', color: '#9ca3af', flexShrink: 0
+                  alignItems: 'center', justifyContent: 'center', color: '#6b7280', flexShrink: 0
                 }}>
                   <Box size={20} />
                 </div>
@@ -296,7 +337,7 @@ export function Dispositivos() {
                     <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '1.05rem' }}>
                       {disp.nome || 'Nome não informado'}
                     </span>
-                    <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>
+                    <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>
                       {disp.codigo || ''}
                     </span>
                   </div>
@@ -305,7 +346,7 @@ export function Dispositivos() {
                     {catNome && <span className={getBadgeColor(catNome)}>{catNome}</span>}
                     {famNome && <span className={getBadgeColor(famNome)}>{famNome}</span>}
                     {prodNome && <span className="badge badge-blue">{prodNome}</span>}
-                    {disp.peso && <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: 500 }}>{disp.peso}g</span>}
+                    {disp.peso && <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 500 }}>{disp.peso}g</span>}
                     {(disp.palavrasChave || []).map(tag => (
                       <span key={tag} className="badge badge-pink" style={{ fontSize: '0.75rem' }}>{tag}</span>
                     ))}
@@ -371,7 +412,8 @@ export function Dispositivos() {
 
       </div>
 
-      <Suspense fallback={null}>
+      <LimiteDeErro compacto onFechar={() => { setIsImportOpen(false); setIsDuplicadosOpen(false); closeBulkModal(); }}>
+      <Suspense fallback={<CarregandoModal />}>
       {isImportOpen && <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />}
       {isDuplicadosOpen && <DuplicadosModal isOpen={isDuplicadosOpen} onClose={() => setIsDuplicadosOpen(false)} />}
 
@@ -395,6 +437,7 @@ export function Dispositivos() {
         emptyMessage={bulkEmptyMessage}
       />}
       </Suspense>
+      </LimiteDeErro>
 
       {canCadastrar && (
         <button className="fab-button" onClick={() => openDispForm()} aria-label="Cadastrar novo dispositivo">

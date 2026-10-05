@@ -28,7 +28,7 @@ function Chip({ status }: { status: ReutilizacaoStatus }) {
 
 function Conector() {
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 0', color: '#9ca3af' }}>
+    <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 0', color: '#6b7280' }}>
       <ArrowDown size={16} />
     </div>
   );
@@ -123,11 +123,11 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', fontSize: '0.8rem', color: '#4b5563' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <CornerDownRight size={14} style={{ color: '#9ca3af' }} />
+              <CornerDownRight size={14} style={{ color: '#6b7280' }} />
               <strong>Similar encontrado:</strong> retorna à análise do Projetista (etapa 3) e o solicitante é avisado.
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              <CornerDownRight size={14} style={{ color: '#9ca3af' }} />
+              <CornerDownRight size={14} style={{ color: '#6b7280' }} />
               <strong>Sem similar:</strong>
               <Chip status="Liberado para fabricação (novo dispositivo)" />
               fabricação do dispositivo novo liberada — fluxo encerrado.

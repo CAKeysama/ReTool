@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useAvisoAoSair } from '../hooks/useAvisoAoSair';
 import { AccessibleModal } from './AccessibleModal';
 import { useReTool } from '../context/ReToolContext';
 import { Dispositivo } from '../domain/entities/dispositivo';
@@ -90,12 +91,13 @@ function ResumoFinal({ resultado, enviados }: { resultado: ResultadoImportacaoLo
   const ignorados = resultado.ignoradosSemAlteracao ?? 0;
   const naoGravados = resultado.naoGravados ?? 0;
   const parcial = !interrompido && resultado.erros > 0;
+  const nadaAGravar = !interrompido && resultado.sucesso === 0 && resultado.erros === 0 && naoGravados === 0 && ignorados > 0;
 
   const titulo = interrompido === 'cota'
     ? 'Cota diária do Firebase esgotada'
     : interrompido === 'cancelado'
       ? 'Importação cancelada'
-      : parcial ? 'Importação parcial' : 'Importação concluída';
+      : parcial ? 'Importação parcial' : nadaAGravar ? 'Nada a gravar' : 'Importação concluída';
   const cor = interrompido === 'cota' || parcial ? '#b45309' : interrompido === 'cancelado' ? 'var(--color-text-dark)' : 'var(--color-success)';
   const Icone = interrompido || parcial ? (interrompido === 'cancelado' ? XCircle : AlertCircle) : CheckCircle2;
 
@@ -105,8 +107,12 @@ function ResumoFinal({ resultado, enviados }: { resultado: ResultadoImportacaoLo
         <Icone size={20} aria-hidden /> {titulo}
       </div>
       <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.9rem', lineHeight: 1.6 }}>
-        <li><strong>{fmt(resultado.sucesso)}</strong> de {fmt(enviados)} registros gravados ({fmt(resultado.inseridos)} novos, {fmt(resultado.atualizados)} atualizados)</li>
-        <li><strong>{fmt(ignorados)}</strong> já estavam iguais no banco e não foram regravados</li>
+        {nadaAGravar
+          ? <li>Nada a gravar: os <strong>{fmt(ignorados)}</strong> registros já estavam iguais no banco</li>
+          : <>
+            <li><strong>{fmt(resultado.sucesso)}</strong> de {fmt(Math.max(resultado.sucesso, enviados - ignorados))} registros com mudanças gravados ({fmt(resultado.inseridos)} novos, {fmt(resultado.atualizados)} atualizados)</li>
+            {ignorados > 0 && <li><strong>{fmt(ignorados)}</strong> já estavam iguais no banco e não foram regravados</li>}
+          </>}
         {naoGravados > 0 && <li><strong>{fmt(naoGravados)}</strong> não gravados</li>}
         {resultado.erros > 0 && <li><strong>{fmt(resultado.erros)}</strong> com erro de gravação</li>}
         {resultado.documentosLidos !== undefined && (
@@ -132,6 +138,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
   const { categorias, familias, produtos, importarDispositivosEmLote } = useReTool();
   const [file, setFile] = useState<File | null>(null);
   const [fase, setFase] = useState<Fase>('selecao');
+  useAvisoAoSair(fase === 'processando' || fase === 'importando');
   const [parsedData, setParsedData] = useState<Partial<Dispositivo>[]>([]);
   const [newCategorias, setNewCategorias] = useState<string[]>([]);
   const [newFamilias, setNewFamilias] = useState<string[]>([]);
@@ -481,7 +488,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                       <td style={{ padding: '8px' }}>
                         {disp.categoriaId
                           ? (categorias.find(c => c.id === disp.categoriaId)?.nome || disp.categoriaId)
-                          : <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Sem Categoria</span>
+                          : <span style={{ color: '#6b7280', fontStyle: 'italic' }}>Sem Categoria</span>
                         }
                       </td>
                       <td style={{ padding: '8px' }}>{disp.peso}</td>

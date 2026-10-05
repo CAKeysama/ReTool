@@ -31,15 +31,18 @@ const reutilizacoesRepo = new FirestoreReutilizacoesRepository();
 const MAX_SUGESTOES = 8;
 
 /** Totais dos cartões via count() no servidor (não baixa documentos). */
+type Total = number | null | 'erro';
 function useTotaisHome(revisao: number) {
-  const [totais, setTotais] = useState<{ dispositivos: number | null; reutilizacoes: number | null }>({ dispositivos: null, reutilizacoes: null });
+  const [totais, setTotais] = useState<{ dispositivos: Total; reutilizacoes: Total }>({ dispositivos: null, reutilizacoes: null });
+  const [tentativa, setTentativa] = useState(0);
   useEffect(() => {
     let vivo = true;
-    contarDispositivos().then(n => vivo && setTotais(t => ({ ...t, dispositivos: n }))).catch(() => undefined);
-    reutilizacoesRepo.contar().then(n => vivo && setTotais(t => ({ ...t, reutilizacoes: n }))).catch(() => undefined);
+    setTotais(t => ({ dispositivos: t.dispositivos === 'erro' ? null : t.dispositivos, reutilizacoes: t.reutilizacoes === 'erro' ? null : t.reutilizacoes }));
+    contarDispositivos().then(n => vivo && setTotais(t => ({ ...t, dispositivos: n }))).catch(() => vivo && setTotais(t => ({ ...t, dispositivos: 'erro' })));
+    reutilizacoesRepo.contar().then(n => vivo && setTotais(t => ({ ...t, reutilizacoes: n }))).catch(() => vivo && setTotais(t => ({ ...t, reutilizacoes: 'erro' })));
     return () => { vivo = false; };
-  }, [revisao]);
-  return totais;
+  }, [revisao, tentativa]);
+  return { ...totais, tentarNovamente: () => setTentativa(n => n + 1) };
 }
 
 export function Home() {
@@ -167,7 +170,7 @@ export function Home() {
           <span style={{ color: 'var(--color-gray-steel)' }}>Re</span>
           <span style={{ color: 'var(--color-primary)' }}>Tool</span>
         </h1>
-        <p style={{ color: '#9ca3af', fontSize: '0.9rem', fontWeight: 500 }}>
+        <p style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 500 }}>
           Gestão de Dispositivos e Ferramentas Industriais
         </p>
       </div>
@@ -261,7 +264,7 @@ export function Home() {
                   <Search size={14} color="#9ca3af" />
                   <strong style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{peca.nome || 'Nome não informado'}</strong>
                 </div>
-                <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{peca.codigo || ''}</span>
+                <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{peca.codigo || ''}</span>
               </li>
             ))}
             {resultado.total > suggestions.length && (
@@ -302,8 +305,8 @@ export function Home() {
         WebkitOverflowScrolling: 'touch' /* Suavidade no iOS */
       }}>
         <div style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
-          <HomeCard count={totais.dispositivos} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
-          <HomeCard count={totais.reutilizacoes} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
+          <HomeCard count={totais.dispositivos} onTentarNovamente={totais.tentarNovamente} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
+          <HomeCard count={totais.reutilizacoes} onTentarNovamente={totais.tentarNovamente} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
           {(canCadastrar || canEditar) && (
             <HomeCard count={referenciasProntas ? categorias.length : null} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
           )}
@@ -312,7 +315,7 @@ export function Home() {
 
       {/* Texto de Atalho Footer */}
       <div style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#d1d5db', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-        Pressione <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#9ca3af', fontWeight: 600 }}>/</span> para focar a busca de qualquer tela
+        Pressione <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#6b7280', fontWeight: 600 }}>/</span> para focar a busca de qualquer tela
       </div>
 
       {/* Botão de Bug Flutuante no Chão de Fábrica com Hover Tooltip & Efeitos de Explosão */}
@@ -441,7 +444,7 @@ export function Home() {
   );
 }
 
-function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count: number | null, label: string, colorType: 'pink' | 'teal' | 'yellow', icon: React.ReactNode, onClick: () => void, shortcut: string }) {
+function HomeCard({ count, label, colorType, icon, onClick, shortcut, onTentarNovamente }: { count: Total, onTentarNovamente?: () => void, label: string, colorType: 'pink' | 'teal' | 'yellow', icon: React.ReactNode, onClick: () => void, shortcut: string }) {
   const isPink = colorType === 'pink';
   const isTeal = colorType === 'teal';
 
@@ -480,7 +483,10 @@ function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count:
 
       <div>
         <div style={{ fontSize: '1.5rem', fontWeight: 800, color: textColor, lineHeight: 1, minHeight: '1.5rem' }} aria-busy={count === null}>
-          {count === null ? <SkeletonLinha largura={56} altura={22} /> : count.toLocaleString('pt-BR')}
+          {count === null ? <SkeletonLinha largura={56} altura={22} />
+            : count === 'erro'
+              ? <button type="button" className="btn" style={{ fontSize: '0.75rem', padding: '2px 8px', height: 'auto' }} title="Não foi possível carregar o total" onClick={e => { e.stopPropagation(); onTentarNovamente?.(); }}>Tentar de novo</button>
+              : count.toLocaleString('pt-BR')}
         </div>
         <div style={{ fontSize: '0.8rem', color: textColor, fontWeight: 500, marginTop: '2px' }}>{label}</div>
       </div>

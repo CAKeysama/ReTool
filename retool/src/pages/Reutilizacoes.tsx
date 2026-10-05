@@ -5,12 +5,15 @@ import { Tabs, EmptyState } from '../components/Tabs';
 import type { BulkItem } from '../components/BulkActionModal';
 import { FluxoReutilizacaoModal } from '../components/FluxoReutilizacaoModal';
 import { SeletorDispositivo } from '../components/SeletorDispositivo';
-import { EstadoDados, SkeletonLista, SkeletonTabela, classificarErro } from '../components/feedback';
+import { LimiteDeErro, CarregandoModal } from '../components/LimiteDeErro';
+import { EstadoDados, SkeletonLista, SkeletonTabela, classificarErro, mensagemDeErro } from '../components/feedback';
+import { gravarComPrazo } from '../utils/tempo';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { useReutilizacoes, useNomesDispositivos } from '../presentation/hooks/useReutilizacoes';
 import { ListChecks, ChevronDown, Check, X, Clock, Factory, Send, Wrench, ExternalLink, Info } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
+import { useAvisoAoSair } from '../hooks/useAvisoAoSair';
 import {
   Reutilizacao,
   ReutilizacaoStatus,
@@ -59,6 +62,7 @@ export function Reutilizacoes() {
   const [bulkSearch, setBulkSearch] = useState('');
   const [bulkConfirm, setBulkConfirm] = useState<'disable' | 'delete' | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
+  useAvisoAoSair(bulkLoading);
 
   const statusDe = (u: Reutilizacao): ReutilizacaoStatus => u.status || 'Em análise (Projetista)';
 
@@ -128,11 +132,13 @@ export function Reutilizacoes() {
     ...(tabAtiva === 'historico' ? historicoPagina : filaVisivel.slice(0, limiteCartoes)).map(u => u.dispositivoId),
     filterDispId,
   ], [tabAtiva, historicoPagina, filaVisivel, limiteCartoes, filterDispId]);
-  const nomeDispositivo = useNomesDispositivos(idsVisiveis);
+  // Com as ações em massa abertas, o catálogo dá o nome de todos os dispositivos (busca por nome).
+  const nomeDispositivo = useNomesDispositivos(idsVisiveis, isBulkOpen);
   const rotuloDisp = (id: string) => {
     const d = nomeDispositivo(id);
     if (d === undefined) return 'Carregando…';
     if (d === null) return 'Desconhecido';
+    if (d.erro) return 'Nome indisponível (sem conexão)';
     return d.nome || 'Sem nome';
   };
 
@@ -207,10 +213,10 @@ export function Reutilizacoes() {
     if (transicionando.has(id)) return;
     setTransicionando(prev => new Set(prev).add(id));
     try {
-      await transicionarReutilizacao(id, para, opts);
+      await gravarComPrazo(transicionarReutilizacao(id, para, opts));
     } catch (e) {
       console.error(e);
-      announce('Não foi possível atualizar a reutilização. Tente novamente.');
+      announce(mensagemDeErro(e, 'Não foi possível atualizar a reutilização. Tente novamente.'));
     } finally {
       setTransicionando(prev => { const n = new Set(prev); n.delete(id); return n; });
     }
@@ -306,14 +312,15 @@ export function Reutilizacoes() {
         tabIndex={0}
         onKeyDown={e => { if (e.key === 'Enter') navigate(`/dispositivos/${u.dispositivoId}`); }}
         style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
+          // Quebra linha em telas estreitas: os botões descem em vez de sobrepor o texto.
+          display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px',
           padding: '12px 16px', backgroundColor: 'var(--color-surface)',
           border: '1px solid var(--color-border)', borderRadius: 'var(--radius)',
           cursor: 'pointer', boxShadow: 'var(--shadow-sm)',
           ...(u.id === destacarId ? { boxShadow: '0 0 0 2px var(--color-primary)' } : {})
         }}
       >
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: '1 1 240px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
             {chipDeStatus(u)}
             <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{u.descricaoAlteracao || 'Descrição não informada'}</h4>
@@ -322,7 +329,7 @@ export function Reutilizacoes() {
             <strong>Dispositivo:</strong> {rotuloDisp(u.dispositivoId)} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} | <strong>Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
           {botoesDeAcao(u)}
         </div>
       </div>
@@ -391,7 +398,13 @@ export function Reutilizacoes() {
           }}>
             <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
               {estadoDados === 'carregando' ? 'Carregando registros…' : <>{historicoFiltrado.length.toLocaleString('pt-BR')} {historicoFiltrado.length === 1 ? 'registro' : 'registros'}</>}
-              {bulkSelected.size > 0 && <> · <span style={{ color: 'var(--color-primary)' }}>{bulkSelected.size} selecionado(s)</span></>}
+              {bulkSelected.size > 0 && <> · <span style={{ color: 'var(--color-primary)' }}>{bulkSelected.size.toLocaleString('pt-BR')} selecionado(s)</span></>}
+              {canExcluir && allVisibleSelected && historicoFiltrado.length > historicoPagina.length && bulkSelected.size < historicoFiltrado.length && (
+                <> · <button type="button" className="btn-link" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-primary)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+                  onClick={() => setBulkSelected(new Set(historicoFiltrado.map(u => u.id)))}>
+                  Selecionar todos os {historicoFiltrado.length.toLocaleString('pt-BR')} do filtro
+                </button></>
+              )}
             </div>
             {canExcluir && (
               <button
@@ -449,7 +462,7 @@ export function Reutilizacoes() {
                     <th style={{ padding: '10px 8px', width: '36px' }}>
                       <input
                         type="checkbox"
-                        aria-label="Selecionar todos os registros visíveis"
+                        aria-label="Selecionar os registros desta página"
                         checked={allVisibleSelected}
                         onChange={toggleAllVisible}
                       />
@@ -489,7 +502,7 @@ export function Reutilizacoes() {
                             />
                           </td>
                         )}
-                        <td style={{ padding: '10px 8px', color: '#9ca3af' }}>
+                        <td style={{ padding: '10px 8px', color: '#6b7280' }}>
                           <ChevronDown size={16} style={{ transform: aberto ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
                         </td>
                         <td style={{ padding: '10px 8px', whiteSpace: 'nowrap', color: '#374151' }}>{formatarData(u)}</td>
@@ -563,7 +576,8 @@ export function Reutilizacoes() {
 
       {/* Modal de Ações em Massa da tabela de histórico (baixado só ao abrir) */}
       {isBulkOpen && (
-      <Suspense fallback={null}>
+      <LimiteDeErro compacto onFechar={closeBulk}>
+      <Suspense fallback={<CarregandoModal />}>
       <BulkActionModal
         isOpen={isBulkOpen}
         onClose={closeBulk}
@@ -590,6 +604,7 @@ export function Reutilizacoes() {
         canDisable={false}
       />
       </Suspense>
+      </LimiteDeErro>
       )}
 
       {/* Modal explicativo do fluxo de aceite */}

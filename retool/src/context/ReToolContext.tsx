@@ -38,6 +38,8 @@ const reutilizacoesRepo = new FirestoreReutilizacoesRepository();
 const auditRepo = new FirestoreAuditLogRepository();
 const importarLoteUseCase = new ImportarLoteUseCase(dispositivosRepo);
 
+/** Progresso das ações em massa: itens feitos, total e o nome da etapa atual. */
+export type ProgressoEmMassa = (feitos: number, total: number, etapa?: string) => void;
 export interface ResultadoEmMassa { sucesso: number; erros: number }
 
 interface ReToolContextType {
@@ -55,8 +57,8 @@ interface ReToolContextType {
   addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }) => Promise<void>;
   updateDispositivo: (id: string, data: Partial<Dispositivo>, silent?: boolean) => Promise<void>;
   deleteDispositivo: (id: string, silent?: boolean) => Promise<void>;
-  desativarDispositivosEmLote: (ids: string[], onProgresso?: (feitos: number, total: number) => void) => Promise<ResultadoEmMassa>;
-  excluirDispositivosEmLote: (ids: string[], onProgresso?: (feitos: number, total: number) => void) => Promise<ResultadoEmMassa>;
+  desativarDispositivosEmLote: (ids: string[], onProgresso?: ProgressoEmMassa) => Promise<ResultadoEmMassa>;
+  excluirDispositivosEmLote: (ids: string[], onProgresso?: ProgressoEmMassa) => Promise<ResultadoEmMassa>;
   addCategoria: (data: Omit<Categoria, 'id'>) => Promise<string>;
   updateCategoria: (id: string, data: Partial<Categoria>, silent?: boolean) => Promise<void>;
   deleteCategoria: (id: string, silent?: boolean) => Promise<void>;
@@ -238,8 +240,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     let vivo = true;
     const marcar = (k: 'cat' | 'fam' | 'prod') => setCarregadas(c => (c[k] ? c : { ...c, [k]: true }));
     const falhou = (e: unknown) => setErroReferencias(String((e as { code?: string })?.code || 'erro'));
-    // `tipos` não tem regra no firestore.rules (leitura sempre negada); a falha não bloqueia a tela.
-    const unsubTipos = categoriasRepo.subscribeTipos(setTipos, () => undefined);
+    // `tipos` não é assinada: não tem regra no firestore.rules (toda leitura
+    // era negada, um erro 403 a cada abertura) e nenhuma tela a usa.
 
     // Plano B: as três coleções em tempo real (catálogo ausente ou divergente).
     // Quem pode editar recria o catálogo assim que as três chegam.
@@ -295,7 +297,6 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       vivo = false;
       pararCatalogo();
       pararColecoes?.();
-      unsubTipos();
     };
   }, [uid, tentativaRef]);
 
@@ -317,6 +318,11 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     return () => clearTimeout(t);
   }, [uid, referenciasProntas, tentativaRef]);
 
+  // O Firestore recusa campos `undefined` (ex.: dadosAnteriores ausente em
+  // importações e solicitações), o que fazia o registro de auditoria falhar.
+  // JSON.stringify omite propriedades undefined (inclusive aninhadas).
+  const semIndefinidos = <T,>(o: T): T => JSON.parse(JSON.stringify(o));
+
   // "Event Handler" central de auditoria: acionado no sucesso de cada mutação.
   // A falha no registro nunca derruba a operação principal.
   const dadosAuditoria = (
@@ -327,7 +333,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     acaoDescricao: string,
     conteudo?: Record<string, any>,
     dadosAnteriores?: Record<string, any>
-  ) => ({
+  ) => semIndefinidos({
     usuarioUid: userProfile?.uid || 'sistema',
     usuarioNome: userProfile?.nome || 'Desconhecido',
     usuarioEmail: userProfile?.email || '',
@@ -436,19 +442,21 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     if (!silent) announce('Dispositivo removido com sucesso');
   };
 
-  const desativarDispositivosEmLote = async (ids: string[], onProgresso?: (feitos: number, total: number) => void) => {
+  const desativarDispositivosEmLote = async (ids: string[], onProgresso?: ProgressoEmMassa) => {
     if (currentRole !== 'admin' && currentRole !== 'projetista') {
       announce('Acesso negado: seu perfil não possui permissão para editar dispositivos.');
       return { sucesso: 0, erros: ids.length };
     }
-    onProgresso?.(0, ids.length);
+    onProgresso?.(0, ids.length, 'Preparando');
     const patch: Partial<Dispositivo> = { ativo: false };
     const meta = await metaParaEscrita();
     // Lê e grava em blocos de 150: o estado usado no catálogo é o de segundos
     // antes da gravação (não o do início de uma operação de minutos).
     let sucesso = 0, erros = 0;
+    const blocos = Math.ceil(ids.length / 150);
     for (let i = 0; i < ids.length; i += 150) {
       const bloco = ids.slice(i, i + 150);
+      onProgresso?.(i, ids.length, `Gravando lote ${i / 150 + 1} de ${blocos}`);
       let atuais: Dispositivo[];
       try {
         atuais = await obterDispositivosPorIds(bloco);
@@ -463,19 +471,19 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       );
       sucesso += r.sucesso;
       erros += r.erros + (bloco.length - atuais.length);
-      onProgresso?.(Math.min(ids.length, i + bloco.length), ids.length);
+      onProgresso?.(Math.min(ids.length, i + bloco.length), ids.length, `Gravando lote ${i / 150 + 1} de ${blocos}`);
       if (r.falhas.some(f => /resource-exhausted|quota/i.test(f))) { erros += ids.length - i - bloco.length; break; }
     }
     tocarDispositivos();
     return { sucesso, erros };
   };
 
-  const excluirDispositivosEmLote = async (ids: string[], onProgresso?: (feitos: number, total: number) => void) => {
+  const excluirDispositivosEmLote = async (ids: string[], onProgresso?: ProgressoEmMassa) => {
     if (currentRole !== 'admin') {
       announce('Apenas Administradoras têm permissão para excluir dispositivos.');
       return { sucesso: 0, erros: ids.length };
     }
-    onProgresso?.(0, ids.length);
+    onProgresso?.(0, ids.length, 'Lendo dados atuais e reutilizações vinculadas');
     const [atuais, relacoes] = await Promise.all([obterDispositivosPorIds(ids), reutilizacoesRepo.listarDosDispositivos(ids)]);
     const porDisp = new Map<string, string[]>();
     for (const u of relacoes) porDisp.set(u.dispositivoId, [...(porDisp.get(u.dispositivoId) || []), u.id]);
@@ -483,7 +491,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       atuais.map(d => ({ dispositivo: d, reutilizacaoIds: porDisp.get(d.id) || [] })),
       await metaParaEscrita(),
       (b, d) => auditRepo.adicionarAoBatch(b, dadosAuditoria('exclusao', 'dispositivo', d.id, d.nome || d.id, `Exclusão de dispositivo: ${d.nome || d.id}`, d, d)),
-      onProgresso
+      (feitos, total) => onProgresso?.(feitos, total, 'Excluindo')
     );
     tocarDispositivos();
     return { sucesso: r.excluidos, erros: r.erros + (ids.length - atuais.length) };
@@ -879,7 +887,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         announce(`Importação parcial: ${result.sucesso} de ${novosDispositivos.length} registros gravados, ${result.erros} com erro. Importe o arquivo novamente para gravar os restantes.`);
       } else {
         const iguais = result.ignoradosSemAlteracao ?? 0;
-        announce(`Importação concluída! ${inseridos.toLocaleString('pt-BR')} inseridos, ${atualizados.toLocaleString('pt-BR')} atualizados`
+        if (result.sucesso === 0 && iguais > 0) announce(`Nada a gravar: os ${iguais.toLocaleString('pt-BR')} registros já estavam iguais no banco.`);
+        else announce(`Importação concluída! ${inseridos.toLocaleString('pt-BR')} inseridos, ${atualizados.toLocaleString('pt-BR')} atualizados`
           + (iguais ? ` e ${iguais.toLocaleString('pt-BR')} já estavam iguais (não regravados)` : '') + '.');
       }
       return result;

@@ -5,6 +5,7 @@ import { Dispositivo } from '../domain/entities/dispositivo';
 import { X, Send, Cpu, AlertCircle, LoaderCircle } from 'lucide-react';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { mensagemDeErro } from './feedback/EstadoDados';
+import { gravarComPrazo } from '../utils/tempo';
 
 interface SolicitarReutilizacaoModalProps {
   dispositivo: Dispositivo;
@@ -30,7 +31,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
   const envio = useAsyncAction(async () => {
     const solicitante = userProfile?.nome || 'Engenharia de Processo';
 
-    await solicitarReutilizacao(
+    await gravarComPrazo(solicitarReutilizacao(
       {
         dispositivoId: dispositivo.id,
         data: new Date().toISOString().split('T')[0],
@@ -45,7 +46,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
       },
       solicitante,
       userProfile?.uid
-    );
+    ));
   });
   const loading = envio.emAndamento;
 
@@ -157,7 +158,9 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
 
         {/* FORM */}
         <form onSubmit={handleSubmit} noValidate aria-busy={loading || undefined} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          <fieldset disabled={loading} style={{ border: 'none', minWidth: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', flex: 1 }}>
+          {/* A rolagem fica num <div>: o Chrome não rola um <fieldset> com overflow. */}
+          <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+          <fieldset disabled={loading} style={{ border: 'none', minWidth: 0, margin: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {erro && (
               <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontSize: '0.82rem', backgroundColor: '#fee2e2', padding: '10px', borderRadius: '6px' }}>
                 <AlertCircle size={16} />
@@ -275,6 +278,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
               />
             </div>
           </fieldset>
+          </div>
 
           {/* FOOTER */}
           <div style={{

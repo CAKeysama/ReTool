@@ -34,15 +34,18 @@ const cacheNomes = new Map<string, { nome?: string; codigo?: string } | null>();
  * de busca quando já está em memória; senão lê só os ids que faltam
  * (consultas `in` de 30), nunca a coleção inteira.
  */
-export function useNomesDispositivos(ids: string[]) {
-  const indice = useIndiceBusca(false);
-  const [, setVersao] = useState(0);
+/** Ids cuja leitura falhou recentemente (evita repetir a leitura a cada render). */
+const falhasNomes = new Set<string>();
+
+export function useNomesDispositivos(ids: string[], usarCatalogo = false) {
+  const indice = useIndiceBusca(usarCatalogo);
+  const [versao, setVersao] = useState(0);
   const pedidos = useRef(new Set<string>());
   const chave = Array.from(new Set(ids.filter(Boolean))).sort().join(',');
 
   useEffect(() => {
     if (!chave) return;
-    const faltando = chave.split(',').filter(id => !cacheNomes.has(id) && !pedidos.current.has(id) && !indice.porId(id));
+    const faltando = chave.split(',').filter(id => !cacheNomes.has(id) && !pedidos.current.has(id) && !falhasNomes.has(id) && !indice.porId(id));
     if (faltando.length === 0) return;
     faltando.forEach(id => pedidos.current.add(id));
     let vivo = true;
@@ -54,18 +57,23 @@ export function useNomesDispositivos(ids: string[]) {
           cacheNomes.set(id, d ? { nome: d.nome, codigo: d.codigo } : null);
         }
       })
-      .catch(() => undefined)
+      .catch(() => {
+        // Marca como falha (a tela mostra "indisponível") e tenta de novo em 15 s.
+        faltando.forEach(id => falhasNomes.add(id));
+        setTimeout(() => { faltando.forEach(id => falhasNomes.delete(id)); setVersao(v => v + 1); }, 15_000);
+      })
       .finally(() => {
         faltando.forEach(id => pedidos.current.delete(id));
         if (vivo) setVersao(v => v + 1);
       });
     return () => { vivo = false; };
-  }, [chave, indice.porId]);
+  }, [chave, indice.porId, versao]);
 
-  return useCallback((id: string): { nome?: string; codigo?: string } | null | undefined => {
+  return useCallback((id: string): { nome?: string; codigo?: string; erro?: boolean } | null | undefined => {
     const e = indice.porId(id);
     if (e) return { nome: e.nome, codigo: e.codigo };
+    if (falhasNomes.has(id) && !cacheNomes.has(id)) return { erro: true };
     return cacheNomes.get(id); // undefined = ainda carregando; null = não existe
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indice.porId, chave, cacheNomes.size]);
+  }, [indice.porId, chave, cacheNomes.size, versao]);
 }

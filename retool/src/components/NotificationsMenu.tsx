@@ -21,8 +21,9 @@ function formatarData(iso: string): string {
 }
 
 /** Status "vivo" da notificação, derivado da entidade referenciada. */
-function statusDaNotificacao(n: Notificacao, reutilizacoes: Map<string, { status?: string } | null> | null, usuariosAtivos: Map<string, boolean>): { label: string; cor: string; fundo: string } {
+function statusDaNotificacao(n: Notificacao, reutilizacoes: Map<string, { status?: string } | null> | null | 'erro', usuariosAtivos: Map<string, boolean>): { label: string; cor: string; fundo: string } {
   if (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') {
+    if (reutilizacoes === 'erro') return { label: 'Status indisponível', cor: '#6b7280', fundo: '#f3f4f6' };
     // Status ainda sendo buscado (só as reutilizações das notificações exibidas).
     if (!reutilizacoes || !reutilizacoes.has(n.entidadeId || '')) return { label: '…', cor: '#6b7280', fundo: '#f3f4f6' };
     const reu = reutilizacoes.get(n.entidadeId || '');
@@ -53,7 +54,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
   const [isOpen, setIsOpen] = useState(false);
   // Status vivo das reutilizações citadas: lido só ao abrir o painel e só
   // para as notificações exibidas (antes vinha da coleção inteira em memória).
-  const [reutilizacoes, setReutilizacoes] = useState<Map<string, { status?: string } | null> | null>(null);
+  const [reutilizacoes, setReutilizacoes] = useState<Map<string, { status?: string } | null> | null | 'erro'>(null);
   const idsReutilizacao = notifications
     .filter(n => (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') && n.entidadeId)
     .map(n => n.entidadeId as string);
@@ -61,6 +62,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
   useEffect(() => {
     if (!isOpen || !chaveIds) return;
     let vivo = true;
+    setReutilizacoes(r => (r === 'erro' ? null : r));
     const ids = chaveIds.split(',');
     reutilizacoesRepo.obterPorIds(ids)
       .then(lista => {
@@ -69,7 +71,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
         for (const r of lista) m.set(r.id, r);
         setReutilizacoes(m);
       })
-      .catch(() => { if (vivo) setReutilizacoes(null); });
+      .catch(() => { if (vivo) setReutilizacoes('erro'); });
     return () => { vivo = false; };
   }, [isOpen, chaveIds]);
   const [processando, setProcessando] = useState<string | null>(null);
@@ -223,7 +225,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
                   <div style={{ fontSize: '0.74rem', color: '#4b5563', marginTop: '2px', lineHeight: 1.4 }}>
                     {n.descricao}
                   </div>
-                  <div style={{ fontSize: '0.66rem', color: '#9ca3af', marginTop: '4px' }}>
+                  <div style={{ fontSize: '0.66rem', color: '#6b7280', marginTop: '4px' }}>
                     {formatarData(n.dataHora)}
                   </div>
 
@@ -270,7 +272,7 @@ export function NotificationsMenu({ onOpenUsersModal, align = 'right' }: Notific
                     style={{
                       alignSelf: 'flex-start',
                       background: 'none', border: 'none', cursor: 'pointer',
-                      color: '#9ca3af', padding: '2px', flexShrink: 0
+                      color: '#6b7280', padding: '2px', flexShrink: 0
                     }}
                   >
                     <CheckCheck size={14} />

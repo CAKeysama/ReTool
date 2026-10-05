@@ -101,7 +101,7 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
   /**
    * Exclusão em massa com cascata: cada dispositivo sai junto com suas
    * reutilizações e sua entrada no catálogo, em lotes. Pastas de anexos são
-   * apagadas depois (3 por vez).
+   * apagadas depois, em segundo plano (3 por vez), sem segurar o retorno.
    */
   async excluirComVinculosEmLote(
     itens: { dispositivo: Dispositivo; reutilizacaoIds: string[] }[],
@@ -141,9 +141,13 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
       }
       onProgresso?.(excluidos + erros, itens.length);
     }
-    for (let j = 0; j < apagados.length; j += 3) {
-      await Promise.all(apagados.slice(j, j + 3).map(id => apagarPastaDoDispositivo(id).catch(() => undefined)));
-    }
+    // Os anexos saem em segundo plano: a exclusão já foi gravada e a tela não
+    // precisa esperar o Storage (pode levar minutos com milhares de pastas).
+    void (async () => {
+      for (let j = 0; j < apagados.length; j += 3) {
+        await Promise.all(apagados.slice(j, j + 3).map(id => apagarPastaDoDispositivo(id).catch(() => undefined)));
+      }
+    })();
     return { excluidos, erros, falhas };
   }
 

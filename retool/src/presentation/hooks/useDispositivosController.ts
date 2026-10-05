@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useReTool } from '../../context/ReToolContext';
 import { useHotkeys } from '../../hooks/useHotkeys';
 import { BulkProgress } from '../../hooks/useBulkProgress';
+import { useAvisoAoSair } from '../../hooks/useAvisoAoSair';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useListaDispositivos } from './useListaDispositivos';
 import { useIndiceBusca } from './useIndiceBusca';
@@ -30,22 +31,32 @@ export function useDispositivosController() {
   });
 
   const [filterQuery, setFilterQuery] = useState(queryParam);
-  const [filterCategoria, setFilterCategoria] = useState('');
-  const [filterProcesso, setFilterProcesso] = useState('');
+  // Filtros e tamanho da página ficam na URL: voltar dos detalhes restaura a lista.
+  const [filterCategoria, setFilterCategoria] = useState(searchParams.get('cat') || '');
+  const [filterProcesso, setFilterProcesso] = useState(searchParams.get('proc') || '');
   const [showFilters, setShowFilters] = useState(false);
   const [buscaFocada, setBuscaFocada] = useState(false);
   const textoBusca = useDebouncedValue(filterQuery, ATRASO_BUSCA_MS);
   const buscaPendente = filterQuery !== textoBusca;
 
-  // A URL acompanha a busca já estabilizada (não a cada tecla).
-  useEffect(() => {
-    const atual = searchParams.get('q') || '';
-    if (atual !== textoBusca) setSearchParams(textoBusca ? { q: textoBusca } : {}, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [textoBusca]);
-
   // Paginação (servidor com cursor ou fatias da busca no índice)
-  const [itemsPerPage, setItemsPerPage] = useState<number>(25);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
+    const n = Number(searchParams.get('n'));
+    return (TAMANHOS_PAGINA as readonly number[]).includes(n) ? n : 25;
+  });
+
+  // A URL acompanha a busca já estabilizada (não a cada tecla) e os filtros.
+  useEffect(() => {
+    const novo: Record<string, string> = {};
+    if (textoBusca) novo.q = textoBusca;
+    if (filterCategoria) novo.cat = filterCategoria;
+    if (filterProcesso) novo.proc = filterProcesso;
+    if (itemsPerPage !== 25) novo.n = String(itemsPerPage);
+    const atual = new URLSearchParams(searchParams);
+    const igual = ['q', 'cat', 'proc', 'n'].every(k => (atual.get(k) || '') === (novo[k] || ''));
+    if (!igual) setSearchParams(novo, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [textoBusca, filterCategoria, filterProcesso, itemsPerPage]);
   const lista = useListaDispositivos(
     { texto: textoBusca, categoriaId: filterCategoria, processo: filterProcesso },
     itemsPerPage,
@@ -65,6 +76,7 @@ export function useDispositivosController() {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState<'disable' | 'delete' | null>(null);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null);
+  useAvisoAoSair(isBulkLoading);
   const indice = useIndiceBusca(isBulkModalOpen);
 
   const bulkItems: BulkItem[] = useMemo(() => {
@@ -109,14 +121,17 @@ export function useDispositivosController() {
   };
 
   const executarEmMassa = async (
-    acao: (ids: string[], onProgresso: (feitos: number, total: number) => void) => Promise<{ sucesso: number; erros: number }>,
+    acao: (ids: string[], onProgresso: (feitos: number, total: number, etapa?: string) => void) => Promise<{ sucesso: number; erros: number }>,
     verbo: string
   ) => {
+    if (isBulkLoading) return;
     setIsBulkLoading(true);
+    // Fecha a confirmação para o progresso (no modal de seleção) ficar visível.
+    setIsBulkConfirmOpen(null);
     const ids = Array.from(bulkSelected);
-    setBulkProgress({ done: 0, total: ids.length });
+    setBulkProgress({ done: 0, total: ids.length, etapa: 'Preparando' });
     try {
-      const r = await acao(ids, (feitos, total) => setBulkProgress({ done: feitos, total }));
+      const r = await acao(ids, (feitos, total, etapa) => setBulkProgress({ done: feitos, total, etapa }));
       announce(r.erros > 0
         ? `${r.sucesso} dispositivos ${verbo}, ${r.erros} com erro. Tente novamente para os restantes.`
         : `${r.sucesso} dispositivos ${verbo} com sucesso`);
@@ -175,6 +190,7 @@ export function useDispositivosController() {
     // Filtros
     filterQuery,
     handleSearchChange,
+    limparBusca: () => { setFilterQuery(''); setFilterCategoria(''); setFilterProcesso(''); },
     setBuscaFocada,
     buscaPendente,
     filterCategoria,

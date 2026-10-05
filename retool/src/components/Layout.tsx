@@ -6,6 +6,7 @@ import { useHotkeys } from '../hooks/useHotkeys';
 import { usePermissions } from '../hooks/usePermissions';
 import { UserNavMenu } from './UserNavMenu';
 import { NotificationsMenu } from './NotificationsMenu';
+import { LimiteDeErro, CarregandoModal } from './LimiteDeErro';
 
 // Formulário e modais administrativos só são baixados quando abertos.
 const DispositivoForm = lazy(() => import('../pages/DispositivoForm').then(m => ({ default: m.DispositivoForm })));
@@ -94,7 +95,7 @@ export function Layout() {
             <span style={{ color: 'var(--color-gray-steel)' }}>Re</span>
             <span style={{ color: 'var(--color-primary)' }}>Tool</span>
           </h1>
-          <div style={{ color: '#9ca3af', fontSize: '0.75rem', fontWeight: 500, marginTop: '2px' }}>
+          <div style={{ color: '#6b7280', fontSize: '0.75rem', fontWeight: 500, marginTop: '2px' }}>
             Gestão Industrial
           </div>
         </div>
@@ -112,7 +113,7 @@ export function Layout() {
 
         {/* MENU */}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#9ca3af', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7280', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
             MENU
           </div>
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -135,7 +136,7 @@ export function Layout() {
 
         {/* ATALHOS / FOOTER HELP */}
         <div style={{ backgroundColor: '#f9fafb', padding: 'var(--spacing-md)', borderRadius: 'var(--radius)', marginTop: 'auto' }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#9ca3af', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7280', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
             ATALHOS
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', fontSize: '0.75rem', color: '#6b7280' }}>
@@ -197,12 +198,13 @@ function ModaisGlobais({ isDispFormOpen, isUsersModalOpen, onCloseUsers, isLogsM
   isUsersModalOpen: boolean; onCloseUsers: () => void;
   isLogsModalOpen: boolean; onCloseLogs: () => void;
 }) {
+  const { closeDispForm } = useReTool();
   return (
-    <Suspense fallback={null}>
-      {isDispFormOpen && <DispositivoForm />}
-      {isUsersModalOpen && <UsersManagementModal isOpen onClose={onCloseUsers} />}
-      {isLogsModalOpen && <AuditLogsModal isOpen onClose={onCloseLogs} />}
-    </Suspense>
+    <>
+      {isDispFormOpen && <LimiteDeErro onFechar={closeDispForm}><Suspense fallback={<CarregandoModal />}><DispositivoForm /></Suspense></LimiteDeErro>}
+      {isUsersModalOpen && <LimiteDeErro onFechar={onCloseUsers}><Suspense fallback={<CarregandoModal />}><UsersManagementModal isOpen onClose={onCloseUsers} /></Suspense></LimiteDeErro>}
+      {isLogsModalOpen && <LimiteDeErro onFechar={onCloseLogs}><Suspense fallback={<CarregandoModal />}><AuditLogsModal isOpen onClose={onCloseLogs} /></Suspense></LimiteDeErro>}
+    </>
   );
 }
 

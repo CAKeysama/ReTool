@@ -5,6 +5,7 @@ import { ReToolProvider } from './context/ReToolContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { SkeletonCards, SkeletonLinha } from './components/feedback';
+import { LimiteDeErro, liberarRecargaAutomatica } from './components/LimiteDeErro';
 
 // Cada tela vira um arquivo separado, baixado quando a rota é aberta.
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
@@ -24,7 +25,22 @@ function CarregandoPagina() {
   );
 }
 
-const pagina = (el: React.ReactNode) => <Suspense fallback={<CarregandoPagina />}>{el}</Suspense>;
+const pagina = (el: React.ReactNode) => (
+  <LimiteDeErro><Suspense fallback={<CarregandoPagina />}>{el}</Suspense></LimiteDeErro>
+);
+
+// Depois do login, baixa as telas em segundo plano (navegar não espera a rede).
+let telasPreCarregadas = false;
+function preCarregarTelas() {
+  if (telasPreCarregadas) return;
+  telasPreCarregadas = true;
+  const carregar = () => {
+    void import('./pages/Dispositivos'); void import('./pages/Home'); void import('./pages/DispositivoDetails');
+    void import('./pages/Reutilizacoes'); void import('./pages/Categorias');
+  };
+  const ric = (window as unknown as { requestIdleCallback?: (f: () => void) => void }).requestIdleCallback;
+  if (ric) ric(carregar); else setTimeout(carregar, 1500);
+}
 
 function ProtectedLayout() {
   const { userProfile, loading } = useAuth();
@@ -65,6 +81,8 @@ function ProtectedLayout() {
     return <Navigate to="/login" replace />;
   }
 
+  preCarregarTelas();
+  liberarRecargaAutomatica();
   return <Layout />;
 }
 

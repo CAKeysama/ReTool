@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { usePermissions } from '../hooks/usePermissions';
 import { obterDispositivo } from '../data/repositories/FirestoreDispositivosConsultas';
 import { EstadoDados, SkeletonLista, classificarErro, mensagemDeErro } from '../components/feedback';
+import { gravarComPrazo } from '../utils/tempo';
 
 /**
  * Verifica a permissão antes de montar o formulário (os hooks do formulário
@@ -140,9 +141,10 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
     setErroSalvar(null);
     try {
       if (isEditing && editingDispId) {
-        await updateDispositivo(editingDispId, formData);
+        await gravarComPrazo(updateDispositivo(editingDispId, formData));
       } else {
-        await addDispositivo({ ...formData, id: deviceStorageId });
+        // Mesmo id em uma nova tentativa: não duplica se a primeira chegar depois.
+        await gravarComPrazo(addDispositivo({ ...formData, id: deviceStorageId }));
       }
       closeDispForm();
     } catch (err) {
@@ -511,7 +513,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                 </span>
               ))}
               {(formData.palavrasChave || []).length === 0 && (
-                <span style={{ fontSize: '0.75rem', color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma palavra-chave adicionada ainda.</span>
+                <span style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>Nenhuma palavra-chave adicionada ainda.</span>
               )}
             </div>
           </div>

@@ -18,7 +18,7 @@ const estiloBtnLinha: React.CSSProperties = {
   border: 'none',
   backgroundColor: 'transparent',
   boxShadow: 'none',
-  color: '#9ca3af'
+  color: '#6b7280'
 };
 
 /** Acima disso a lista é renderizada em blocos ("Mostrar mais"). */
@@ -202,7 +202,7 @@ function PainelClassificacao<T extends ItemClassificacao>({
       {itens.length > 0 && (
         <div style={{ padding: '12px 12px 0', position: 'relative' }}>
           <label htmlFor={idBusca} className="sr-only">Buscar {nomePlural}</label>
-          <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 24, top: '50%', transform: 'translateY(calc(-50% + 6px))', color: '#9ca3af', pointerEvents: 'none' }} />
+          <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 24, top: '50%', transform: 'translateY(calc(-50% + 6px))', color: '#6b7280', pointerEvents: 'none' }} />
           <input
             id={idBusca}
             type="search"

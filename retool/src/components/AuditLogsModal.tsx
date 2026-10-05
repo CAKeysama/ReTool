@@ -364,7 +364,7 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
                         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>
                           {log.usuarioNome}
                         </span>
-                        <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
                           ({log.usuarioEmail || 'sistema'})
                         </span>
                       </div>
@@ -380,7 +380,7 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
                     </div>
 
                     {log.entidadeId && (
-                      <div style={{ fontSize: '0.72rem', color: '#9ca3af' }}>
+                      <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>
                         ID do Registro: {log.entidadeId}
                       </div>
                     )}

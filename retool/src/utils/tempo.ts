@@ -25,3 +25,17 @@ export function comTimeout<T>(p: Promise<T>, ms: number, mensagem?: string): Pro
     );
   });
 }
+
+/** Prazo para gravações feitas por um clique (salvar, enviar, aprovar). */
+export const PRAZO_GRAVACAO_MS = 15_000;
+
+/**
+ * Mensagem para quando a gravação não teve resposta no prazo. O Firestore
+ * mantém a gravação pendente e a envia quando a conexão volta (com a aba
+ * aberta), por isso não dizemos que falhou: pedimos para conferir.
+ */
+export const MENSAGEM_GRAVACAO_SEM_RESPOSTA =
+  'Sem resposta do servidor. Verifique a conexão: a gravação pode ser concluída quando ela voltar. Confira antes de tentar de novo.';
+
+/** `comTimeout` com o prazo e a mensagem padrão das gravações. */
+export const gravarComPrazo = <T>(p: Promise<T>) => comTimeout(p, PRAZO_GRAVACAO_MS, MENSAGEM_GRAVACAO_SEM_RESPOSTA);

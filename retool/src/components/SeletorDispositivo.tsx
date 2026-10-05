@@ -21,7 +21,7 @@ interface SeletorDispositivoProps {
 export function SeletorDispositivo({ valor, rotuloValor, onChange, placeholder = 'Filtrar por dispositivo (nome ou código)' }: SeletorDispositivoProps) {
   const [texto, setTexto] = useState('');
   const [aberto, setAberto] = useState(false);
-  const [ativo, setAtivo] = useState(0);
+  const [ativo, setAtivo] = useState(-1);
   const [usado, setUsado] = useState(false);
   const indice = useIndiceBusca(usado);
   const busca = useDebouncedValue(texto, 150);
@@ -71,11 +71,16 @@ export function SeletorDispositivo({ valor, rotuloValor, onChange, placeholder =
         value={texto}
         onFocus={() => { setUsado(true); setAberto(true); }}
         onBlur={() => setTimeout(() => setAberto(false), 150)}
-        onChange={e => { setTexto(e.target.value); setAtivo(0); setAberto(true); setUsado(true); }}
+        onChange={e => { setTexto(e.target.value); setAtivo(-1); setAberto(true); setUsado(true); }}
         onKeyDown={e => {
           if (e.key === 'ArrowDown') { e.preventDefault(); setAtivo(a => Math.min(a + 1, sugestoes.length - 1)); }
           else if (e.key === 'ArrowUp') { e.preventDefault(); setAtivo(a => Math.max(a - 1, 0)); }
-          else if (e.key === 'Enter' && sugestoes[ativo]) { e.preventDefault(); escolher(sugestoes[ativo].id); }
+          else if (e.key === 'Escape' && aberto) { e.preventDefault(); e.stopPropagation(); setAberto(false); setAtivo(-1); }
+          else if (e.key === 'Enter') {
+            // Sem item destacado, Enter só escolhe quando há uma única sugestão.
+            const alvo = sugestoes[ativo] || (sugestoes.length === 1 ? sugestoes[0] : undefined);
+            if (alvo) { e.preventDefault(); escolher(alvo.id); }
+          }
           else if (e.key === 'Escape') setAberto(false);
         }}
         style={{ width: '100%' }}

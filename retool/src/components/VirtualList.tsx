@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
 interface VirtualListProps<T> {
   itens: T[];
@@ -13,6 +13,8 @@ interface VirtualListProps<T> {
   style?: React.CSSProperties;
   /** Linhas extras renderizadas acima/abaixo da área visível. */
   margem?: number;
+  /** Seleção múltipla: informa se o item está marcado (leitores de tela anunciam "selecionado"). */
+  marcado?: (item: T) => boolean;
 }
 
 /**
@@ -21,8 +23,9 @@ interface VirtualListProps<T> {
  * setas/Home/End/PageUp/PageDown e Enter/Espaço, rolando até a linha ativa.
  */
 export function VirtualList<T>({
-  itens, alturaItem, chave, renderItem, onAtivar, ariaLabel, className, style, margem = 6
+  itens, alturaItem, chave, renderItem, onAtivar, ariaLabel, className, style, margem = 6, marcado
 }: VirtualListProps<T>) {
+  const prefixo = useId();
   const ref = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [alturaVisivel, setAlturaVisivel] = useState(400);
@@ -88,9 +91,10 @@ export function VirtualList<T>({
     visiveis.push(
       <div
         key={chave(item)}
-        id={`vl-item-${i}`}
+        id={`${prefixo}-item-${i}`}
         role="option"
-        aria-selected={i === ativo}
+        aria-selected={marcado ? marcado(item) : i === ativo}
+        className={i === ativo ? 'vl-item-ativo' : undefined}
         aria-setsize={itens.length}
         aria-posinset={i + 1}
         style={{ position: 'absolute', top: i * alturaItem, left: 0, right: 0, height: alturaItem }}
@@ -106,12 +110,14 @@ export function VirtualList<T>({
       ref={ref}
       role="listbox"
       aria-label={ariaLabel}
-      aria-activedescendant={ativo >= 0 ? `vl-item-${ativo}` : undefined}
+      aria-multiselectable={marcado ? true : undefined}
+      aria-activedescendant={ativo >= 0 ? `${prefixo}-item-${ativo}` : undefined}
       tabIndex={0}
       onScroll={onScroll}
       onKeyDown={onKeyDown}
-      className={className}
-      style={{ overflowY: 'auto', position: 'relative', outline: 'none', ...style }}
+      onFocus={() => { if (ativo < 0 && itens.length) setAtivo(0); }}
+      className={['vl-lista', className].filter(Boolean).join(' ')}
+      style={{ overflowY: 'auto', position: 'relative', ...style }}
     >
       <div style={{ height: itens.length * alturaItem, position: 'relative' }}>{visiveis}</div>
     </div>
