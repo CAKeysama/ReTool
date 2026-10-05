@@ -30,7 +30,7 @@ export function normalizarNumeroPeca(codigo?: string): string {
 // Caracteres invisíveis comuns em planilhas: zero-width (U+200B–U+200D),
 // BOM/ZWNBSP (U+FEFF), soft hyphen (U+00AD), word joiner (U+2060) e controles C0/C1.
 // eslint-disable-next-line no-control-regex
-const INVISIVEIS = /[​-‍﻿­⁠\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+export const INVISIVEIS = /[​-‍﻿­⁠\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
 
 /**
  * Normaliza um valor de Código ou Dispositivo para compor a chave de unicidade.

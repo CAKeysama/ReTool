@@ -112,8 +112,16 @@ com cota diária de operações do Firestore (~17 mil operações no uso do clie
 
 ### Custo em operações do Firestore
 
-- **Leituras**: 1 por dispositivo existente, sempre do servidor, mais o
-  `count()` de conferência (1 a cada 1.000 documentos). O catálogo de busca
+- **Leituras**: sempre do servidor, mais o `count()` (1 a cada 1.000
+  documentos). Quando o arquivo é pequeno perto do banco (consultas × 2 +
+  linhas < metade do banco), só os dispositivos com os mesmos códigos do
+  arquivo são lidos (`codigo in [...]` em blocos de 30, nas grafias original,
+  sem espaços/invisíveis, MAIÚSCULAS, minúsculas e número): o custo segue o
+  tamanho do arquivo. Senão, 1 por dispositivo existente, conferido com o
+  `count()`. Limite da leitura por candidatos: um código antigo gravado em
+  caixa mista diferente da planilha (ex.: "Dmp11" e "DMP11") não é achado e
+  a linha vira registro novo; os códigos do acervo são numéricos e a
+  verificação de Duplicados encontra esses casos. O catálogo de busca
   não é usado como fonte: ele pode ser gravado por quem edita e não prova o
   conteúdo atual de cada documento, e um engano ali vira duplicata ou
   sobrescrita no banco.
@@ -128,7 +136,8 @@ Medido pela tela, ponta a ponta, no emulador (build de produção, planilha de
 | Cenário | Leituras | Escritas | Tempo (ler + gravar) |
 |---|---|---|---|
 | Primeira importação: 13.400 iguais + 2.000 novos | 13.440 | 2.000 dispositivos + catálogo por lote + reconstrução (~22) + 1 auditoria | 16,7 s |
-| Reimportar o mesmo arquivo (tudo igual), 3 rodadas | 15.435 | 1 (auditoria) | 7,1 a 8,6 s |
+| Reimportar o mesmo arquivo (tudo igual), 4 rodadas | 15.435 a 15.445 | 1 (auditoria) | 7,1 a 8,6 s |
+| Planilha de 50 linhas (40 iguais + 10 novas) sobre 15.400 | 75 | 10 dispositivos + catálogo + 1 auditoria | 10,5 s |
 
 O processamento da planilha (no Worker) levou de 9 a 11 s em cada rodada.
 

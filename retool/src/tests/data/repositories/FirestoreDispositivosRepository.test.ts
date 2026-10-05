@@ -274,6 +274,35 @@ describe('FirestoreDispositivosRepository', () => {
       expect(eventos[eventos.length - 1]).toEqual({ etapa: 'concluido', feitos: 1234, total: 1234 });
     });
 
+    test('arquivo pequeno sobre banco grande: lê só os candidatos e o plano sai igual', async () => {
+      await repository.importarLote(lista(3000), [], [], [], [], [], []);
+      // Grafias antigas: código numérico, caixa e espaços diferentes da planilha.
+      mockDbState.dispositivos.push(
+        { id: 'antigo-num', codigo: 12345, nome: 'D' },
+        { id: 'antigo-caixa', codigo: 'abc-1', nome: 'Disp X' },
+      );
+      const fs = jest.requireMock('firebase/firestore') as { getDocsFromServer: jest.Mock<any> };
+      fs.getDocsFromServer.mockClear();
+      const arquivo = [
+        ...lista(10),                                     // iguais ao banco
+        { codigo: '12345', nome: 'D', peso: '1' },        // mesmo que o código numérico
+        { codigo: ' ABC-1 ', nome: 'disp  x', peso: '1' }, // mesma chave, outra grafia
+        ...Array.from({ length: 5 }, (_, i) => ({ codigo: `NOVO${i}`, nome: 'D', peso: '1' })),
+      ];
+      const r = await repository.importarLote(arquivo, [], [], [], [], [], []);
+
+      expect(r.leituraParcial).toBe(true);
+      expect(r.documentosFinais).toBeUndefined();
+      // Só os candidatos (mesmo código do arquivo), não os 3.002.
+      expect(fs.getDocsFromServer.mock.calls.length).toBeLessThan(5);
+      expect(r.documentosLidos).toBe(12);
+      expect(r).toMatchObject({ inseridos: 5, ignoradosSemAlteracao: 10, erros: 0 });
+      expect(mockDbState.dispositivos).toHaveLength(3002 + 5);
+      // As duas linhas com outra grafia atualizaram os documentos antigos (peso novo), sem duplicar.
+      expect(mockDbState.dispositivos.find((d: any) => d.id === 'antigo-num')).toMatchObject({ peso: '1' });
+      expect(mockDbState.dispositivos.find((d: any) => d.id === 'antigo-caixa')).toMatchObject({ peso: '1' });
+    });
+
     test('leitura dos existentes incompleta: lê de novo; se ainda faltar, não grava nada', async () => {
       const existentes = lista(1200);
       await repository.importarLote(existentes, [], [], [], [], [], []);

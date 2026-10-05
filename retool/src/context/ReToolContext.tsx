@@ -18,6 +18,7 @@ import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAudit
 import {
   obterDispositivo, obterDispositivosPorIds, obterDispositivosPorCodigo, varrerDispositivos, varrerColecao, ProgressoVarredura, contarDispositivos
 } from '../data/repositories/FirestoreDispositivosConsultas';
+import { ITENS_POR_PARTE } from '../domain/services/buscaDispositivos';
 import { MetaIndice, lerMetaIndiceDoServidor, reconstruirIndice, metaRef, parteRef } from '../data/repositories/FirestoreIndiceDispositivos';
 import { indiceBusca } from '../data/repositories/IndiceBuscaStore';
 import {
@@ -919,22 +920,22 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         `Importação em lote: ${inseridos} inserido(s), ${atualizados} atualizado(s), ${result.erros} erro(s) de ${novosDispositivos.length} enviado(s)`,
         { enviados: novosDispositivos.length, sucesso: result.sucesso, inseridos, atualizados, erros: result.erros, ignoradosSemAlteracao: result.ignoradosSemAlteracao ?? 0, interrompido: result.interrompido ?? null }
       );
-      // Cada lote já atualizou o catálogo. Depois, o catálogo é refeito a
-      // partir do estado que a importação acabou de ler do banco (sem leitura
-      // extra; ~1 escrita por parte), o que também corrige divergências
-      // antigas. Só se ninguém gravou no catálogo durante a importação (senão
-      // a reconstrução apagaria essas alterações).
+      // Cada lote já atualizou o catálogo. Ele só é refeito (a partir do que
+      // a importação acabou de ler do banco inteiro: sem leitura extra, ~1
+      // escrita por parte) quando precisa: total diferente do banco
+      // (divergência antiga) ou partes cheias demais para o volume novo.
+      // Refazer sem precisar mudaria todas as versões e faria todo navegador
+      // baixar o catálogo de novo. Só se ninguém gravou no catálogo durante a
+      // importação (senão a reconstrução apagaria essas alterações).
       if (result.documentosFinais && !result.interrompido && result.documentosLidos) {
         try {
           const metaAgora = await lerMetaIndiceDoServidor();
           const versoesSomadas = (m: MetaIndice | null) => Object.values(m?.versoes || {}).reduce((a, b) => a + b, 0);
           const tocadoSoPorEsta = !metaInicial || (metaAgora && metaAgora.geracao === metaInicial.geracao
             && versoesSomadas(metaAgora) - versoesSomadas(metaInicial) === (result.documentosGravados ?? 0));
-          // Nada gravado e catálogo do mesmo tamanho do banco: refazer só
-          // mudaria as versões e faria todos os navegadores baixarem o
-          // catálogo de novo.
-          const semMudanca = !result.documentosGravados && metaAgora?.total === result.documentosFinais.length;
-          if (tocadoSoPorEsta && !semMudanca) {
+          const n = result.documentosFinais.length;
+          const precisa = !metaAgora || metaAgora.total !== n || n > metaAgora.partes * ITENS_POR_PARTE * 1.5;
+          if (tocadoSoPorEsta && precisa) {
             const { alteradoNoMeio } = await reconstruirIndice(result.documentosFinais, metaAgora);
             if (alteradoNoMeio) console.warn('Índice de busca: houve gravação durante a reconstrução; atualize o índice para incluí-la.');
           }

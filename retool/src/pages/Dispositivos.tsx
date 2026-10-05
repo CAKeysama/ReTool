@@ -80,17 +80,23 @@ export function Dispositivos() {
   const { reconstruirIndiceBusca, announce } = useReTool();
   const [indiceProgresso, setIndiceProgresso] = React.useState<{ lidos: number; total: number | null } | null>(null);
 
+  const cancelarIndice = React.useRef<AbortController | null>(null);
   const atualizarIndice = async () => {
     if (indiceProgresso) return;
+    const ctrl = new AbortController();
+    cancelarIndice.current = ctrl;
     setIndiceProgresso({ lidos: 0, total: null });
     try {
-      await reconstruirIndiceBusca(p => setIndiceProgresso(p));
+      await reconstruirIndiceBusca(p => setIndiceProgresso(p), ctrl.signal);
     } catch (e) {
-      console.error(e);
-      if ((e as Error)?.message !== 'indice-alterado-durante-varredura') {
+      if ((e as { name?: string })?.name === 'AbortError') {
+        announce('Atualização do índice cancelada. Nada foi gravado.');
+      } else if ((e as Error)?.message !== 'indice-alterado-durante-varredura') {
+        console.error(e);
         announce('Não foi possível atualizar o índice de busca. Tente novamente.');
       }
     } finally {
+      cancelarIndice.current = null;
       setIndiceProgresso(null);
     }
   };
@@ -161,6 +167,16 @@ export function Dispositivos() {
                     ? `Atualizando índice${indiceProgresso.total ? ` ${Math.round((indiceProgresso.lidos / indiceProgresso.total) * 100)}%` : '…'}`
                     : lista.indiceAusente ? 'Criar índice de busca' : 'Atualizar índice'}
                 </span>
+              </button>
+            )}
+            {indiceProgresso && (
+              <button
+                className="btn"
+                onClick={() => cancelarIndice.current?.abort()}
+                aria-label="Cancelar a atualização do índice de busca"
+                style={{ height: '40px', padding: '0 16px' }}
+              >
+                Cancelar
               </button>
             )}
 

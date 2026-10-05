@@ -22,6 +22,11 @@ export interface ResultadoImportacaoLote {
   documentosLidos?: number;
   /** Estado final dos dispositivos ({ id, ...dados }) após a importação — reconstrói o índice de busca sem reler a coleção. */
   documentosFinais?: Dispositivo[];
+  /**
+   * Só os dispositivos candidatos (mesmo código ou nome do arquivo) foram
+   * lidos: `documentosFinais` não vem (não é o banco inteiro).
+   */
+  leituraParcial?: boolean;
   /** Documentos efetivamente gravados (combinações repetidas na lista contam 1). */
   documentosGravados?: number;
 }

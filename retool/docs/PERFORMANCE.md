@@ -13,8 +13,11 @@ Referências de volume usadas nas medições:
   no uso atual).
 
 Todas as medições foram feitas com dados sintéticos no emulador do Firestore
-(projeto `demo-retool`), nunca no banco publicado, com a CPU do navegador
-desacelerada 4 vezes (equivale a um notebook corporativo modesto).
+(projeto `demo-retool`), nunca no banco publicado. As de tela (lista, busca,
+Home, processamento da planilha) usaram a CPU do navegador desacelerada 4
+vezes (equivale a um notebook corporativo modesto); as de importação ponta a
+ponta e de Reutilizações, não (com 4x, a gravação do arquivo oficial levou
+60,5 s na medição do validador de performance).
 
 ## Resultado
 
@@ -30,8 +33,9 @@ desacelerada 4 vezes (equivale a um notebook corporativo modesto).
 | Próxima página | (tudo em memória) | 168 ms |
 | JavaScript inicial (gzip) | 357 KB | 223 KB, `xlsx` só dentro do Worker |
 | Processar a planilha oficial (472.976 linhas) | 33,3 s com a tela travada | 11,8 s em segundo plano, maior bloqueio da tela 33 ms |
-| Reimportar planilha igual ao banco (369.600 linhas, 15.400 combinações) | 1 leitura por dispositivo + regravava tudo | 15.435 leituras, 0 dispositivos regravados, 7 a 9 s |
+| Reimportar planilha igual ao banco (369.600 linhas, 15.400 combinações) | 1 leitura por dispositivo + regravava tudo | 15.445 leituras, 0 dispositivos regravados, 7 a 9 s |
 | Importar 2.000 novos sobre 13.400 iguais | idem | 13.440 leituras, 2.000 gravações, 16,7 s |
+| Importar planilha de 50 linhas (40 iguais, 10 novas) sobre 15.400 | 15.400 leituras + 50 gravações | 75 leituras, 10 gravações, 10,5 s |
 | Abrir Reutilizações (3.000 registros, acervo normalizado) | 3.000 leituras | 64 leituras |
 
 Os números da importação ponta a ponta estão em
@@ -185,10 +189,15 @@ As filas passaram a ser ordenadas da mais recente para a mais antiga.
 Detalhes em [IMPORTACAO_DISPOSITIVOS.md](IMPORTACAO_DISPOSITIVOS.md). Resumo:
 
 - leitura do .xlsx num Web Worker, com progresso real e cancelamento;
-- existentes sempre lidos do servidor, em páginas de 1.000 (1 leitura por
-  dispositivo); o catálogo não é usado como fonte, porque é gravável por
-  quem edita e não prova o conteúdo atual de cada documento;
-- no fim, o catálogo é refeito a partir dessa leitura (sem leituras extras);
+- existentes sempre lidos do servidor (o catálogo não é usado como fonte,
+  porque é gravável por quem edita e não prova o conteúdo atual de cada
+  documento). Arquivo pequeno perto do banco: só os dispositivos com os
+  mesmos códigos do arquivo (`codigo in [...]`, em várias grafias), com
+  custo pelo tamanho do arquivo. Arquivo grande: a coleção inteira, em
+  páginas de 1.000, conferida com `count()` e interrompida antes de gravar
+  se vier incompleta;
+- o catálogo só é refeito no fim quando precisa (total diferente do banco ou
+  partes cheias), a partir da leitura completa (sem leituras extras);
 - linhas iguais ao banco não são regravadas;
 - catálogo atualizado lote a lote, no mesmo writeBatch;
 - para no primeiro lote recusado por cota (`resource-exhausted`) e pode ser
@@ -217,7 +226,15 @@ apagar arquivos.
   mostra quantos selecionados estão fora da busca; anexos são apagados em
   segundo plano.
 - Aviso ao fechar a aba durante importação ou ação em massa.
-- Lista mostrada a partir do cache local (sem conexão) vem com aviso.
+- Lista mostrada a partir do cache local vem com aviso se o servidor não
+  responder em 2,5 s; sem conexão, o total de páginas fica indeterminado.
+- Excluir e desativar em massa, remover duplicados e atualizar o índice têm
+  progresso real desde a leitura e botão Cancelar (vale entre lotes; o que
+  já foi gravado fica).
+- Cadastro exige Nº do dispositivo e código; categorias, famílias e produtos
+  não aceitam nome repetido.
+- Login, Início e detalhes funcionam em 375 px (uma coluna, sem rolagem
+  lateral).
 
 ## Observabilidade
 
@@ -259,7 +276,10 @@ Nada de autorização foi movido para o cliente. As regras novas
 | Custo de uma edição | 1 escrita do dispositivo + 1 da parte + 1 da meta + 1 da auditoria; até 2 leituras (meta e, com imagem, a linha do mesmo Número da Peça) | antes eram 2 escritas, mas abrir o app lia a coleção inteira |
 | Reutilizações | modo legado lê a coleção inteira até a normalização | uma Administradora clica em "Normalizar" uma vez (1 leitura e no máximo 1 escrita por registro) |
 | Gravação de importações grandes | o SDK do Firestore processa cada lote de ~480 documentos de uma vez: com CPU 4x mais lenta, tarefas de até ~1,3 s durante a gravação (processar a planilha não trava) | lotes menores reduziriam as pausas, mas cada lote também grava as partes do catálogo (+~19 escritas por lote), o que pesa na cota; mantido |
-| Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras e reimportar também (os existentes são lidos do servidor), então não faça os dois no mesmo dia |
+| Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras e reimportar um arquivo grande também, então não faça os dois no mesmo dia. Arquivos pequenos custam leituras na ordem do número de linhas |
+| Leitura completa (importação grande, "Atualizar índice", Duplicados) | 1 leitura por dispositivo; acima de ~45 mil dispositivos não cabe nas 50 mil leituras diárias do Spark | crescer além disso exige o plano Blaze (ou Cloud Functions); arquivos pequenos continuam funcionando |
+| Total do catálogo (`meta.total`) | somado com `increment`; um commit reenviado pelo SDK depois de perder a confirmação pode contar duas vezes (visto uma vez pelo validador, +419 com 60 mil) | a tela compara com o `count()` e oferece "Atualizar índice"; a próxima importação grande também corrige |
+| Usuárias | a lista de usuárias é assinada inteira depois do login (já era assim) | pequena (dezenas); revisar se passar de algumas centenas |
 
 ## Publicação
 

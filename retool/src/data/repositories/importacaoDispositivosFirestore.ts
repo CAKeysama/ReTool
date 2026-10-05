@@ -1,10 +1,10 @@
 import { db } from '../datasources/firebase';
 import {
   collection, doc, writeBatch, getDocsFromServer, getCountFromServer, query, orderBy, limit, startAfter, documentId,
-  QueryConstraint,
+  where, QueryConstraint,
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { Dispositivo } from '../../domain/entities/dispositivo';
+import { Dispositivo, INVISIVEIS } from '../../domain/entities/dispositivo';
 import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
 import { Produto } from '../../domain/entities/produto';
@@ -27,6 +27,81 @@ class InterrupcaoImportacao extends Error {
 const mensagemDe = (erro: unknown) => (erro instanceof Error ? erro.message : String(erro));
 const chaveNome = (v: string) => v.toLowerCase().trim();
 
+const contarDispositivosNoServidor = async (): Promise<number> => {
+  try {
+    return (await getCountFromServer(collection(db, 'dispositivos'))).data().count;
+  } catch (erro) {
+    if (ehErroDeCota(erro)) throw new InterrupcaoImportacao('cota', erro);
+    throw erro;
+  }
+};
+
+/** Grafias com que um valor da planilha pode estar gravado (a chave ignora caixa, espaços e invisíveis). */
+export function variantesDoValor(valor: unknown): (string | number)[] {
+  if (valor === null || valor === undefined) return [];
+  const bruto = String(valor);
+  const limpo = bruto.normalize('NFC').replace(INVISIVEIS, '').replace(/\s+/g, ' ').trim();
+  const out = new Set<string | number>([bruto, bruto.trim(), limpo, limpo.toUpperCase(), limpo.toLowerCase()]);
+  // Código gravado como número em dados antigos: "123" e 123 têm a mesma chave.
+  if (/^\d{1,15}$/.test(limpo)) out.add(Number(limpo));
+  out.delete('');
+  return Array.from(out);
+}
+
+/** Valores para `where(campo, 'in', ...)`: variantes de todos os valores, sem repetir. */
+function valoresParaConsulta(valores: unknown[]): (string | number)[] {
+  const out = new Set<string | number>();
+  for (const v of valores) for (const x of variantesDoValor(v)) out.add(x);
+  return Array.from(out);
+}
+
+const MAX_IN_CONSULTA = 30;
+
+/**
+ * Leitura só dos candidatos: dispositivos cujo Código aparece na planilha
+ * (em qualquer das grafias de `variantesDoValor`: original, sem espaços nas
+ * pontas, sem invisíveis, MAIÚSCULAS, minúsculas e número). Só esses podem ter
+ * a mesma chave Código + Dispositivo de uma linha do arquivo, então o plano
+ * de gravação sai igual ao da leitura completa, com leituras na ordem do
+ * tamanho do arquivo e não do banco. Limite: um código antigo gravado em
+ * caixa mista diferente da planilha (ex.: "Dmp11" no banco, "DMP11" no
+ * arquivo) não é encontrado e a linha vira um registro novo; os códigos do
+ * acervo são numéricos, e a verificação de Duplicados acha esses casos.
+ */
+async function lerCandidatos(
+  linhas: Partial<Dispositivo>[],
+  sinal: AbortSignal | undefined,
+  avisar: (feitos: number, total: number) => void
+): Promise<Map<string, Dispositivo>> {
+  const consultas: (string | number)[][] = [];
+  const valores = valoresParaConsulta(linhas.map(l => l.codigo));
+  for (let i = 0; i < valores.length; i += MAX_IN_CONSULTA) consultas.push(valores.slice(i, i + MAX_IN_CONSULTA));
+  const existentes = new Map<string, Dispositivo>();
+  let feitas = 0;
+  avisar(0, consultas.length);
+  // 3 consultas por vez.
+  for (let i = 0; i < consultas.length; i += 3) {
+    if (sinal?.aborted) throw new InterrupcaoImportacao('cancelado');
+    let snaps;
+    try {
+      snaps = await Promise.all(consultas.slice(i, i + 3).map(c =>
+        getDocsFromServer(query(collection(db, 'dispositivos'), where('codigo', 'in', c)))));
+    } catch (erro) {
+      if (ehErroDeCota(erro)) throw new InterrupcaoImportacao('cota', erro);
+      throw erro;
+    }
+    for (const snap of snaps) for (const d of snap.docs) existentes.set(d.id, { id: d.id, ...d.data() } as Dispositivo);
+    feitas += snaps.length;
+    avisar(feitas, consultas.length);
+  }
+  return existentes;
+}
+
+/** Quantas consultas `in` a leitura por candidatos faria (cada uma custa ao menos 1 leitura). */
+export function consultasDeCandidatos(linhas: Partial<Dispositivo>[]): number {
+  return Math.ceil(valoresParaConsulta(linhas.map(l => l.codigo)).length / MAX_IN_CONSULTA);
+}
+
 /**
  * Lê todos os dispositivos e confere com count() no servidor. Uma leitura
  * que volta incompleta (página curta antes do fim, cache sem conexão)
@@ -36,18 +111,13 @@ const chaveNome = (v: string) => v.toLowerCase().trim();
  */
 async function lerExistentesConferido(
   sinal: AbortSignal | undefined,
-  avisar: (lidos: number, total: number) => void
+  avisar: (lidos: number, total: number) => void,
+  contagemInicial?: number
 ): Promise<Map<string, Dispositivo>> {
   for (let tentativa = 1; ; tentativa++) {
     // O count() vem antes: dá o total real da barra de progresso e é a
     // referência da conferência.
-    let esperado: number;
-    try {
-      esperado = (await getCountFromServer(collection(db, 'dispositivos'))).data().count;
-    } catch (erro) {
-      if (ehErroDeCota(erro)) throw new InterrupcaoImportacao('cota', erro);
-      throw erro;
-    }
+    const esperado = tentativa === 1 && contagemInicial !== undefined ? contagemInicial : await contarDispositivosNoServidor();
     avisar(0, esperado);
     const existentes = await lerExistentesPaginado(sinal, lidos => avisar(lidos, Math.max(esperado, lidos)));
     if (existentes.size >= esperado) return existentes;
@@ -192,6 +262,7 @@ export async function importarLoteFirestore(
   // 1. Dispositivos existentes (antes de qualquer escrita: se a leitura for
   // cancelada ou faltar cota, nada é gravado).
   let existentes: Map<string, Dispositivo>;
+  let leituraParcial = false;
   if (opcoes?.existentesConhecidos) {
     // Já lidos do servidor por quem chamou: 0 leituras de dispositivos.
     existentes = new Map(opcoes.existentesConhecidos.map(d => [d.id as string, d as Dispositivo]));
@@ -200,19 +271,25 @@ export async function importarLoteFirestore(
     try {
       // Total desconhecido (0 = barra indeterminada) até o count() responder.
       progresso({ etapa: 'lendo-existentes', feitos: 0, total: 0 });
-      existentes = await lerExistentesConferido(sinal, (lidos, total) => {
-        progresso({ etapa: 'lendo-existentes', feitos: lidos, total });
-      });
+      const noBanco = await contarDispositivosNoServidor();
+      // Arquivo pequeno perto do banco: lê só os candidatos (custo pelo
+      // tamanho do arquivo). Senão, a leitura completa conferida sai mais barata.
+      const consultas = consultasDeCandidatos(novosDispositivos);
+      leituraParcial = consultas * 2 + novosDispositivos.length < noBanco / 2;
+      existentes = leituraParcial
+        ? await lerCandidatos(novosDispositivos, sinal, (feitas, total) => progresso({ etapa: 'lendo-existentes', feitos: feitas, total }))
+        : await lerExistentesConferido(sinal, (lidos, total) => progresso({ etapa: 'lendo-existentes', feitos: lidos, total }), noBanco);
     } catch (erro) {
       if (erro instanceof InterrupcaoImportacao) return interromper(erro, novosDispositivos.length);
       throw erro;
     }
     resultado.documentosLidos = existentes.size;
+    resultado.leituraParcial = leituraParcial;
   }
   const metaIndice = (opcoes?.indice ?? null) as MetaIndice | null;
   // Estado final = existentes + o que for efetivamente gravado.
   const finais = new Map(existentes);
-  resultado.documentosFinais = [];
+  resultado.documentosFinais = leituraParcial ? undefined : [];
 
   // 2. Classificações novas.
   const totalClassificacoes = newCategoriasNomes.length + newFamiliasNomes.length + newProdutosNomes.length;
@@ -229,7 +306,7 @@ export async function importarLoteFirestore(
     produtosCriados = await criarClassificacoes('produtos', newProdutosNomes, produtosExistentes, sinal, avisar, !!opcoes?.catalogoClassificacoes);
   } catch (erro) {
     if (erro instanceof InterrupcaoImportacao) {
-      resultado.documentosFinais = Array.from(finais.values());
+      resultado.documentosFinais = leituraParcial ? undefined : Array.from(finais.values());
       return interromper(erro, novosDispositivos.length);
     }
     throw erro;
@@ -271,7 +348,7 @@ export async function importarLoteFirestore(
     const restantes = () => total - feitos;
 
     if (sinal?.aborted) {
-      resultado.documentosFinais = Array.from(finais.values());
+      resultado.documentosFinais = leituraParcial ? undefined : Array.from(finais.values());
       return interromper(new InterrupcaoImportacao('cancelado'), restantes());
     }
 
@@ -293,7 +370,7 @@ export async function importarLoteFirestore(
         // Cota diária esgotada: os próximos lotes também falhariam. Para aqui;
         // este lote (atômico, não gravado) e os restantes ficam para amanhã.
         console.error('Cota do Firestore esgotada durante a importação:', erro);
-        resultado.documentosFinais = Array.from(finais.values());
+        resultado.documentosFinais = leituraParcial ? undefined : Array.from(finais.values());
         return interromper(new InterrupcaoImportacao('cota', erro), restantes());
       }
       // Outra falha: o lote entra em `erros` e os demais continuam.
@@ -306,7 +383,7 @@ export async function importarLoteFirestore(
   }
 
   resultado.sucesso = resultado.inseridos! + resultado.atualizados!;
-  resultado.documentosFinais = Array.from(finais.values());
+  resultado.documentosFinais = leituraParcial ? undefined : Array.from(finais.values());
   progresso({ etapa: 'concluido', feitos: total, total });
   return resultado;
 }

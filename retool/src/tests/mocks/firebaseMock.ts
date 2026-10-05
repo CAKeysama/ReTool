@@ -127,6 +127,12 @@ jest.mock('firebase/firestore', () => {
       const col = colRef.name as keyof typeof mockDbState;
       let itens = [...(mockDbState[col] || [])];
       const restricoes: any[] = colRef.restricoes || [];
+      // where '==' / 'in' (como o servidor: igualdade exata, sem normalizar).
+      for (const f of restricoes.filter(r => r?.tipo === 'where')) {
+        const campo = f.campo === '__name__' ? 'id' : f.campo;
+        if (f.op === '==') itens = itens.filter(i => i[campo] === f.valor);
+        if (f.op === 'in') itens = itens.filter(i => (f.valor as any[]).includes(i[campo]));
+      }
       if (restricoes.some(r => r?.tipo === 'orderBy' && r.campo === '__name__')) {
         itens.sort((a, b) => (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0));
         const depois = restricoes.find(r => r?.tipo === 'startAfter');
