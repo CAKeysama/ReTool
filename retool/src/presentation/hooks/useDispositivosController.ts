@@ -96,6 +96,8 @@ export function useDispositivosController() {
         : 'Carregando lista…')
     : bulkBusca ? 'Nenhum dispositivo corresponde à busca' : 'Nenhum dispositivo cadastrado';
 
+  const bulkCarregando = isBulkModalOpen && !indice.pronto && indice.estado !== 'ausente' && indice.estado !== 'erro';
+
   const toggleBulkSelect = (id: string) => {
     setBulkSelected(prev => {
       const next = new Set(prev);
@@ -123,25 +125,39 @@ export function useDispositivosController() {
     setIsBulkConfirmOpen(null);
   };
 
+  const controleEmMassa = useRef<AbortController | null>(null);
+  const cancelarEmMassa = () => {
+    if (!controleEmMassa.current || controleEmMassa.current.signal.aborted) return;
+    controleEmMassa.current.abort();
+    setBulkProgress(p => (p ? { ...p, etapa: 'Cancelando: terminando o lote em andamento…' } : p));
+  };
+
   const executarEmMassa = async (
-    acao: (ids: string[], onProgresso: (feitos: number, total: number, etapa?: string) => void) => Promise<{ sucesso: number; erros: number }>,
+    acao: (ids: string[], onProgresso: (feitos: number, total: number, etapa?: string) => void, sinal?: AbortSignal) => Promise<{ sucesso: number; erros: number; cancelado?: boolean }>,
     verbo: string
   ) => {
     if (isBulkLoading) return;
     setIsBulkLoading(true);
+    const controle = new AbortController();
+    controleEmMassa.current = controle;
     // Fecha a confirmação para o progresso (no modal de seleção) ficar visível.
     setIsBulkConfirmOpen(null);
     const ids = Array.from(bulkSelected);
     setBulkProgress({ done: 0, total: ids.length, etapa: 'Preparando' });
     try {
-      const r = await acao(ids, (feitos, total, etapa) => setBulkProgress({ done: feitos, total, etapa }));
-      announce(r.erros > 0
+      const r = await acao(ids, (feitos, total, etapa) => {
+        if (!controle.signal.aborted) setBulkProgress({ done: feitos, total, etapa });
+      }, controle.signal);
+      if (r.cancelado) {
+        announce(`Cancelado: ${r.sucesso} dispositivos já ${verbo} continuam assim; os outros ${ids.length - r.sucesso - r.erros} não foram alterados.`);
+      } else announce(r.erros > 0
         ? `${r.sucesso} dispositivos ${verbo}, ${r.erros} com erro. Tente novamente para os restantes.`
         : `${r.sucesso} dispositivos ${verbo} com sucesso`);
     } catch (e) {
       console.error(e);
       announce(`Não foi possível concluir: nenhum dispositivo ${verbo} além dos já informados.`);
     } finally {
+      controleEmMassa.current = null;
       setBulkProgress(null);
       setIsBulkLoading(false);
       setIsBulkConfirmOpen(null);
@@ -234,6 +250,8 @@ export function useDispositivosController() {
     closeBulkModal,
     handleBulkDisable,
     handleBulkDelete,
+    cancelarEmMassa,
+    bulkCarregando,
 
     // Ações
     handleDelete,

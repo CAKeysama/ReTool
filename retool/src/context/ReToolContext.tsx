@@ -39,8 +39,16 @@ const auditRepo = new FirestoreAuditLogRepository();
 const importarLoteUseCase = new ImportarLoteUseCase(dispositivosRepo);
 
 /** Progresso das ações em massa: itens feitos, total e o nome da etapa atual. */
+/** Já existe uma classificação com o mesmo nome; `idExistente` aponta qual. */
+export class ErroNomeDuplicado extends Error {
+  constructor(mensagem: string, public idExistente: string) {
+    super(mensagem);
+    this.name = 'ErroNomeDuplicado';
+  }
+}
+
 export type ProgressoEmMassa = (feitos: number, total: number, etapa?: string) => void;
-export interface ResultadoEmMassa { sucesso: number; erros: number }
+export interface ResultadoEmMassa { sucesso: number; erros: number; cancelado?: boolean }
 
 interface ReToolContextType {
   /** Dados de referência (pequenos): carregados em tempo real só após o login. */
@@ -57,8 +65,8 @@ interface ReToolContextType {
   addDispositivo: (data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }) => Promise<void>;
   updateDispositivo: (id: string, data: Partial<Dispositivo>, silent?: boolean) => Promise<void>;
   deleteDispositivo: (id: string, silent?: boolean) => Promise<void>;
-  desativarDispositivosEmLote: (ids: string[], onProgresso?: ProgressoEmMassa) => Promise<ResultadoEmMassa>;
-  excluirDispositivosEmLote: (ids: string[], onProgresso?: ProgressoEmMassa) => Promise<ResultadoEmMassa>;
+  desativarDispositivosEmLote: (ids: string[], onProgresso?: ProgressoEmMassa, sinal?: AbortSignal) => Promise<ResultadoEmMassa>;
+  excluirDispositivosEmLote: (ids: string[], onProgresso?: ProgressoEmMassa, sinal?: AbortSignal) => Promise<ResultadoEmMassa>;
   addCategoria: (data: Omit<Categoria, 'id'>) => Promise<string>;
   updateCategoria: (id: string, data: Partial<Categoria>, silent?: boolean) => Promise<void>;
   deleteCategoria: (id: string, silent?: boolean) => Promise<void>;
@@ -79,7 +87,12 @@ interface ReToolContextType {
   importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[], opcoes?: OpcoesImportacaoLote) => Promise<ResultadoImportacaoLote>;
   deleteAllData: (onProgresso?: (p: { etapa: string; feitos: number; total: number | null }) => void) => Promise<void>;
   /** `base` = varredura completa recém-feita em DuplicadosModal; tudo é conferido de novo antes de apagar. */
-  limparDispositivosDuplicados: (ids: string[], base: Dispositivo[]) => Promise<{ excluidos: number; erros: number; falhas: string[] }>;
+  limparDispositivosDuplicados: (
+    ids: string[],
+    base: Dispositivo[],
+    onProgresso?: (p: { etapa: string; feitos: number; total: number | null }) => void,
+    sinal?: AbortSignal
+  ) => Promise<{ excluidos: number; erros: number; falhas: string[]; cancelado?: boolean }>;
   /** Recria o catálogo de busca lendo a coleção em páginas (ação administrativa explícita). */
   reconstruirIndiceBusca: (onProgresso?: (p: ProgressoVarredura) => void, sinal?: AbortSignal) => Promise<number>;
   announce: (message: string, showToast?: boolean) => void;
@@ -457,7 +470,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     if (!silent) announce('Dispositivo removido com sucesso');
   };
 
-  const desativarDispositivosEmLote = async (ids: string[], onProgresso?: ProgressoEmMassa) => {
+  const desativarDispositivosEmLote = async (ids: string[], onProgresso?: ProgressoEmMassa, sinal?: AbortSignal): Promise<ResultadoEmMassa> => {
     if (currentRole !== 'admin' && currentRole !== 'projetista') {
       announce('Acesso negado: seu perfil não possui permissão para editar dispositivos.');
       return { sucesso: 0, erros: ids.length };
@@ -470,11 +483,16 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     let sucesso = 0, erros = 0;
     const blocos = Math.ceil(ids.length / 150);
     for (let i = 0; i < ids.length; i += 150) {
+      // Cancelamento entre lotes: o que já foi gravado fica.
+      if (sinal?.aborted) { tocarDispositivos(); return { sucesso, erros, cancelado: true }; }
       const bloco = ids.slice(i, i + 150);
-      onProgresso?.(i, ids.length, `Gravando lote ${i / 150 + 1} de ${blocos}`);
+      const lote = `lote ${i / 150 + 1} de ${blocos}`;
+      onProgresso?.(i, ids.length, `Lendo dados atuais (${lote})`);
       let atuais: Dispositivo[];
       try {
-        atuais = await obterDispositivosPorIds(bloco);
+        atuais = await obterDispositivosPorIds(bloco, (lidos, total) =>
+          onProgresso?.(i, ids.length, `Lendo dados atuais: ${lidos} de ${total} (${lote})`));
+        onProgresso?.(i, ids.length, `Gravando ${lote}`);
       } catch (e) {
         erros += ids.length - i;
         console.error(e);
@@ -486,30 +504,64 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       );
       sucesso += r.sucesso;
       erros += r.erros + (bloco.length - atuais.length);
-      onProgresso?.(Math.min(ids.length, i + bloco.length), ids.length, `Gravando lote ${i / 150 + 1} de ${blocos}`);
+      onProgresso?.(Math.min(ids.length, i + bloco.length), ids.length, `Gravado ${lote}`);
       if (r.falhas.some(f => /resource-exhausted|quota/i.test(f))) { erros += ids.length - i - bloco.length; break; }
     }
     tocarDispositivos();
     return { sucesso, erros };
   };
 
-  const excluirDispositivosEmLote = async (ids: string[], onProgresso?: ProgressoEmMassa) => {
+  const excluirDispositivosEmLote = async (ids: string[], onProgresso?: ProgressoEmMassa, sinal?: AbortSignal): Promise<ResultadoEmMassa> => {
     if (currentRole !== 'admin') {
       announce('Apenas Administradoras têm permissão para excluir dispositivos.');
       return { sucesso: 0, erros: ids.length };
     }
-    onProgresso?.(0, ids.length, 'Lendo dados atuais e reutilizações vinculadas');
-    const [atuais, relacoes] = await Promise.all([obterDispositivosPorIds(ids), reutilizacoesRepo.listarDosDispositivos(ids)]);
-    const porDisp = new Map<string, string[]>();
-    for (const u of relacoes) porDisp.set(u.dispositivoId, [...(porDisp.get(u.dispositivoId) || []), u.id]);
-    const r = await dispositivosRepo.excluirComVinculosEmLote(
-      atuais.map(d => ({ dispositivo: d, reutilizacaoIds: porDisp.get(d.id) || [] })),
-      await metaParaEscrita(),
-      (b, d) => auditRepo.adicionarAoBatch(b, dadosAuditoria('exclusao', 'dispositivo', d.id, d.nome || d.id, `Exclusão de dispositivo: ${d.nome || d.id}`, d, d)),
-      (feitos, total) => onProgresso?.(feitos, total, 'Excluindo')
-    );
+    // Lotes de 150: lê os dados atuais e as reutilizações vinculadas do lote,
+    // exclui e só então passa ao próximo. O progresso anda desde o primeiro
+    // lote e o cancelamento vale entre lotes (o que já foi excluído fica).
+    const meta = await metaParaEscrita();
+    let sucesso = 0, erros = 0;
+    const tam = 150;
+    const blocos = Math.ceil(ids.length / tam);
+    for (let i = 0; i < ids.length; i += tam) {
+      if (sinal?.aborted) { tocarDispositivos(); return { sucesso, erros, cancelado: true }; }
+      const bloco = ids.slice(i, i + tam);
+      const lote = `lote ${i / tam + 1} de ${blocos}`;
+      onProgresso?.(i, ids.length, `Lendo dados atuais (${lote})`);
+      let atuais: Dispositivo[], relacoes: { id: string; dispositivoId: string }[];
+      try {
+        atuais = await obterDispositivosPorIds(bloco, (lidos, total) =>
+          onProgresso?.(i, ids.length, `Lendo dados atuais: ${lidos} de ${total} (${lote})`));
+        onProgresso?.(i, ids.length, `Lendo reutilizações vinculadas (${lote})`);
+        relacoes = await reutilizacoesRepo.listarDosDispositivos(bloco);
+      } catch (e) {
+        console.error(e);
+        erros += ids.length - i;
+        break;
+      }
+      const porDisp = new Map<string, string[]>();
+      for (const u of relacoes) porDisp.set(u.dispositivoId, [...(porDisp.get(u.dispositivoId) || []), u.id]);
+      const r = await dispositivosRepo.excluirComVinculosEmLote(
+        atuais.map(d => ({ dispositivo: d, reutilizacaoIds: porDisp.get(d.id) || [] })),
+        meta,
+        (b, d) => auditRepo.adicionarAoBatch(b, dadosAuditoria('exclusao', 'dispositivo', d.id, d.nome || d.id, `Exclusão de dispositivo: ${d.nome || d.id}`, d, d)),
+        (feitos) => onProgresso?.(i + feitos, ids.length, `Excluindo (${lote})`)
+      );
+      sucesso += r.excluidos;
+      erros += r.erros + (bloco.length - atuais.length);
+      onProgresso?.(Math.min(ids.length, i + bloco.length), ids.length, `Excluído ${lote}`);
+      if (r.falhas.some(f => /resource-exhausted|quota/i.test(f))) { erros += ids.length - i - bloco.length; break; }
+    }
     tocarDispositivos();
-    return { sucesso: r.excluidos, erros: r.erros + (ids.length - atuais.length) };
+    return { sucesso, erros };
+  };
+
+  // Nomes de classificação não se repetem (ignora caixa e espaços): o
+  // primeiro cadastrado vale e o erro informa qual é (para a tela selecioná-lo).
+  const exigirNomeNovo = (lista: { id: string; nome?: string }[], nome: string, rotulo: string) => {
+    const chave = (nome || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const existente = lista.find(i => (i.nome || '').trim().replace(/\s+/g, ' ').toLowerCase() === chave);
+    if (existente) throw new ErroNomeDuplicado(`Já existe ${rotulo} com o nome "${existente.nome}".`, existente.id);
   };
 
   const addCategoria = async (data: Omit<Categoria, 'id'>) => {
@@ -517,6 +569,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: seu perfil não possui permissão para cadastrar categorias.');
       return '';
     }
+    exigirNomeNovo(categorias, data.nome, 'uma categoria');
     const id = await gravarClassificacao('categorias', 'criar', null, data as Record<string, unknown>, catalogoClassifAtivo.current);
     await registrarAuditoria('criacao', 'categoria', id, data.nome, 'Cadastrou categoria', { ...data });
     announce('Categoria adicionada com sucesso');
@@ -529,6 +582,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     const atual = categorias.find(c => c.id === id);
+    if (typeof data.nome === 'string' && data.nome.trim() !== (categorias.find(i => i.id === id)?.nome || '').trim()) exigirNomeNovo(categorias.filter(i => i.id !== id), data.nome, 'uma categoria');
     await gravarClassificacao('categorias', 'alterar', id, data as Record<string, unknown>, catalogoClassifAtivo.current);
     await registrarAuditoria('edicao', 'categoria', id, atual?.nome || id, 'Editou categoria', { valoresAlterados: data }, atual);
     if (!silent) announce('Categoria atualizada com sucesso');
@@ -582,6 +636,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: seu perfil não possui permissão para cadastrar famílias.');
       return '';
     }
+    exigirNomeNovo(familias, data.nome, 'uma família');
     const id = await gravarClassificacao('familias', 'criar', null, data as Record<string, unknown>, catalogoClassifAtivo.current);
     await registrarAuditoria('criacao', 'familia', id, data.nome, 'Cadastrou família', { ...data });
     announce('Família adicionada com sucesso');
@@ -594,6 +649,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     const atual = familias.find(f => f.id === id);
+    if (typeof data.nome === 'string' && data.nome.trim() !== (familias.find(i => i.id === id)?.nome || '').trim()) exigirNomeNovo(familias.filter(i => i.id !== id), data.nome, 'uma família');
     await gravarClassificacao('familias', 'alterar', id, data as Record<string, unknown>, catalogoClassifAtivo.current);
     await registrarAuditoria('edicao', 'familia', id, atual?.nome || id, 'Editou família', { valoresAlterados: data }, atual);
     if (!silent) announce('Família atualizada com sucesso');
@@ -615,6 +671,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: seu perfil não possui permissão para cadastrar produtos.');
       return '';
     }
+    exigirNomeNovo(produtos, data.nome, 'um produto');
     const id = await gravarClassificacao('produtos', 'criar', null, data as Record<string, unknown>, catalogoClassifAtivo.current);
     await registrarAuditoria('criacao', 'produto', id, data.nome, 'Cadastrou produto', { ...data });
     announce('Produto adicionado com sucesso');
@@ -627,6 +684,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     const atual = produtos.find(p => p.id === id);
+    if (typeof data.nome === 'string' && data.nome.trim() !== (produtos.find(i => i.id === id)?.nome || '').trim()) exigirNomeNovo(produtos.filter(i => i.id !== id), data.nome, 'um produto');
     await gravarClassificacao('produtos', 'alterar', id, data as Record<string, unknown>, catalogoClassifAtivo.current);
     await registrarAuditoria('edicao', 'produto', id, atual?.nome || id, 'Editou produto', { valoresAlterados: data }, atual);
     if (!silent) announce('Produto atualizado com sucesso');
@@ -912,21 +970,32 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
    * refeito com as reutilizações atuais e cada alvo é relido do banco; quem
    * ganhou vínculo (reutilização, imagem, anexo, observação) não é apagado.
    */
-  const limparDispositivosDuplicados = async (ids: string[], base: Dispositivo[]) => {
+  const limparDispositivosDuplicados = async (
+    ids: string[],
+    base: Dispositivo[],
+    onProgresso?: (p: { etapa: string; feitos: number; total: number | null }) => void,
+    sinal?: AbortSignal
+  ) => {
     if (currentRole !== 'admin') {
       announce('Apenas Administradoras podem remover dispositivos duplicados.');
       return { excluidos: 0, erros: 0, falhas: ['acesso negado'] };
     }
-    const reutilizacoesAtuais = await varrerColecao('reutilizacoes', d => String(d.data().dispositivoId || ''));
+    const reutilizacoesAtuais = await varrerColecao(
+      'reutilizacoes', d => String(d.data().dispositivoId || ''),
+      p => onProgresso?.({ etapa: 'Conferindo reutilizações vinculadas', feitos: p.lidos, total: p.total }), sinal
+    );
     const idsComReutilizacao = new Set(reutilizacoesAtuais);
     const plano = planejarLimpezaDuplicados(base, idsComReutilizacao);
     const seguros = new Set(plano.grupos.flatMap(g => g.remover.map(d => d.id)));
     const candidatos = ids.filter(id => seguros.has(id));
-    const frescos = await obterDispositivosPorIds(candidatos);
+    const frescos = await obterDispositivosPorIds(candidatos, (lidos, total) =>
+      onProgresso?.({ etapa: 'Conferindo dados atuais dos duplicados', feitos: lidos, total }));
+    if (sinal?.aborted) return { excluidos: 0, erros: 0, falhas: [], cancelado: true };
     const temVinculo = (d: Dispositivo) =>
       idsComReutilizacao.has(d.id) || !!d.imagemPeca || !!d.imagemDispositivo || (d.anexos?.length ?? 0) > 0 || !!d.observacoes?.trim();
     const alvo = frescos.filter(d => !temVinculo(d)).map(d => d.id);
-    const result = await dispositivosRepo.excluirEmLote(alvo, await metaParaEscrita());
+    const result = await dispositivosRepo.excluirEmLote(alvo, await metaParaEscrita(),
+      (feitos, total) => onProgresso?.({ etapa: 'Removendo duplicados', feitos, total }), sinal);
     await registrarAuditoria(
       'exclusao',
       'dispositivo',
@@ -936,7 +1005,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       { solicitados: ids.length, removidos: result.excluidos, erros: result.erros, ids: alvo }
     );
     tocarDispositivos();
-    announce(result.erros > 0
+    announce(result.cancelado
+      ? `Remoção cancelada: ${result.excluidos} duplicados já removidos; os demais continuam no banco.`
+      : result.erros > 0
       ? `Limpeza parcial: ${result.excluidos} duplicados removidos, ${result.erros} com erro. Rode a verificação de novo.`
       : `${result.excluidos} dispositivos duplicados removidos.`);
     return result;

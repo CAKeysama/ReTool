@@ -465,7 +465,7 @@ export function DispositivoDetails() {
             Nenhuma reutilização registrada ainda.
           </div>
         ) : (
-          <div>
+          <div className="tabela-rolavel" role="region" aria-label="Histórico de reutilizações" tabIndex={0}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.83rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid var(--color-border)' }}>

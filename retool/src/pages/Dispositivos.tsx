@@ -70,7 +70,7 @@ export function Dispositivos() {
     toggleSelectAll,
     closeBulkModal,
     handleBulkDisable,
-    handleBulkDelete,
+    handleBulkDelete, cancelarEmMassa, bulkCarregando,
 
     // Ações
     handleDelete,
@@ -436,6 +436,8 @@ export function Dispositivos() {
         onSetConfirmAction={setIsBulkConfirmOpen}
         onDisable={handleBulkDisable}
         onDelete={handleBulkDelete}
+        onCancelarExecucao={cancelarEmMassa}
+        carregandoItens={bulkCarregando}
         isLoading={isBulkLoading}
         progress={bulkProgress}
         canDisable={true}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useReTool } from '../context/ReToolContext';
+import { useReTool, ErroNomeDuplicado } from '../context/ReToolContext';
 import { Dispositivo } from '../domain/entities/dispositivo';
 import { FileAttachment } from '../domain/entities/fileAttachment';
 import { AccessibleModal } from '../components/AccessibleModal';
@@ -133,18 +133,37 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
     closeDispForm();
   };
 
+  // Obrigatórios: Nº do dispositivo e código. Na edição de um registro
+  // antigo que já não tinha o campo, não bloqueia (só não deixa apagar).
+  const exigeNome = !isEditing || !!dispEdicao?.nome?.trim();
+  const exigeCodigo = !isEditing || !!dispEdicao?.codigo?.trim();
+  const errosCampos = {
+    nome: exigeNome && !formData.nome?.trim() ? 'Informe o Nº do dispositivo.' : null,
+    codigo: exigeCodigo && !formData.codigo?.trim() ? 'Informe o código da peça.' : null,
+  };
+  const [mostrarErrosCampos, setMostrarErrosCampos] = useState(false);
+  const codigoRef = useRef<HTMLInputElement>(null);
+
   // Fecha só depois que o banco confirmou; em erro, mantém o que foi digitado.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (salvando) return;
+    if (errosCampos.nome || errosCampos.codigo) {
+      setMostrarErrosCampos(true);
+      (errosCampos.nome ? firstInputRef.current : codigoRef.current)?.focus();
+      announce(errosCampos.nome || errosCampos.codigo || '', true);
+      return;
+    }
     setSalvando(true);
     setErroSalvar(null);
+    // Gravação que só termina depois do prazo: troca o aviso pela confirmação.
+    const concluiuDepois = () => { setErroSalvar(null); closeDispForm(); };
     try {
       if (isEditing && editingDispId) {
-        await gravarComPrazo(updateDispositivo(editingDispId, formData));
+        await gravarComPrazo(updateDispositivo(editingDispId, formData), concluiuDepois);
       } else {
         // Mesmo id em uma nova tentativa: não duplica se a primeira chegar depois.
-        await gravarComPrazo(addDispositivo({ ...formData, id: deviceStorageId }));
+        await gravarComPrazo(addDispositivo({ ...formData, id: deviceStorageId }), concluiuDepois);
       }
       closeDispForm();
     } catch (err) {
@@ -189,6 +208,14 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
       setNewCatName('');
       setShowNewCatForm(false);
     } catch (err) {
+      if (err instanceof ErroNomeDuplicado) {
+        // Já existia: seleciona a existente em vez de criar outra igual.
+        setFormData(prev => ({ ...prev, categoriaId: err.idExistente }));
+        setNewCatName('');
+        setShowNewCatForm(false);
+        announce(`${err.message} A opção existente foi selecionada.`, true);
+        return;
+      }
       console.error(err);
       announce('Erro ao cadastrar nova categoria.', true);
     } finally {
@@ -208,6 +235,14 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
       setNewFamName('');
       setShowNewFamForm(false);
     } catch (err) {
+      if (err instanceof ErroNomeDuplicado) {
+        // Já existia: seleciona a existente em vez de criar outra igual.
+        setFormData(prev => ({ ...prev, familiaId: err.idExistente }));
+        setNewFamName('');
+        setShowNewFamForm(false);
+        announce(`${err.message} A opção existente foi selecionada.`, true);
+        return;
+      }
       console.error(err);
       announce('Erro ao cadastrar nova família.', true);
     } finally {
@@ -227,6 +262,14 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
       setNewProdName('');
       setShowNewProdForm(false);
     } catch (err) {
+      if (err instanceof ErroNomeDuplicado) {
+        // Já existia: seleciona a existente em vez de criar outra igual.
+        setFormData(prev => ({ ...prev, produtoId: err.idExistente }));
+        setNewProdName('');
+        setShowNewProdForm(false);
+        announce(`${err.message} A opção existente foi selecionada.`, true);
+        return;
+      }
       console.error(err);
       announce('Erro ao cadastrar novo produto.', true);
     } finally {
@@ -244,7 +287,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
           {/* Linha 1: Nº Dispositivo e Código Peça */}
           <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
-              <label htmlFor="inputNumeroDispositivo" className="input-label">Nº dispositivo</label>
+              <label htmlFor="inputNumeroDispositivo" className="input-label">Nº dispositivo{exigeNome ? ' *' : ''}</label>
               <input 
                 ref={firstInputRef}
                 id="inputNumeroDispositivo" name="nome"
@@ -252,20 +295,31 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                 placeholder="Ex: Dispositivo 12"
                 value={formData.nome || ''} 
                 onChange={handleChange}
+                aria-required={exigeNome}
+                aria-invalid={mostrarErrosCampos && !!errosCampos.nome}
+                aria-describedby={mostrarErrosCampos && errosCampos.nome ? 'erroNumeroDispositivo' : undefined}
               />
-              <div className="input-helper">Nome ou identificação do dispositivo</div>
+              {mostrarErrosCampos && errosCampos.nome
+                ? <div id="erroNumeroDispositivo" className="input-helper" style={{ color: 'var(--danger, #b91c1c)' }}>{errosCampos.nome}</div>
+                : <div className="input-helper">Nome ou identificação do dispositivo</div>}
             </div>
 
             <div>
-              <label htmlFor="inputCodigoPeca" className="input-label">CÓDIGO PEÇA</label>
+              <label htmlFor="inputCodigoPeca" className="input-label">CÓDIGO PEÇA{exigeCodigo ? ' *' : ''}</label>
               <input 
+                ref={codigoRef}
                 id="inputCodigoPeca" name="codigo"
                 className="input-field" 
                 placeholder="Ex: DMP00011"
                 value={formData.codigo || ''} 
                 onChange={handleChange}
+                aria-required={exigeCodigo}
+                aria-invalid={mostrarErrosCampos && !!errosCampos.codigo}
+                aria-describedby={mostrarErrosCampos && errosCampos.codigo ? 'erroCodigoPeca' : undefined}
               />
-              <div className="input-helper">Código único de fabricação ou catálogo</div>
+              {mostrarErrosCampos && errosCampos.codigo
+                ? <div id="erroCodigoPeca" className="input-helper" style={{ color: 'var(--danger, #b91c1c)' }}>{errosCampos.codigo}</div>
+                : <div className="input-helper">Código único de fabricação ou catálogo</div>}
             </div>
           </div>
 

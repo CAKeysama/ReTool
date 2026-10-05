@@ -261,10 +261,12 @@ describe('FirestoreDispositivosRepository', () => {
       mockDbState.dispositivos.push({ id: 'x1', codigo: 'Z', nome: 'Z' });
       const eventos: ProgressoImportacao[] = [];
       await repository.importarLote(lista(1234), [], [], [], [], [], [], {
-        onProgresso: p => eventos.push({ ...p }), totalExistentesEstimado: 1,
+        onProgresso: p => eventos.push({ ...p }),
       });
 
-      expect(eventos[0]).toEqual({ etapa: 'lendo-existentes', feitos: 0, total: 1 });
+      // Indeterminada até o count() responder; depois, o total real do banco.
+      expect(eventos[0]).toEqual({ etapa: 'lendo-existentes', feitos: 0, total: 0 });
+      expect(eventos[1]).toEqual({ etapa: 'lendo-existentes', feitos: 0, total: 1 });
       expect(eventos).toContainEqual({ etapa: 'lendo-existentes', feitos: 1, total: 1 });
       const gravando = eventos.filter(e => e.etapa === 'gravando');
       expect(gravando.map(e => [e.feitos, e.lote, e.totalLotes])).toEqual([[0, 0, 3], [500, 1, 3], [1000, 2, 3], [1234, 3, 3]]);

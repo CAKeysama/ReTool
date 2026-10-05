@@ -412,8 +412,8 @@ export function AuditLogsModal({ isOpen, onClose }: AuditLogsModalProps) {
         }}>
           <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
             {carregando ? 'Carregando registros…' : temFiltro
-              ? `${filteredLogs.length.toLocaleString('pt-BR')} de ${auditLogs.length.toLocaleString('pt-BR')} registros`
-              : `Total de registros: ${filteredLogs.length.toLocaleString('pt-BR')}`}
+              ? `${filteredLogs.length.toLocaleString('pt-BR')} de ${auditLogs.length.toLocaleString('pt-BR')} registros mais recentes`
+              : `${filteredLogs.length.toLocaleString('pt-BR')} registros mais recentes`}
           </div>
           <button
             type="button"

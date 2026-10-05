@@ -58,7 +58,7 @@ describe('ImportarLoteUseCase', () => {
     const useCase = new ImportarLoteUseCase({ importarLote } as unknown as IDispositivosRepository);
     const controle = new AbortController();
     const onProgresso = jest.fn();
-    const opcoes = { onProgresso, sinal: controle.signal, totalExistentesEstimado: 13400 };
+    const opcoes = { onProgresso, sinal: controle.signal };
 
     const result = await useCase.execute([{ codigo: 'A', nome: '1' }], [], [], [], [], [], [], opcoes);
 

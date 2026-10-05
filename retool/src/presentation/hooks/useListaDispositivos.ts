@@ -138,8 +138,17 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
       limit(tamanho + 1)
     );
     let primeira = true;
-    const parar = onSnapshot(q, snap => {
+    let timerCache: ReturnType<typeof setTimeout> | null = null;
+    // includeMetadataChanges: a resposta do servidor que só confirma o que
+    // veio do cache local também chega aqui (senão o aviso "sem conexão"
+    // ficaria preso depois de voltar a uma página já vista).
+    const parar = onSnapshot(q, { includeMetadataChanges: true }, snap => {
       if (!vivo) return;
+      // Aviso de cache só se o servidor não responder em 2,5 s (voltar a uma
+      // página já vista mostra o cache por um instante, o que é normal).
+      if (timerCache) { clearTimeout(timerCache); timerCache = null; }
+      if (snap.metadata.fromCache) timerCache = setTimeout(() => { if (vivo) setDoCache(true); }, 2500);
+      else setDoCache(false);
       const eraPrimeira = primeira;
       if (primeira) { registrarConsulta('dispositivos:pagina', snap.size, performance.now() - t0); primeira = false; }
       else registrarConsulta('dispositivos:pagina-mudanca', snap.docChanges().length, 0);
@@ -147,7 +156,6 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
       cursores.current[pagina] = docs.length ? docs[docs.length - 1].id : null;
       cursores.current.length = pagina + 1;
       paginasGuardadas.set(chaveAnterior.current, { pagina, cursores: [...cursores.current] });
-      setDoCache(snap.metadata.fromCache);
       setItensServidor(docs.map(d => ({ id: d.id, ...d.data() } as Dispositivo)));
       setTemMaisServidor(snap.size > tamanho);
       setEstadoServidor('pronto');
@@ -159,7 +167,7 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
       setErro(e);
       setEstadoServidor('erro');
     });
-    return () => { vivo = false; parar(); };
+    return () => { vivo = false; if (timerCache) clearTimeout(timerCache); parar(); };
   }, [usarIndice, pagina, tamanho, filtro.categoriaId, tentativa]);
 
   // Total no servidor (count): ao mudar o filtro e quando a página ganha/perde documentos.
@@ -238,7 +246,8 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
     };
   }
 
-  const totalPaginas = totalServidor === null ? null : Math.max(1, Math.ceil(totalServidor / tamanho));
+  // Sem conexão (dados do cache), o total contado antes pode não valer mais: páginas ficam indeterminadas.
+  const totalPaginas = totalServidor === null || doCache ? null : Math.max(1, Math.ceil(totalServidor / tamanho));
   const metaAtual = indice.acompanhando && indice.estado !== 'carregando'
     ? (indice.estado === 'ausente' ? { meta: null } : indice.metaTotal !== null ? { meta: { total: indice.metaTotal, partes: indice.metaPartes ?? 1 } } : null)
     : metaAvulsa ? { meta: metaAvulsa.meta ? { total: metaAvulsa.meta.total, partes: metaAvulsa.meta.partes } : null } : null;

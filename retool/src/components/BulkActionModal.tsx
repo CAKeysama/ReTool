@@ -30,10 +30,14 @@ interface BulkActionModalProps {
   onDelete: () => Promise<void>;
   isLoading: boolean;
   progress?: BulkProgress | null;
+  /** Cancela a ação em andamento (vale entre lotes; o já gravado fica). */
+  onCancelarExecucao?: () => void;
   /** Se false, o botão "Desativar" não aparece */
   canDisable?: boolean;
   /** Texto quando a lista está vazia (ex.: carregando ou sem resultados). */
   emptyMessage?: string;
+  /** A lista ainda está sendo carregada (o total ainda não é conhecido). */
+  carregandoItens?: boolean;
 }
 
 export function BulkActionModal({
@@ -51,8 +55,10 @@ export function BulkActionModal({
   onDelete,
   isLoading,
   progress,
+  onCancelarExecucao,
   canDisable = true,
   emptyMessage,
+  carregandoItens,
 }: BulkActionModalProps) {
   const dialogoRef = React.useRef<HTMLDivElement>(null);
   // Foco preso no diálogo (Tab/Shift+Tab circulam dentro dele) e Esc fecha
@@ -178,6 +184,11 @@ export function BulkActionModal({
                 </>
               )}
               <p style={{ fontSize: '0.75rem', color: '#6b7280', margin: 0 }}>Não feche esta janela</p>
+              {progress && onCancelarExecucao && (
+                <button type="button" className="btn" onClick={onCancelarExecucao}>
+                  Cancelar (para depois do lote atual)
+                </button>
+              )}
             </div>
           )}
           {/* Header */}
@@ -241,14 +252,16 @@ export function BulkActionModal({
               cursor: 'pointer',
               userSelect: 'none'
             }}
-            onClick={onToggleAll}
+            onClick={carregandoItens ? undefined : onToggleAll}
+            disabled={carregandoItens}
+            aria-busy={carregandoItens || undefined}
           >
             {allSelected
               ? <CheckSquare size={18} color="var(--color-primary)" />
               : <Square size={18} color="#9ca3af" />
             }
             <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--color-text-dark)' }}>
-              Selecionar todos ({items.length.toLocaleString('pt-BR')})
+              {carregandoItens ? 'Selecionar todos (carregando…)' : `Selecionar todos (${items.length.toLocaleString('pt-BR')})`}
             </span>
           </button>
 

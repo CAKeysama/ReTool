@@ -167,13 +167,20 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
     );
   }
 
-  async excluirEmLote(ids: string[], meta: MetaIndice | null = null): Promise<{ excluidos: number; erros: number; falhas: string[] }> {
+  async excluirEmLote(
+    ids: string[],
+    meta: MetaIndice | null = null,
+    onProgresso?: (feitos: number, total: number) => void,
+    sinal?: AbortSignal
+  ): Promise<{ excluidos: number; erros: number; falhas: string[]; cancelado?: boolean }> {
     let excluidos = 0;
     let erros = 0;
     const falhas: string[] = [];
     // Com o catálogo, cada exclusão também remove a entrada (1 escrita a mais por item + a meta).
     const porLote = meta ? 240 : 500;
+    onProgresso?.(0, ids.length);
     for (let i = 0; i < ids.length; i += porLote) {
+      if (sinal?.aborted) return { excluidos, erros, falhas, cancelado: true };
       const lote = ids.slice(i, i + porLote);
       const batch = writeBatch(db);
       for (const id of lote) batch.delete(doc(db, 'dispositivos', id));
@@ -186,6 +193,7 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
         falhas.push(error instanceof Error ? error.message : String(error));
         console.error('Falha ao excluir lote de dispositivos:', error);
       }
+      onProgresso?.(excluidos + erros, ids.length);
     }
     return { excluidos, erros, falhas };
   }

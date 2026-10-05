@@ -36,12 +36,14 @@ export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem
     >
       {items.map((item, index) => {
         const isFocused = index === activeIndex;
+        // Uma única parada de Tab na lista (a linha ativa); as setas andam entre as linhas.
+        const paradaDeTab = index === (activeIndex >= 0 && activeIndex < items.length ? activeIndex : 0);
         return (
           <li
             key={getKey ? getKey(item, index) : index}
             role="option"
             aria-selected={isFocused}
-            tabIndex={0}
+            tabIndex={paradaDeTab ? 0 : -1}
             data-navigable="true"
             onFocus={() => setActiveIndex(index)}
             onClick={() => onItemAction && onItemAction(item)}

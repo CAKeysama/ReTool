@@ -149,7 +149,7 @@ export function Home() {
       />
 
       {/* Botão Institucional - Top Left (o top right é ocupado por perfil + notificações) */}
-      <div style={{ position: 'absolute', top: 'var(--spacing-xl)', left: 'var(--spacing-xl)' }}>
+      <div className="home-sobre" style={{ position: 'absolute', top: 'var(--spacing-xl)', left: 'var(--spacing-xl)' }}>
         <button
           className="btn"
           onClick={() => navigate('/sobre')}
@@ -295,7 +295,7 @@ export function Home() {
       </div>
 
       {/* Cartões Coloridos */}
-      <div style={{
+      <div className="home-cartoes-faixa" style={{
         display: 'flex',
         gap: 'var(--spacing-md)',
         overflowX: 'auto',
@@ -305,7 +305,7 @@ export function Home() {
         padding: '0 var(--spacing-lg)', /* Para dar uma borda de respiro na rolagem */
         WebkitOverflowScrolling: 'touch' /* Suavidade no iOS */
       }}>
-        <div style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
+        <div className="home-cartoes" style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
           <HomeCard count={totais.dispositivos} onTentarNovamente={totais.tentarNovamente} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
           <HomeCard count={totais.reutilizacoes} onTentarNovamente={totais.tentarNovamente} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
           {(canCadastrar || canEditar) && (
@@ -315,12 +315,13 @@ export function Home() {
       </div>
 
       {/* Texto de Atalho Footer */}
-      <div style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#6b7280', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div className="hide-on-mobile" style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#6b7280', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
         Pressione <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#6b7280', fontWeight: 600 }}>/</span> para focar a busca de qualquer tela
       </div>
 
       {/* Botão de Bug Flutuante no Chão de Fábrica com Hover Tooltip & Efeitos de Explosão */}
       <div 
+        className="home-bug"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         style={{

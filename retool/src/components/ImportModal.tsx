@@ -9,7 +9,6 @@ import {
   ProcessamentoCancelado, TarefaPlanilha, processarPlanilhaNoWorker,
 } from '../application/importacao/processarPlanilhaNoWorker';
 import type { ProgressoImportacao, ResultadoImportacaoLote } from '../domain/repositories/IDispositivosRepository';
-import { indiceBusca } from '../data/repositories/IndiceBuscaStore';
 import { BarraProgresso } from './feedback';
 import { Upload, AlertCircle, CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
 
@@ -270,15 +269,12 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
     setFase('importando');
     setCancelando(false);
     setErrorMsg('');
-    // Total aproximado para a barra de leitura: o catálogo de busca já
-    // carregado na tela (0 leituras). Sem ele, a barra fica indeterminada.
-    const noIndice = indiceBusca.obter().entradas.length;
-    setProgImportacao({ etapa: 'lendo-existentes', feitos: 0, total: noIndice });
+    // A barra de leitura fica indeterminada até o count() do servidor dar o total real.
+    setProgImportacao({ etapa: 'lendo-existentes', feitos: 0, total: 0 });
     try {
       const r = await importarDispositivosEmLote(parsedData, newCategorias, newFamilias, newProdutos, {
         onProgresso: setProgImportacao,
         sinal: controle.signal,
-        totalExistentesEstimado: noIndice || undefined,
       });
       setResultado(r);
       setFase('resumo');

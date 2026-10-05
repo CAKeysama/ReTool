@@ -262,7 +262,7 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
 
 .details-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
 }
@@ -343,7 +343,7 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
 .fab-button {
   display: none;
   position: fixed;
-  bottom: 80px; /* Acima do bottom-nav */
+  bottom: calc(80px + env(safe-area-inset-bottom)); /* Acima do bottom-nav */
   right: 20px;
   width: 56px;
   height: 56px;
@@ -422,7 +422,7 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
 
   /* Grids de formulário viram 1 coluna */
   .form-row-grid, .details-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .input-field, .btn {
@@ -840,3 +840,51 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
 /* Formulários em duas colunas que viram uma no celular. */
 .grade-2-colunas { grid-template-columns: 1fr 1fr; }
 @media (max-width: 600px) { .grade-2-colunas { grid-template-columns: 1fr; } }
+
+/* Login: duas colunas no desktop; no celular, uma coluna com o formulário primeiro. */
+.login-cartao {
+  grid-template-columns: 1.25fr 1fr;
+}
+@media (max-width: 768px) {
+  .login-cartao {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .login-cartao > .login-apresentacao {
+    order: 2;
+    padding: 24px 20px !important;
+  }
+  .login-cartao > .login-formulario {
+    padding: 28px 20px !important;
+  }
+}
+
+/* Tabelas largas rolam dentro do próprio quadro (não esticam a página no celular). */
+.tabela-rolavel {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tabela-rolavel > table {
+  min-width: 640px;
+}
+
+/* Início no celular: cartões quebram em linhas, "Sobre o Projeto" sai do canto ocupado pelo perfil. */
+@media (max-width: 768px) {
+  .home-cartoes-faixa {
+    overflow-x: visible !important;
+    padding: 0 16px !important;
+  }
+  .home-cartoes {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  /* Botão de reportar bug acima da barra de navegação inferior. */
+  .home-bug {
+    bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+  }
+  .home-sobre {
+    position: static !important;
+    align-self: flex-start;
+    margin: 8px 0 0 8px;
+  }
+}

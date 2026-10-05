@@ -64,11 +64,10 @@ export function Login() {
       padding: '24px',
       fontFamily: 'Inter, system-ui, sans-serif'
     }}>
-      <div style={{
+      <div className="login-cartao" style={{
         maxWidth: '1020px',
         width: '100%',
         display: 'grid',
-        gridTemplateColumns: '1.25fr 1fr',
         backgroundColor: 'white',
         borderRadius: 'var(--radius-lg)',
         boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.15)',
@@ -76,7 +75,7 @@ export function Login() {
         border: '1px solid #e2e8f0'
       }}>
         {/* LADO ESQUERDO: APRESENTAÇÃO DOS PERFIS INSTITUCIONAIS */}
-        <div style={{
+        <div className="login-apresentacao" style={{
           backgroundColor: '#0f172a',
           color: '#ffffff',
           padding: '44px 40px',
@@ -165,7 +164,7 @@ export function Login() {
         </div>
 
         {/* LADO DIREITO: FORMULÁRIO DE AUTENTICAÇÃO REAL */}
-        <div style={{ padding: '44px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div className="login-formulario" style={{ padding: '44px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
           <div style={{ marginBottom: '20px' }}>
             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
               {isRegistering ? 'Criar Nova Conta' : 'Acesse o Sistema'}
@@ -196,7 +195,7 @@ export function Login() {
           </div>
 
           {sucesso && (
-            <div style={{
+            <div role="status" style={{
               display: 'flex',
               alignItems: 'flex-start',
               gap: '8px',
@@ -213,7 +212,7 @@ export function Login() {
           )}
 
           {erro && (
-            <div style={{
+            <div role="alert" style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',

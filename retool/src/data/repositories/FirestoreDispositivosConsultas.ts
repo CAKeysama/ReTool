@@ -86,7 +86,7 @@ export function assinarDispositivo(
 }
 
 /** Lê dispositivos por id em blocos de 30 (limite do `in`), 2 consultas por vez. Preserva a ordem pedida. */
-export async function obterDispositivosPorIds(ids: string[]): Promise<Dispositivo[]> {
+export async function obterDispositivosPorIds(ids: string[], onLidos?: (consultados: number, total: number) => void): Promise<Dispositivo[]> {
   const unicos = Array.from(new Set(ids.filter(Boolean)));
   if (unicos.length === 0) return [];
   const blocos: string[][] = [];
@@ -97,6 +97,7 @@ export async function obterDispositivosPorIds(ids: string[]): Promise<Dispositiv
       medirConsulta('dispositivos:por-ids', () => getDocs(query(col(), where(documentId(), 'in', b))), s => s.size)
     ));
     for (const s of snaps) for (const d of s.docs) porId.set(d.id, paraDispositivo(d));
+    onLidos?.(Math.min(unicos.length, (i + 2) * MAX_IN), unicos.length);
   }
   return ids.map(id => porId.get(id)).filter((d): d is Dispositivo => !!d);
 }

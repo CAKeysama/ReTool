@@ -36,10 +36,11 @@ const chaveNome = (v: string) => v.toLowerCase().trim();
  */
 async function lerExistentesConferido(
   sinal: AbortSignal | undefined,
-  avisar: (lidos: number) => void
+  avisar: (lidos: number, total: number) => void
 ): Promise<Map<string, Dispositivo>> {
   for (let tentativa = 1; ; tentativa++) {
-    const existentes = await lerExistentesPaginado(sinal, avisar);
+    // O count() vem antes: dá o total real da barra de progresso e é a
+    // referência da conferência.
     let esperado: number;
     try {
       esperado = (await getCountFromServer(collection(db, 'dispositivos'))).data().count;
@@ -47,6 +48,8 @@ async function lerExistentesConferido(
       if (ehErroDeCota(erro)) throw new InterrupcaoImportacao('cota', erro);
       throw erro;
     }
+    avisar(0, esperado);
+    const existentes = await lerExistentesPaginado(sinal, lidos => avisar(lidos, Math.max(esperado, lidos)));
     if (existentes.size >= esperado) return existentes;
     if (tentativa >= 2) {
       throw new Error(
@@ -190,15 +193,15 @@ export async function importarLoteFirestore(
   // cancelada ou faltar cota, nada é gravado).
   let existentes: Map<string, Dispositivo>;
   if (opcoes?.existentesConhecidos) {
-    // Catálogo de busca conferido com o banco: 0 leituras de dispositivos.
+    // Já lidos do servidor por quem chamou: 0 leituras de dispositivos.
     existentes = new Map(opcoes.existentesConhecidos.map(d => [d.id as string, d as Dispositivo]));
     resultado.documentosLidos = 0;
   } else {
     try {
-      const estimado = opcoes?.totalExistentesEstimado ?? 0;
-      progresso({ etapa: 'lendo-existentes', feitos: 0, total: estimado });
-      existentes = await lerExistentesConferido(sinal, lidos => {
-        progresso({ etapa: 'lendo-existentes', feitos: lidos, total: Math.max(estimado, lidos) });
+      // Total desconhecido (0 = barra indeterminada) até o count() responder.
+      progresso({ etapa: 'lendo-existentes', feitos: 0, total: 0 });
+      existentes = await lerExistentesConferido(sinal, (lidos, total) => {
+        progresso({ etapa: 'lendo-existentes', feitos: lidos, total });
       });
     } catch (erro) {
       if (erro instanceof InterrupcaoImportacao) return interromper(erro, novosDispositivos.length);

@@ -39,12 +39,11 @@ export interface OpcoesImportacaoLote {
   onProgresso?: (p: ProgressoImportacao) => void;
   /** Cancela entre lotes; o que já foi gravado continua gravado (reimportar completa). */
   sinal?: AbortSignal;
-  /** Quantidade aproximada de dispositivos no banco (só para o total do progresso de leitura). */
-  totalExistentesEstimado?: number;
   /**
-   * Dispositivos existentes já conhecidos e conferidos (catálogo de busca
-   * sincronizado com o banco): dispensa ler a coleção inteira. Precisam ter
-   * todos os campos que a importação compara.
+   * Dispositivos existentes já lidos do servidor por quem chama (dispensa
+   * a leitura). O app NÃO passa o catálogo de busca aqui: ele é gravável por
+   * quem edita e não prova o conteúdo atual (ver PERFORMANCE.md). Precisam
+   * ter todos os campos que a importação compara.
    */
   existentesConhecidos?: Partial<Dispositivo>[];
   /**
@@ -71,5 +70,10 @@ export interface IDispositivosRepository {
     opcoes?: OpcoesImportacaoLote
   ): Promise<ResultadoImportacaoLote>;
   /** Exclui documentos em lotes de 500; falhas de lote são devolvidas, não lançadas. */
-  excluirEmLote(ids: string[]): Promise<{ excluidos: number; erros: number; falhas: string[] }>;
+  excluirEmLote(
+    ids: string[],
+    meta?: { partes: number } | null,
+    onProgresso?: (feitos: number, total: number) => void,
+    sinal?: AbortSignal
+  ): Promise<{ excluidos: number; erros: number; falhas: string[]; cancelado?: boolean }>;
 }

@@ -77,18 +77,29 @@ export function DuplicadosModal({ isOpen, onClose }: DuplicadosModalProps) {
     URL.revokeObjectURL(url);
   };
 
+  const [removendo, setRemovendo] = useState<{ etapa: string; feitos: number; total: number | null } | null>(null);
+  const cancelarRemocao = useRef<AbortController | null>(null);
+
   const handleRemover = async () => {
     if (!base || isProcessing) return;
     setIsProcessing(true);
+    const ctrl = new AbortController();
+    cancelarRemocao.current = ctrl;
+    setRemovendo({ etapa: 'Preparando', feitos: 0, total: null });
     try {
-      const r = await limparDispositivosDuplicados(idsRemover, base.dispositivos);
+      const r = await limparDispositivosDuplicados(idsRemover, base.dispositivos, p => {
+        if (!ctrl.signal.aborted) setRemovendo(p);
+      }, ctrl.signal);
       setResultado(r);
       setConfirmado(false);
       // A lista mostrada já não vale: pede nova verificação.
       setBase(null);
     } catch (e) {
-      setErroVarredura(e);
+      if ((e as { name?: string })?.name !== 'AbortError') setErroVarredura(e);
+      else setBase(null);
     } finally {
+      cancelarRemocao.current = null;
+      setRemovendo(null);
       setIsProcessing(false);
     }
   };
@@ -208,6 +219,17 @@ export function DuplicadosModal({ isOpen, onClose }: DuplicadosModalProps) {
                 </div>
               )}
             </div>
+            {removendo && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                <BarraProgresso feitos={removendo.feitos} total={removendo.total ?? undefined} rotulo={removendo.etapa} />
+                <div>
+                  <button className="btn" onClick={() => {
+                    cancelarRemocao.current?.abort();
+                    setRemovendo(r => (r ? { ...r, etapa: 'Cancelando: terminando o lote em andamento…' } : r));
+                  }}>Cancelar</button>
+                </div>
+              </div>
+            )}
           </>
         )}
         </>)}
