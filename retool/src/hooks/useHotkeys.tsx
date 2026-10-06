@@ -26,16 +26,29 @@ export function useHotkeys(config?: HotkeysConfig) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignorar se estiver digitando em um input ou textarea (exceto os atalhos como Esc que sempre podem funcionar ali tb)
-      const target = e.target as HTMLElement;
-      const isInputPhase = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      const target = e.target as HTMLElement | null;
+      const isInputPhase = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
 
       if (e.key === 'Escape') {
         if (config?.onClose) {
           config.onClose();
         }
+        return;
       }
 
       if (isInputPhase) return;
+
+      // Se houver algum modal/diálogo aberto no DOM, ignora todos os atalhos globais
+      // para não navegar para outra tela nem desmontar operações em andamento (A1).
+      const isModalOpen = !!document.querySelector('[role="dialog"], [aria-modal="true"], .modal-overlay, dialog[open]');
+      if (isModalOpen) return;
+
+      // Se o foco estiver em controles interativos (botões, selects, etc.), ignora atalhos
+      const isControl = !!target?.closest('button, select, input, textarea, [role="button"]');
+      if (isControl) return;
+
+      // Ignora combinações com Ctrl, Alt ou Meta/Command
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
 
       const key = e.key.toLowerCase();
 
@@ -62,6 +75,7 @@ export function useHotkeys(config?: HotkeysConfig) {
           break;
         case 'n':
           if (canCadastrar && config?.onNewRecord) {
+            e.preventDefault();
             config.onNewRecord();
           }
           break;

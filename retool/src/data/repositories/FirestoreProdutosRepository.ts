@@ -5,11 +5,11 @@ import { Produto } from '../../domain/entities/produto';
 import { IProdutosRepository } from '../../domain/repositories/IProdutosRepository';
 
 export class FirestoreProdutosRepository implements IProdutosRepository {
-  subscribeAll(callback: (produtos: Produto[]) => void): () => void {
+  subscribeAll(callback: (produtos: Produto[]) => void, onError?: (e: unknown) => void): () => void {
     return onSnapshot(collection(db, 'produtos'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Produto));
       callback(data.sort((a, b) => a.nome.localeCompare(b.nome)));
-    });
+    }, (e) => onError?.(e));
   }
 
   async add(data: Omit<Produto, 'id'>): Promise<string> {

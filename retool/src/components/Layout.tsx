@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Settings, Home, List, Component, Menu, X } from 'lucide-react';
-import { useReTool } from '../context/ReToolContext';
+import { useReTool, useAnuncio } from '../context/ReToolContext';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { usePermissions } from '../hooks/usePermissions';
-import { DispositivoForm } from '../pages/DispositivoForm';
 import { UserNavMenu } from './UserNavMenu';
-import { UsersManagementModal } from './UsersManagementModal';
-import { AuditLogsModal } from './AuditLogsModal';
 import { NotificationsMenu } from './NotificationsMenu';
+import { LimiteDeErro, CarregandoModal } from './LimiteDeErro';
+
+// Formulário e modais administrativos só são baixados quando abertos.
+const DispositivoForm = lazy(() => import('../pages/DispositivoForm').then(m => ({ default: m.DispositivoForm })));
+const UsersManagementModal = lazy(() => import('./UsersManagementModal').then(m => ({ default: m.UsersManagementModal })));
+const AuditLogsModal = lazy(() => import('./AuditLogsModal').then(m => ({ default: m.AuditLogsModal })));
 
 export function Layout() {
-  const { announcement, isDispFormOpen } = useReTool();
+  const { isDispFormOpen } = useReTool();
+  const announcement = useAnuncio();
   const { canCadastrar, canEditar, canExcluir, canVerLogs } = usePermissions();
   const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
   const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
@@ -38,10 +42,11 @@ export function Layout() {
         </div>
 
         <Outlet />
-        {isDispFormOpen && <DispositivoForm />}
-        
-        <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
-        {canVerLogs && <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />}
+        <ModaisGlobais
+          isDispFormOpen={isDispFormOpen}
+          isUsersModalOpen={isUsersModalOpen} onCloseUsers={() => setIsUsersModalOpen(false)}
+          isLogsModalOpen={canVerLogs && isLogsModalOpen} onCloseLogs={() => setIsLogsModalOpen(false)}
+        />
 
         {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
         <nav className="bottom-nav" aria-label="Navegação Mobile">
@@ -90,7 +95,7 @@ export function Layout() {
             <span style={{ color: 'var(--color-gray-steel)' }}>Re</span>
             <span style={{ color: 'var(--color-primary)' }}>Tool</span>
           </h1>
-          <div style={{ color: '#9ca3af', fontSize: '0.75rem', fontWeight: 500, marginTop: '2px' }}>
+          <div style={{ color: '#6b7280', fontSize: '0.75rem', fontWeight: 500, marginTop: '2px' }}>
             Gestão Industrial
           </div>
         </div>
@@ -108,7 +113,7 @@ export function Layout() {
 
         {/* MENU */}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#9ca3af', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7280', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
             MENU
           </div>
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -131,7 +136,7 @@ export function Layout() {
 
         {/* ATALHOS / FOOTER HELP */}
         <div style={{ backgroundColor: '#f9fafb', padding: 'var(--spacing-md)', borderRadius: 'var(--radius)', marginTop: 'auto' }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#9ca3af', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7280', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
             ATALHOS
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', fontSize: '0.75rem', color: '#6b7280' }}>
@@ -179,10 +184,27 @@ export function Layout() {
         <Outlet />
       </main>
       
-      {isDispFormOpen && <DispositivoForm />}
-      <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
-      {canVerLogs && <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />}
+      <ModaisGlobais
+        isDispFormOpen={isDispFormOpen}
+        isUsersModalOpen={isUsersModalOpen} onCloseUsers={() => setIsUsersModalOpen(false)}
+        isLogsModalOpen={canVerLogs && isLogsModalOpen} onCloseLogs={() => setIsLogsModalOpen(false)}
+      />
     </div>
+  );
+}
+
+function ModaisGlobais({ isDispFormOpen, isUsersModalOpen, onCloseUsers, isLogsModalOpen, onCloseLogs }: {
+  isDispFormOpen: boolean;
+  isUsersModalOpen: boolean; onCloseUsers: () => void;
+  isLogsModalOpen: boolean; onCloseLogs: () => void;
+}) {
+  const { closeDispForm } = useReTool();
+  return (
+    <>
+      {isDispFormOpen && <LimiteDeErro onFechar={closeDispForm}><Suspense fallback={<CarregandoModal />}><DispositivoForm /></Suspense></LimiteDeErro>}
+      {isUsersModalOpen && <LimiteDeErro onFechar={onCloseUsers}><Suspense fallback={<CarregandoModal />}><UsersManagementModal isOpen onClose={onCloseUsers} /></Suspense></LimiteDeErro>}
+      {isLogsModalOpen && <LimiteDeErro onFechar={onCloseLogs}><Suspense fallback={<CarregandoModal />}><AuditLogsModal isOpen onClose={onCloseLogs} /></Suspense></LimiteDeErro>}
+    </>
   );
 }
 
@@ -215,7 +237,7 @@ function SidebarLink({ to, icon, label, shortcut }: { to: string, icon: React.Re
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: '4px',
             backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-border)',
-            color: isActive ? 'white' : '#9ca3af',
+            color: isActive ? 'white' : '#4b5563',
             fontWeight: 700
           }}>
             {shortcut}

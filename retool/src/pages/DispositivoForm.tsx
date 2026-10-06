@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useReTool } from '../context/ReToolContext';
+import { useReTool, ErroNomeDuplicado } from '../context/ReToolContext';
 import { Dispositivo } from '../domain/entities/dispositivo';
 import { FileAttachment } from '../domain/entities/fileAttachment';
 import { AccessibleModal } from '../components/AccessibleModal';
@@ -7,11 +7,17 @@ import { FileUploadDropzone } from '../components/FileUploadDropzone';
 import { Plus, X, Loader2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { usePermissions } from '../hooks/usePermissions';
+import { obterDispositivo } from '../data/repositories/FirestoreDispositivosConsultas';
+import { EstadoDados, SkeletonLista, classificarErro, mensagemDeErro } from '../components/feedback';
+import { gravarComPrazo } from '../utils/tempo';
 
+/**
+ * Verifica a permissão antes de montar o formulário (os hooks do formulário
+ * nunca rodam condicionalmente) e, na edição, lê só o documento editado.
+ */
 export function DispositivoForm() {
   const { canCadastrar, canEditar } = usePermissions();
-  const { dispositivos, categorias, familias, produtos, addDispositivo, updateDispositivo, addCategoria, addFamilia, addProduto, announce, editingDispId, closeDispForm } = useReTool();
-  
+  const { announce, editingDispId, closeDispForm } = useReTool();
   const isEditing = Boolean(editingDispId);
   const isAllowed = isEditing ? canEditar : canCadastrar;
 
@@ -22,9 +28,48 @@ export function DispositivoForm() {
     }
   }, [isAllowed, isEditing, announce, closeDispForm]);
 
+  // Leitura única (não em tempo real): uma alteração externa não apaga o que
+  // a pessoa está digitando.
+  const [carga, setCarga] = useState<{ estado: 'carregando' | 'pronto' | 'erro'; disp: Dispositivo | null; erro?: unknown }>(
+    { estado: isEditing ? 'carregando' : 'pronto', disp: null }
+  );
+  const [tentativa, setTentativa] = useState(0);
+  useEffect(() => {
+    if (!editingDispId || !isAllowed) return;
+    let vivo = true;
+    setCarga({ estado: 'carregando', disp: null });
+    obterDispositivo(editingDispId)
+      .then(d => { if (vivo) setCarga({ estado: 'pronto', disp: d }); })
+      .catch(e => { if (vivo) setCarga({ estado: 'erro', disp: null, erro: e }); });
+    return () => { vivo = false; };
+  }, [editingDispId, isAllowed, tentativa]);
+
   if (!isAllowed) return null;
 
-  const dispEdicao = isEditing ? dispositivos.find(p => p.id === editingDispId) : null;
+  if (isEditing && carga.estado !== 'pronto') {
+    return (
+      <AccessibleModal isOpen={true} onClose={closeDispForm} title="Editar dispositivo" maxWidth="780px">
+        {carga.estado === 'carregando'
+          ? <div aria-busy="true"><SkeletonLista linhas={4} alturaLinha={56} /></div>
+          : <EstadoDados estado={classificarErro(carga.erro)} onTentarNovamente={() => setTentativa(t => t + 1)} />}
+      </AccessibleModal>
+    );
+  }
+  if (isEditing && !carga.disp) {
+    return (
+      <AccessibleModal isOpen={true} onClose={closeDispForm} title="Editar dispositivo" maxWidth="780px">
+        <EstadoDados estado="vazio" titulo="Dispositivo não encontrado" descricao="Ele pode ter sido excluído por outra pessoa." />
+      </AccessibleModal>
+    );
+  }
+  return <FormularioDispositivo dispEdicao={carga.disp} />;
+}
+
+function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null }) {
+  const { categorias, familias, produtos, addDispositivo, updateDispositivo, addCategoria, addFamilia, addProduto, announce, editingDispId, closeDispForm } = useReTool();
+  const isEditing = Boolean(editingDispId);
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
 
   // Garante um ID único estável para o dispositivo e sua pasta no Storage
   const deviceStorageId = useMemo(() => editingDispId || uuidv4(), [editingDispId]);
@@ -64,14 +109,14 @@ export function DispositivoForm() {
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (isEditing && dispEdicao) {
+    if (dispEdicao) {
       setFormData({
         ...dispEdicao,
         palavrasChave: dispEdicao.palavrasChave || [],
         anexos: dispEdicao.anexos || []
       });
     }
-  }, [isEditing, dispEdicao]);
+  }, [dispEdicao]);
 
   useEffect(() => {
     firstInputRef.current?.focus();
@@ -84,20 +129,48 @@ export function DispositivoForm() {
   };
 
   const handleClose = () => {
+    if (salvando) return;
     closeDispForm();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Obrigatórios: Nº do dispositivo e código. Na edição de um registro
+  // antigo que já não tinha o campo, não bloqueia (só não deixa apagar).
+  const exigeNome = !isEditing || !!dispEdicao?.nome?.trim();
+  const exigeCodigo = !isEditing || !!dispEdicao?.codigo?.trim();
+  const errosCampos = {
+    nome: exigeNome && !formData.nome?.trim() ? 'Informe o Nº do dispositivo.' : null,
+    codigo: exigeCodigo && !formData.codigo?.trim() ? 'Informe o código da peça.' : null,
+  };
+  const [mostrarErrosCampos, setMostrarErrosCampos] = useState(false);
+  const codigoRef = useRef<HTMLInputElement>(null);
+
+  // Fecha só depois que o banco confirmou; em erro, mantém o que foi digitado.
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEditing && editingDispId) {
-      updateDispositivo(editingDispId, formData);
+    if (salvando) return;
+    if (errosCampos.nome || errosCampos.codigo) {
+      setMostrarErrosCampos(true);
+      (errosCampos.nome ? firstInputRef.current : codigoRef.current)?.focus();
+      announce(errosCampos.nome || errosCampos.codigo || '', true);
+      return;
+    }
+    setSalvando(true);
+    setErroSalvar(null);
+    // Gravação que só termina depois do prazo: troca o aviso pela confirmação.
+    const concluiuDepois = () => { setErroSalvar(null); closeDispForm(); };
+    try {
+      if (isEditing && editingDispId) {
+        await gravarComPrazo(updateDispositivo(editingDispId, formData), concluiuDepois);
+      } else {
+        // Mesmo id em uma nova tentativa: não duplica se a primeira chegar depois.
+        await gravarComPrazo(addDispositivo({ ...formData, id: deviceStorageId }), concluiuDepois);
+      }
       closeDispForm();
-    } else {
-      addDispositivo({
-        ...formData,
-        id: deviceStorageId
-      });
-      closeDispForm();
+    } catch (err) {
+      console.error(err);
+      setErroSalvar(mensagemDeErro(err, 'Não foi possível salvar o dispositivo. Tente novamente.'));
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -135,6 +208,14 @@ export function DispositivoForm() {
       setNewCatName('');
       setShowNewCatForm(false);
     } catch (err) {
+      if (err instanceof ErroNomeDuplicado) {
+        // Já existia: seleciona a existente em vez de criar outra igual.
+        setFormData(prev => ({ ...prev, categoriaId: err.idExistente }));
+        setNewCatName('');
+        setShowNewCatForm(false);
+        announce(`${err.message} A opção existente foi selecionada.`, true);
+        return;
+      }
       console.error(err);
       announce('Erro ao cadastrar nova categoria.', true);
     } finally {
@@ -154,6 +235,14 @@ export function DispositivoForm() {
       setNewFamName('');
       setShowNewFamForm(false);
     } catch (err) {
+      if (err instanceof ErroNomeDuplicado) {
+        // Já existia: seleciona a existente em vez de criar outra igual.
+        setFormData(prev => ({ ...prev, familiaId: err.idExistente }));
+        setNewFamName('');
+        setShowNewFamForm(false);
+        announce(`${err.message} A opção existente foi selecionada.`, true);
+        return;
+      }
       console.error(err);
       announce('Erro ao cadastrar nova família.', true);
     } finally {
@@ -173,6 +262,14 @@ export function DispositivoForm() {
       setNewProdName('');
       setShowNewProdForm(false);
     } catch (err) {
+      if (err instanceof ErroNomeDuplicado) {
+        // Já existia: seleciona a existente em vez de criar outra igual.
+        setFormData(prev => ({ ...prev, produtoId: err.idExistente }));
+        setNewProdName('');
+        setShowNewProdForm(false);
+        announce(`${err.message} A opção existente foi selecionada.`, true);
+        return;
+      }
       console.error(err);
       announce('Erro ao cadastrar novo produto.', true);
     } finally {
@@ -188,9 +285,9 @@ export function DispositivoForm() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
           {/* Linha 1: Nº Dispositivo e Código Peça */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
-              <label htmlFor="inputNumeroDispositivo" className="input-label">Nº dispositivo</label>
+              <label htmlFor="inputNumeroDispositivo" className="input-label">Nº dispositivo{exigeNome ? ' *' : ''}</label>
               <input 
                 ref={firstInputRef}
                 id="inputNumeroDispositivo" name="nome"
@@ -198,25 +295,36 @@ export function DispositivoForm() {
                 placeholder="Ex: Dispositivo 12"
                 value={formData.nome || ''} 
                 onChange={handleChange}
+                aria-required={exigeNome}
+                aria-invalid={mostrarErrosCampos && !!errosCampos.nome}
+                aria-describedby={mostrarErrosCampos && errosCampos.nome ? 'erroNumeroDispositivo' : undefined}
               />
-              <div className="input-helper">Nome ou identificação do dispositivo</div>
+              {mostrarErrosCampos && errosCampos.nome
+                ? <div id="erroNumeroDispositivo" className="input-helper" style={{ color: 'var(--danger, #b91c1c)' }}>{errosCampos.nome}</div>
+                : <div className="input-helper">Nome ou identificação do dispositivo</div>}
             </div>
 
             <div>
-              <label htmlFor="inputCodigoPeca" className="input-label">CÓDIGO PEÇA</label>
+              <label htmlFor="inputCodigoPeca" className="input-label">CÓDIGO PEÇA{exigeCodigo ? ' *' : ''}</label>
               <input 
+                ref={codigoRef}
                 id="inputCodigoPeca" name="codigo"
                 className="input-field" 
                 placeholder="Ex: DMP00011"
                 value={formData.codigo || ''} 
                 onChange={handleChange}
+                aria-required={exigeCodigo}
+                aria-invalid={mostrarErrosCampos && !!errosCampos.codigo}
+                aria-describedby={mostrarErrosCampos && errosCampos.codigo ? 'erroCodigoPeca' : undefined}
               />
-              <div className="input-helper">Código único de fabricação ou catálogo</div>
+              {mostrarErrosCampos && errosCampos.codigo
+                ? <div id="erroCodigoPeca" className="input-helper" style={{ color: 'var(--danger, #b91c1c)' }}>{errosCampos.codigo}</div>
+                : <div className="input-helper">Código único de fabricação ou catálogo</div>}
             </div>
           </div>
 
           {/* Linha 2: Família do Produto (com Inline Creation) e Produto */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <label htmlFor="selectFamilia" className="input-label" style={{ margin: 0 }}>Família do Produto</label>
@@ -349,7 +457,7 @@ export function DispositivoForm() {
           </div>
 
           {/* Linha 3: Categoria (com Inline Creation) e Peso dispositivo */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <label htmlFor="selectCategoria" className="input-label" style={{ margin: 0 }}>CATEGORIA</label>
@@ -459,7 +567,7 @@ export function DispositivoForm() {
                 </span>
               ))}
               {(formData.palavrasChave || []).length === 0 && (
-                <span style={{ fontSize: '0.75rem', color: '#9ca3af', fontStyle: 'italic' }}>Nenhuma palavra-chave adicionada ainda.</span>
+                <span style={{ fontSize: '0.75rem', color: '#6b7280', fontStyle: 'italic' }}>Nenhuma palavra-chave adicionada ainda.</span>
               )}
             </div>
           </div>
@@ -480,10 +588,10 @@ export function DispositivoForm() {
           {/* Seção de Mídias e Arquivos (Firebase Storage) */}
           <div style={{ marginTop: '8px' }}>
             <h4 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-primary)', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px', marginBottom: '12px' }}>
-              Arquivos Físicos e Fotos (Firebase Storage)
+              Arquivos Físicos e Fotos
             </h4>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
               {/* IMAGEM PEÇA Dropzone */}
               <FileUploadDropzone
                 categoria="imagem_peca"
@@ -557,17 +665,25 @@ export function DispositivoForm() {
 
         </div>
 
+        {erroSalvar && (
+          <div role="alert" style={{ padding: '10px 12px', borderRadius: 'var(--radius)', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '0.88rem' }}>
+            {erroSalvar}
+          </div>
+        )}
+
         {/* Botões */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-sm)' }}>
-          <button type="button" className="btn" onClick={handleClose}>
+          <button type="button" className="btn" onClick={handleClose} disabled={salvando}>
             Cancelar
           </button>
           <button 
             type="submit" 
             className="btn btn-primary" 
             aria-label="Salvar registro do dispositivo"
+            disabled={salvando}
+            aria-busy={salvando}
           >
-            {isEditing ? 'Salvar alterações' : 'Cadastrar dispositivo'}
+            {salvando ? 'Salvando…' : isEditing ? 'Salvar alterações' : 'Cadastrar dispositivo'}
           </button>
         </div>
 

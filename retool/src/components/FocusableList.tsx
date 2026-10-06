@@ -8,9 +8,11 @@ interface FocusableListProps<T> {
   onDeleteItem?: (item: T) => void;
   onEditItem?: (item: T) => void;
   ariaLabel?: string;
+  /** Chave estável por item (evita remontar linhas ao paginar/filtrar). */
+  getKey?: (item: T, index: number) => string;
 }
 
-export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem, onEditItem, ariaLabel }: FocusableListProps<T>) {
+export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem, onEditItem, ariaLabel, getKey }: FocusableListProps<T>) {
   const { activeIndex, setActiveIndex, containerRef, handleKeyDown } = useKeyboardNavigation<HTMLUListElement>(items.length, 1);
 
   if (items.length === 0) {
@@ -34,12 +36,14 @@ export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem
     >
       {items.map((item, index) => {
         const isFocused = index === activeIndex;
+        // Uma única parada de Tab na lista (a linha ativa); as setas andam entre as linhas.
+        const paradaDeTab = index === (activeIndex >= 0 && activeIndex < items.length ? activeIndex : 0);
         return (
           <li
-            key={index}
+            key={getKey ? getKey(item, index) : index}
             role="option"
             aria-selected={isFocused}
-            tabIndex={0}
+            tabIndex={paradaDeTab ? 0 : -1}
             data-navigable="true"
             onFocus={() => setActiveIndex(index)}
             onClick={() => onItemAction && onItemAction(item)}
@@ -67,7 +71,7 @@ export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem
               borderRadius: 'var(--radius)',
               cursor: onItemAction ? 'pointer' : 'default',
               backgroundColor: 'var(--color-surface)',
-              outline: isFocused ? '2px solid rgba(228, 13, 44, 0.1)' : 'none',
+              outline: isFocused ? '2px solid var(--color-primary)' : 'none',
               outlineOffset: '2px',
               transition: 'all 0.15s ease',
               display: 'flex',

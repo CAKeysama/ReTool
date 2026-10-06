@@ -53,6 +53,23 @@ export interface ResultadoProcessamento {
   resumo: ResumoImportacao;
 }
 
+/**
+ * Progresso real da leitura/processamento de uma planilha (contado pelas
+ * linhas já percorridas). `total` = 0 quando ainda não é conhecido (ex.: a
+ * descompactação do .xlsx, que a biblioteca faz numa única chamada).
+ */
+export interface ProgressoPlanilha {
+  etapa: 'lendo-arquivo' | 'convertendo' | 'processando';
+  feitos: number;
+  total: number;
+  aba?: string;
+}
+
+export type OuvinteProgressoPlanilha = (p: ProgressoPlanilha) => void;
+
+/** A cada quantas linhas o progresso é avisado (evita inundar a UI com mensagens). */
+export const INTERVALO_PROGRESSO_LINHAS = 5000;
+
 export interface ContextoProcessamento {
   categorias: Pick<Categoria, 'id' | 'nome'>[];
   familias: Pick<Familia, 'id' | 'nome'>[];
@@ -82,26 +99,74 @@ function numeroParaTexto(v: number): string {
 }
 
 /**
+ * Cache de formatação por formato: numa planilha grande o mesmo formato
+ * (ex.: Peso "##,##0.0000") se repete em centenas de milhares de células.
+ * Formato que a biblioteca não suporta (lança exceção — caso do
+ * "##,##0.0000" real) fica marcado como `null` e usa o valor completo, como
+ * a biblioteca já fazia ao deixar `w` vazio; sem isso seriam ~470 mil
+ * exceções (vários segundos).
+ */
+const cacheFormatos = new Map<string, Map<number, string> | null>();
+const LIMITE_CACHE_POR_FORMATO = 50_000;
+
+function formatarNumero(formato: string, valor: number, date1904: boolean): string {
+  const chave = (date1904 ? '1|' : '0|') + formato;
+  let cache = cacheFormatos.get(chave);
+  if (cache === null) return numeroParaTexto(valor);
+  const emCache = cache?.get(valor);
+  if (emCache !== undefined) return emCache;
+  let texto: string;
+  try {
+    texto = XLSX.SSF.format(formato, valor, { date1904 });
+  } catch {
+    cacheFormatos.set(chave, null);
+    return numeroParaTexto(valor);
+  }
+  if (!cache) { cache = new Map(); cacheFormatos.set(chave, cache); }
+  if (cache.size < LIMITE_CACHE_POR_FORMATO) cache.set(valor, texto);
+  return texto;
+}
+
+/**
  * Texto de uma célula como o usuário o vê, sem perder informação:
  * - número com formato explícito ("00000", "0.00", data) → texto formatado
  *   (preserva zeros à esquerda e casas decimais exibidos);
  * - número em formato Geral → valor completo (o texto formatado do Geral
  *   abrevia códigos longos para "5.04001E+13", o que colidiria códigos);
  * - texto → como está.
+ *
+ * Por desempenho, `lerPlanilha` não pede à biblioteca o texto formatado de
+ * todas as células (`cellText: false`); quando `w` não vem, ele é calculado
+ * aqui só para as células que precisam (número com formato explícito, erro),
+ * com a mesma função de formatação (`SSF.format`) que a biblioteca usaria.
  */
-export function textoDaCelula(cell: XLSX.CellObject | undefined): string {
+export function textoDaCelula(cell: XLSX.CellObject | undefined, opcoes?: { date1904?: boolean }): string {
   if (!cell || cell.v === undefined || cell.v === null) return '';
   if (cell.t === 'n') {
     const formato = typeof cell.z === 'string' ? cell.z : 'General';
-    if (formato === 'General' || formato === '@' || cell.w === undefined) {
-      return numeroParaTexto(cell.v as number);
-    }
-    return cell.w;
+    if (formato === 'General' || formato === '@') return numeroParaTexto(cell.v as number);
+    if (cell.w !== undefined) return cell.w;
+    if (cell.z === undefined) return numeroParaTexto(cell.v as number);
+    return formatarNumero(formato, cell.v as number, !!opcoes?.date1904);
   }
-  if (cell.t === 'e') return cell.w ?? '';
+  if (cell.t === 'e') return cell.w ?? XLSX.utils.format_cell(cell) ?? '';
   if (cell.t === 'd') return cell.w ?? (cell.v as Date).toISOString();
   if (cell.t === 'b') return cell.w ?? String(cell.v);
   return String(cell.v);
+}
+
+/**
+ * Acesso às células de uma aba lida em modo denso (`dense: true`: linhas como
+ * arrays — bem mais rápido e econômico que o objeto "A1", "B1"… com milhões
+ * de chaves) ou, por segurança, no modo esparso tradicional.
+ */
+type LinhasDensas = (XLSX.CellObject | undefined)[][];
+
+function linhasDensas(sheet: XLSX.WorkSheet): LinhasDensas | null {
+  const comData = sheet as unknown as { '!data'?: LinhasDensas };
+  if (Array.isArray(comData['!data'])) return comData['!data'];
+  if (Array.isArray(sheet)) return sheet as unknown as LinhasDensas;
+  return null;
 }
 
 /**
@@ -111,17 +176,29 @@ export function textoDaCelula(cell: XLSX.CellObject | undefined): string {
  */
 function intervaloReal(sheet: XLSX.WorkSheet): XLSX.Range | null {
   let range: XLSX.Range | null = null;
+  const incluir = (r: number, c: number) => {
+    if (!range) {
+      range = { s: { r, c }, e: { r, c } };
+    } else {
+      if (r < range.s.r) range.s.r = r;
+      if (c < range.s.c) range.s.c = c;
+      if (r > range.e.r) range.e.r = r;
+      if (c > range.e.c) range.e.c = c;
+    }
+  };
+  const densas = linhasDensas(sheet);
+  if (densas) {
+    for (let r = 0; r < densas.length; r++) {
+      const linha = densas[r];
+      if (!linha) continue;
+      for (let c = 0; c < linha.length; c++) if (linha[c]) incluir(r, c);
+    }
+    return range;
+  }
   for (const endereco of Object.keys(sheet)) {
     if (endereco[0] === '!') continue;
     const c = XLSX.utils.decode_cell(endereco);
-    if (!range) {
-      range = { s: { r: c.r, c: c.c }, e: { r: c.r, c: c.c } };
-    } else {
-      if (c.r < range.s.r) range.s.r = c.r;
-      if (c.c < range.s.c) range.s.c = c.c;
-      if (c.r > range.e.r) range.e.r = c.r;
-      if (c.c > range.e.c) range.e.c = c.c;
-    }
+    incluir(c.r, c.c);
   }
   return range;
 }
@@ -134,23 +211,36 @@ function ehCsv(nomeArquivo: string): boolean {
  * Lê .xlsx/.xls/.csv e devolve cada aba como texto. CSV é decodificado
  * explicitamente (UTF-8/Windows-1252) e lido com `raw: true`, para que
  * "0041" continue "0041" e o cabeçalho "Código" não vire "CÃ³digo".
+ *
+ * Desempenho (472.976 linhas): modo denso + `cellText: false` (o texto
+ * formatado só é calculado nas células que precisam, ver `textoDaCelula`).
+ * `onProgresso` recebe a etapa e as linhas já convertidas.
  */
-export function lerPlanilha(conteudo: ArrayBuffer | Uint8Array, nomeArquivo: string): AbaPlanilha[] {
+export function lerPlanilha(
+  conteudo: ArrayBuffer | Uint8Array,
+  nomeArquivo: string,
+  onProgresso?: OuvinteProgressoPlanilha
+): AbaPlanilha[] {
   const bytes = conteudo instanceof Uint8Array ? conteudo : new Uint8Array(conteudo);
+  onProgresso?.({ etapa: 'lendo-arquivo', feitos: 0, total: 0 });
   const workbook = ehCsv(nomeArquivo)
-    ? XLSX.read(decodificarTexto(bytes), { type: 'string', raw: true })
-    : XLSX.read(bytes, { type: 'array', cellNF: true, cellDates: false });
+    ? XLSX.read(decodificarTexto(bytes), { type: 'string', raw: true, dense: true })
+    : XLSX.read(bytes, { type: 'array', cellNF: true, cellText: false, cellHTML: false, cellDates: false, dense: true });
+  const date1904 = !!workbook.Workbook?.WBProps?.date1904;
 
   return workbook.SheetNames.map(nome => {
     const sheet = workbook.Sheets[nome];
     const range = intervaloReal(sheet);
     if (!range) return { nome, cabecalhos: [], linhas: [] };
+    const densas = linhasDensas(sheet);
+    const celula = (r: number, c: number): XLSX.CellObject | undefined =>
+      densas ? densas[r]?.[c] : (sheet[XLSX.utils.encode_cell({ r, c })] as XLSX.CellObject | undefined);
 
     const lerLinha = (r: number): CelulaPlanilha[] => {
       const valores: CelulaPlanilha[] = [];
       for (let c = range.s.c; c <= range.e.c; c++) {
-        const cell = sheet[XLSX.utils.encode_cell({ r, c })] as XLSX.CellObject | undefined;
-        const texto = textoDaCelula(cell);
+        const cell = celula(r, c);
+        const texto = textoDaCelula(cell, { date1904 });
         valores.push(cell && cell.t === 'n' ? { texto, numero: cell.v as number } : texto);
       }
       return valores;
@@ -158,7 +248,14 @@ export function lerPlanilha(conteudo: ArrayBuffer | Uint8Array, nomeArquivo: str
 
     const cabecalhos = lerLinha(range.s.r).map(textoCelula);
     const linhas: CelulaPlanilha[][] = [];
-    for (let r = range.s.r + 1; r <= range.e.r; r++) linhas.push(lerLinha(r));
+    const total = range.e.r - range.s.r;
+    for (let r = range.s.r + 1; r <= range.e.r; r++) {
+      linhas.push(lerLinha(r));
+      if (onProgresso && linhas.length % INTERVALO_PROGRESSO_LINHAS === 0) {
+        onProgresso({ etapa: 'convertendo', feitos: linhas.length, total, aba: nome });
+      }
+    }
+    onProgresso?.({ etapa: 'convertendo', feitos: linhas.length, total, aba: nome });
     return { nome, cabecalhos, linhas };
   });
 }
@@ -237,8 +334,11 @@ function criarResolvedor(existentes: Pick<Categoria, 'id' | 'nome'>[]) {
  */
 export function processarPlanilhaDispositivos(
   abas: AbaPlanilha[],
-  ctx: ContextoProcessamento
+  ctx: ContextoProcessamento,
+  onProgresso?: OuvinteProgressoPlanilha
 ): ResultadoProcessamento {
+  const totalLinhas = abas.reduce((n, a) => n + a.linhas.length, 0);
+  let percorridas = 0;
   const categorias = criarResolvedor(ctx.categorias);
   const familias = criarResolvedor(ctx.familias);
   const produtos = criarResolvedor(ctx.produtos);
@@ -265,7 +365,7 @@ export function processarPlanilhaDispositivos(
       ignorada: col.codigo < 0 && col.nome < 0,
     };
     resumo.abas.push(resumoAba);
-    if (resumoAba.ignorada) continue;
+    if (resumoAba.ignorada) { percorridas += aba.linhas.length; continue; }
 
     if (col.codigo < 0) {
       resumo.avisos.push(`Aba "${aba.nome}": coluna Código não encontrada — os registros dessa aba ficarão sem Código.`);
@@ -277,6 +377,9 @@ export function processarPlanilhaDispositivos(
     const valor = (linha: CelulaPlanilha[], idx: number) => (idx >= 0 ? limparTexto(textoCelula(linha[idx])) : '');
 
     for (const linha of aba.linhas) {
+      if (onProgresso && ++percorridas % INTERVALO_PROGRESSO_LINHAS === 0) {
+        onProgresso({ etapa: 'processando', feitos: percorridas, total: totalLinhas, aba: aba.nome });
+      }
       if (linha.every(c => !textoCelula(c).trim())) continue; // linha totalmente vazia
       resumoAba.linhas++;
       resumo.linhasLidas++;
@@ -322,6 +425,7 @@ export function processarPlanilhaDispositivos(
     }
   }
 
+  onProgresso?.({ etapa: 'processando', feitos: totalLinhas, total: totalLinhas });
   const dispositivos = Array.from(porChave.values());
   resumo.combinacoesUnicas = dispositivos.length;
   if (resumo.linhasSemChave > 0) {

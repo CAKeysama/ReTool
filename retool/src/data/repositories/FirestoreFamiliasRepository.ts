@@ -5,11 +5,11 @@ import { Familia } from '../../domain/entities/familia';
 import { IFamiliasRepository } from '../../domain/repositories/IFamiliasRepository';
 
 export class FirestoreFamiliasRepository implements IFamiliasRepository {
-  subscribeAll(callback: (familias: Familia[]) => void): () => void {
+  subscribeAll(callback: (familias: Familia[]) => void, onError?: (e: unknown) => void): () => void {
     return onSnapshot(collection(db, 'familias'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Familia));
       callback(data.sort((a, b) => a.nome.localeCompare(b.nome)));
-    });
+    }, (e) => onError?.(e));
   }
 
   async add(data: Omit<Familia, 'id'>): Promise<string> {

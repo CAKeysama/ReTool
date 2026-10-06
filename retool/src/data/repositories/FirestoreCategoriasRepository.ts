@@ -5,16 +5,16 @@ import { Categoria, Tipo } from '../../domain/entities/categoria';
 import { ICategoriasRepository } from '../../domain/repositories/ICategoriasRepository';
 
 export class FirestoreCategoriasRepository implements ICategoriasRepository {
-  subscribeCategorias(callback: (categorias: Categoria[]) => void): () => void {
+  subscribeCategorias(callback: (categorias: Categoria[]) => void, onError?: (e: unknown) => void): () => void {
     return onSnapshot(collection(db, 'categorias'), (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Categoria)));
-    });
+    }, (e) => onError?.(e));
   }
 
-  subscribeTipos(callback: (tipos: Tipo[]) => void): () => void {
+  subscribeTipos(callback: (tipos: Tipo[]) => void, onError?: (e: unknown) => void): () => void {
     return onSnapshot(collection(db, 'tipos'), (snapshot) => {
       callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tipo)));
-    });
+    }, (e) => onError?.(e));
   }
 
   async addCategoria(data: Omit<Categoria, 'id'>): Promise<string> {
