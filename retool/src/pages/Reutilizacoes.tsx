@@ -100,8 +100,9 @@ export function Reutilizacoes() {
 
   // ---------------- FONTES DE DADOS (modo servidor x legado) ----------------
   const { modo, contagens, reverificar } = useModoReutilizacoes();
-  const servidor = modo === 'servidor';
-  const legado = modo === 'legado';
+  const [indiceIndisponivel, setIndiceIndisponivel] = useState(false);
+  const servidor = modo === 'servidor' && !indiceIndisponivel;
+  const legado = modo === 'legado' || indiceIndisponivel;
   const todas = useReutilizacoes(legado || (servidor && (buscaCompleta || isBulkOpen)));
   const reutilizacoes = todas.itens;
   // Histórico no cliente: modo legado ou busca de texto em todo o histórico.
@@ -126,6 +127,24 @@ export function Reutilizacoes() {
   const filaP = useFilaReutilizacoes(FILA_PROJETISTA, limiteCartoes, servidor && veFilaP, tabAtiva === 'filaProjetista');
   const filaE = useFilaReutilizacoes(FILA_ENGENHARIA, limiteCartoes, servidor && veFilaE, tabAtiva === 'filaEngenharia');
 
+  const hist = useHistoricoReutilizacoes(
+    { status: filterStatus === 'todos' ? undefined : filterStatus, dispositivoId: filterDispId || undefined },
+    POR_PAGINA,
+    servidor && tabAtiva === 'historico' && !buscaCompleta
+  );
+
+  // Se qualquer consulta no servidor falhar por índice do Firestore ausente ou em construção (failed-precondition),
+  // faz fallback transparente para o modo legado em memória para não bloquear o usuário.
+  useEffect(() => {
+    if (indiceIndisponivel) return;
+    const isPrecondition = (err: unknown) =>
+      Boolean(err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'failed-precondition');
+    if (isPrecondition(filaP.erro) || isPrecondition(filaE.erro) || isPrecondition(hist.erro)) {
+      console.warn('Índice composto do Firestore indisponível ou em construção. Alternando para modo em memória temporariamente.');
+      setIndiceIndisponivel(true);
+    }
+  }, [filaP.erro, filaE.erro, hist.erro, indiceIndisponivel]);
+
   const filaProjetista = servidor ? filaP.itens : filaProjetistaLegado;
   const filaEngenharia = servidor ? filaE.itens : filaEngenhariaLegado;
   // Contadores só quando conhecidos (0 durante o carregamento enganaria).
@@ -140,12 +159,6 @@ export function Reutilizacoes() {
     t.push({ id: 'historico', label: 'Histórico Geral', count: totalGeral });
     return t;
   }, [veFilaP, veFilaE, contaFilaP, contaFilaE, totalGeral]);
-
-  const hist = useHistoricoReutilizacoes(
-    { status: filterStatus === 'todos' ? undefined : filterStatus, dispositivoId: filterDispId || undefined },
-    POR_PAGINA,
-    servidor && tabAtiva === 'historico' && !buscaCompleta
-  );
 
   // Estado da fonte que a aba ativa mostra.
   const fonte = modo === 'verificando'

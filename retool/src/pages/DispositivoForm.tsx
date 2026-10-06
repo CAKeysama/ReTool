@@ -588,7 +588,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
           {/* Seção de Mídias e Arquivos (Firebase Storage) */}
           <div style={{ marginTop: '8px' }}>
             <h4 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-primary)', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px', marginBottom: '12px' }}>
-              Arquivos Físicos e Fotos (Firebase Storage)
+              Arquivos Físicos e Fotos
             </h4>
             
             <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
