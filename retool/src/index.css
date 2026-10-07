@@ -400,6 +400,10 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
 
   .main-content {
     margin-left: 0;
+    /* Ocupa a largura da tela: tabelas largas rolam em seus próprios
+       contêineres (overflow-x) em vez de alargar a página. */
+    width: 100%;
+    min-width: 0;
     padding: var(--spacing-md);
     padding-bottom: 90px; /* Espaço para o Bottom Nav + FAB */
     padding-top: var(--spacing-md);

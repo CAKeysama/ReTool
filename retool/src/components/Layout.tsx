@@ -1,79 +1,90 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Settings, Home, List, Component, Menu, X } from 'lucide-react';
+import { Settings, Home, List, Component, ShieldCheck } from 'lucide-react';
 import { useReTool } from '../context/ReToolContext';
+import { useAuth } from '../context/AuthContext';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { usePermissions } from '../hooks/usePermissions';
+import { situacaoDoUsuario } from '../domain/entities/user';
 import { DispositivoForm } from '../pages/DispositivoForm';
 import { UserNavMenu } from './UserNavMenu';
-import { UsersManagementModal } from './UsersManagementModal';
-import { AuditLogsModal } from './AuditLogsModal';
 import { NotificationsMenu } from './NotificationsMenu';
 
 export function Layout() {
   const { announcement, isDispFormOpen } = useReTool();
-  const { canCadastrar, canEditar, canExcluir, canVerLogs } = usePermissions();
-  const [isUsersModalOpen, setIsUsersModalOpen] = useState(false);
-  const [isLogsModalOpen, setIsLogsModalOpen] = useState(false);
+  const { users, solicitacoesCargo } = useAuth();
+  const { canCadastrar, canEditar, canExcluir, canGerenciarUsuarios } = usePermissions();
   useHotkeys();
   const location = useLocation();
-  
+
+  // Pendências administrativas (cadastros + solicitações de cargo) exibidas no menu.
+  const pendenciasAdmin = canGerenciarUsuarios
+    ? users.filter(u => situacaoDoUsuario(u) === 'pendente').length
+      + solicitacoesCargo.filter(s => s.status === 'pendente').length
+    : 0;
+
   // Condição para telas centralizadas sem a sidebar fixa
   const isFullScreenMode = location.pathname === '/' || location.pathname === '/sobre';
+
+  const bottomNav = (
+    <nav className="bottom-nav" aria-label="Navegação Mobile">
+      <ul className="bottom-nav-list">
+        <li>
+          <NavLink to="/" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+            <Home size={24} />
+            <span>Home</span>
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/dispositivos" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+            <Component size={24} />
+            <span>Dispositivos</span>
+          </NavLink>
+        </li>
+        <li>
+          <NavLink to="/reutilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+            <List size={24} />
+            <span>Reutilizações</span>
+          </NavLink>
+        </li>
+        {(canCadastrar || canEditar) && (
+          <li>
+            <NavLink to="/categorias" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+              <Settings size={24} />
+              <span>Categorias</span>
+            </NavLink>
+          </li>
+        )}
+        {canGerenciarUsuarios && (
+          <li>
+            <NavLink to="/administracao" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
+              <ShieldCheck size={24} />
+              <span>Admin{pendenciasAdmin > 0 ? ` (${pendenciasAdmin})` : ''}</span>
+            </NavLink>
+          </li>
+        )}
+      </ul>
+    </nav>
+  );
 
   if (isFullScreenMode) {
     return (
       <div className="app-container" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)', paddingBottom: '90px', position: 'relative' }}>
         <div aria-live="polite" className="sr-only">{announcement}</div>
-        
+
         {/* TOP RIGHT PROFILE BADGE EM TELAS FULLSCREEN */}
         <div style={{ position: 'absolute', top: '16px', right: '24px', zIndex: 100, width: '280px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <UserNavMenu 
-              onOpenUsersModal={() => setIsUsersModalOpen(true)} 
-              onOpenLogsModal={() => setIsLogsModalOpen(true)} 
-            />
+            <UserNavMenu />
           </div>
-          <NotificationsMenu align="right" onOpenUsersModal={() => setIsUsersModalOpen(true)} />
+          <NotificationsMenu align="right" />
         </div>
 
         <Outlet />
         {isDispFormOpen && <DispositivoForm />}
-        
-        <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
-        {canVerLogs && <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />}
 
         {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
-        <nav className="bottom-nav" aria-label="Navegação Mobile">
-          <ul className="bottom-nav-list">
-            <li>
-              <NavLink to="/" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                <Home size={24} />
-                <span>Home</span>
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/dispositivos" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                <Component size={24} />
-                <span>Dispositivos</span>
-              </NavLink>
-            </li>
-            <li>
-              <NavLink to="/reutilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                <List size={24} />
-                <span>Reutilizações</span>
-              </NavLink>
-            </li>
-            {(canCadastrar || canEditar) && (
-              <li>
-                <NavLink to="/categorias" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-                  <Settings size={24} />
-                  <span>Categorias</span>
-                </NavLink>
-              </li>
-            )}
-          </ul>
-        </nav>
+        {bottomNav}
       </div>
     );
   }
@@ -83,7 +94,7 @@ export function Layout() {
       <div aria-live="polite" className="sr-only">{announcement}</div>
 
       <nav className="sidebar" aria-label="Navegação Principal">
-        
+
         {/* LOGO AREA */}
         <div style={{ marginBottom: 'var(--spacing-lg)' }}>
           <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800 }}>
@@ -98,12 +109,9 @@ export function Layout() {
         {/* PERFIL DE ACESSO RBAC + NOTIFICAÇÕES */}
         <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', gap: '8px', alignItems: 'flex-start', minWidth: 0 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <UserNavMenu 
-              onOpenUsersModal={() => setIsUsersModalOpen(true)} 
-              onOpenLogsModal={() => setIsLogsModalOpen(true)} 
-            />
+            <UserNavMenu />
           </div>
-          <NotificationsMenu align="left" onOpenUsersModal={() => setIsUsersModalOpen(true)} />
+          <NotificationsMenu align="left" />
         </div>
 
         {/* MENU */}
@@ -126,6 +134,11 @@ export function Layout() {
                 <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" />
               </li>
             )}
+            {canGerenciarUsuarios && (
+              <li>
+                <SidebarLink to="/administracao" icon={<ShieldCheck size={18} />} label="Administração" shortcut="A" badge={pendenciasAdmin} />
+              </li>
+            )}
           </ul>
         </div>
 
@@ -146,51 +159,22 @@ export function Layout() {
       </nav>
 
       {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
-      <nav className="bottom-nav" aria-label="Navegação Mobile">
-        <ul className="bottom-nav-list">
-          <li>
-            <NavLink to="/" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-              <Home size={24} />
-              <span>Home</span>
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="/dispositivos" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-              <Component size={24} />
-              <span>Dispositivos</span>
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="/reutilizacoes" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-              <List size={24} />
-              <span>Reutilizações</span>
-            </NavLink>
-          </li>
-          <li>
-            <NavLink to="/categorias" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
-              <Settings size={24} />
-              <span>Categorias</span>
-            </NavLink>
-          </li>
-        </ul>
-      </nav>
+      {bottomNav}
 
       <main className="main-content" id="main-content">
         <Outlet />
       </main>
-      
+
       {isDispFormOpen && <DispositivoForm />}
-      <UsersManagementModal isOpen={isUsersModalOpen} onClose={() => setIsUsersModalOpen(false)} />
-      {canVerLogs && <AuditLogsModal isOpen={isLogsModalOpen} onClose={() => setIsLogsModalOpen(false)} />}
     </div>
   );
 }
 
 // Subcomponente de estilo do Link da Sidebar
-function SidebarLink({ to, icon, label, shortcut }: { to: string, icon: React.ReactNode, label: string, shortcut: string }) {
+function SidebarLink({ to, icon, label, shortcut, badge }: { to: string, icon: React.ReactNode, label: string, shortcut: string, badge?: number }) {
   return (
-    <NavLink 
-      to={to} 
+    <NavLink
+      to={to}
       style={({ isActive }) => ({
         display: 'flex',
         alignItems: 'center',
@@ -207,11 +191,25 @@ function SidebarLink({ to, icon, label, shortcut }: { to: string, icon: React.Re
         <>
           <span style={{ marginRight: '12px', display: 'flex' }}>{icon}</span>
           <span style={{ fontWeight: isActive ? 600 : 500, fontSize: '0.95rem' }}>{label}</span>
-          
-          <div style={{ 
-            marginLeft: 'auto', 
-            fontSize: '10px', 
-            width: '18px', height: '18px', 
+
+          {!!badge && badge > 0 && (
+            <span
+              aria-label={`${badge} pendências`}
+              style={{
+                marginLeft: '8px', minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '9px',
+                fontSize: '0.66rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                backgroundColor: isActive ? 'white' : 'var(--color-primary)',
+                color: isActive ? 'var(--color-primary)' : 'white'
+              }}
+            >
+              {badge}
+            </span>
+          )}
+
+          <div style={{
+            marginLeft: 'auto',
+            fontSize: '10px',
+            width: '18px', height: '18px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: '4px',
             backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-border)',

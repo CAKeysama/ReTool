@@ -1,4 +1,4 @@
-import { UserRole } from './user';
+import { PerfilUsuario, UserRole } from './user';
 
 /** Máquina de estados do fluxo de reutilização de dispositivos. */
 export type ReutilizacaoStatus =
@@ -40,6 +40,7 @@ export function normalizarStatusReutilizacao(status?: string): ReutilizacaoStatu
  * - Projetista: análise técnica (1º filtro) e verificação de similares (2º filtro).
  * - Administração: todas as transições.
  * - Gerência: nenhuma (somente leitura).
+ * - Convidado: nenhuma (sem acesso até a aprovação).
  */
 export const TRANSICOES_REUTILIZACAO: Record<UserRole, Partial<Record<ReutilizacaoStatus, ReutilizacaoStatus[]>>> = {
   admin: {
@@ -59,8 +60,8 @@ export const TRANSICOES_REUTILIZACAO: Record<UserRole, Partial<Record<Reutilizac
   gerencia: {}
 };
 
-export function transicaoReutilizacaoPermitida(perfil: UserRole, de: ReutilizacaoStatus, para: ReutilizacaoStatus): boolean {
-  return (TRANSICOES_REUTILIZACAO[perfil]?.[de] || []).includes(para);
+export function transicaoReutilizacaoPermitida(perfil: PerfilUsuario, de: ReutilizacaoStatus, para: ReutilizacaoStatus): boolean {
+  return (TRANSICOES_REUTILIZACAO[perfil as UserRole]?.[de] || []).includes(para);
 }
 
 /** Rótulo compacto para chips/tabelas. */
