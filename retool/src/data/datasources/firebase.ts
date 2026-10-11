@@ -1,6 +1,5 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
@@ -21,7 +20,7 @@ const useFallback = import.meta.env.VITE_USE_FALLBACK_DB === 'true';
 
 // Desenvolvimento local contra os emuladores (`npm run dev:emuladores`):
 // nenhum dado ou conta real é tocado. Projeto "demo-" dispensa credenciais.
-const usarEmuladores = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+export const usarEmuladores = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
 const emulatorConfig = {
   apiKey: 'demo-api-key',
   authDomain: 'demo-retool.firebaseapp.com',
@@ -37,16 +36,17 @@ function conectarAuthAoEmulador(instancia: Auth): Auth {
   return instancia;
 }
 
-const app = initializeApp(activeConfig);
+export const app = initializeApp(activeConfig);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
 export const auth = conectarAuthAoEmulador(getAuth(app));
+// Storage fica em ./storage.ts: o SDK (~10 KB gzip) só é baixado quando um
+// upload ou exclusão de arquivos acontece.
+
 // Mesma região declarada em functions/src/index.ts.
 export const functions = getFunctions(app, 'southamerica-east1');
 
 if (usarEmuladores) {
   connectFirestoreEmulator(db, '127.0.0.1', 8181);
-  connectStorageEmulator(storage, '127.0.0.1', 9199);
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
 

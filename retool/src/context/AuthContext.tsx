@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef, useMemo } from 'react';
 import {
   User as FirebaseUser,
   onAuthStateChanged,
@@ -471,9 +471,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const currentRole: PerfilUsuario = userProfile?.perfil || 'convidado';
   const roleConfig = isOperacional ? configDoPerfil(currentRole) : configDoPerfil('convidado');
 
-  return (
-    <AuthContext.Provider
-      value={{
+  // Valor estável: telas que só leem permissões não renderizam de novo a
+  // cada mudança de estado interna do provider.
+  const valor = useMemo<AuthContextType>(() => ({
         firebaseUser,
         userProfile,
         currentRole: isOperacional ? currentRole : 'convidado',
@@ -508,8 +508,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         canSolicitar: roleConfig.canSolicitar,
         canGerenciarUsuarios: roleConfig.canGerenciarUsuarios,
         canVerLogs: roleConfig.canVerLogs
-      }}
-    >
+  // As ações acima leem só estes estados; recriá-las a cada render
+  // derrubaria a memoização sem mudar o resultado.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [firebaseUser, userProfile, currentRole, isOperacional, loading, users, estadoUsuarios,
+    solicitacoesCargo, estadoSolicitacoesCargo, notifications]);
+
+  return (
+    <AuthContext.Provider value={valor}>
       {children}
     </AuthContext.Provider>
   );

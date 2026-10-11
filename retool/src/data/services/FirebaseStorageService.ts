@@ -1,4 +1,4 @@
-import { storage } from '../datasources/firebase';
+import { storage } from '../datasources/storage';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import { IStorageService } from '../../domain/services/IStorageService';

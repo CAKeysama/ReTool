@@ -1,17 +1,21 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Settings, Home, List, Component, ShieldCheck } from 'lucide-react';
-import { useReTool } from '../context/ReToolContext';
+import { useReTool, useAnuncio } from '../context/ReToolContext';
 import { useAuth } from '../context/AuthContext';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { usePermissions } from '../hooks/usePermissions';
 import { situacaoDoUsuario } from '../domain/entities/user';
-import { DispositivoForm } from '../pages/DispositivoForm';
 import { UserNavMenu } from './UserNavMenu';
 import { NotificationsMenu } from './NotificationsMenu';
+import { LimiteDeErro, CarregandoModal } from './LimiteDeErro';
+
+// O formulário de dispositivo só é baixado quando aberto.
+const DispositivoForm = lazy(() => import('../pages/DispositivoForm').then(m => ({ default: m.DispositivoForm })));
 
 export function Layout() {
-  const { announcement, isDispFormOpen } = useReTool();
+  const { isDispFormOpen } = useReTool();
+  const announcement = useAnuncio();
   const { users, solicitacoesCargo } = useAuth();
   const { canCadastrar, canEditar, canExcluir, canGerenciarUsuarios } = usePermissions();
   useHotkeys();
@@ -81,7 +85,7 @@ export function Layout() {
         </div>
 
         <Outlet />
-        {isDispFormOpen && <DispositivoForm />}
+        <ModaisGlobais isDispFormOpen={isDispFormOpen} />
 
         {/* BOTTOM NAVIGATION (MOBILE ONLY) */}
         {bottomNav}
@@ -101,7 +105,7 @@ export function Layout() {
             <span style={{ color: 'var(--color-gray-steel)' }}>Re</span>
             <span style={{ color: 'var(--color-primary)' }}>Tool</span>
           </h1>
-          <div style={{ color: '#9ca3af', fontSize: '0.75rem', fontWeight: 500, marginTop: '2px' }}>
+          <div style={{ color: '#6b7280', fontSize: '0.75rem', fontWeight: 500, marginTop: '2px' }}>
             Gestão Industrial
           </div>
         </div>
@@ -116,7 +120,7 @@ export function Layout() {
 
         {/* MENU */}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#9ca3af', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7280', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
             MENU
           </div>
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -144,7 +148,7 @@ export function Layout() {
 
         {/* ATALHOS / FOOTER HELP */}
         <div style={{ backgroundColor: '#f9fafb', padding: 'var(--spacing-md)', borderRadius: 'var(--radius)', marginTop: 'auto' }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#9ca3af', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7280', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
             ATALHOS
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', fontSize: '0.75rem', color: '#6b7280' }}>
@@ -165,9 +169,15 @@ export function Layout() {
         <Outlet />
       </main>
 
-      {isDispFormOpen && <DispositivoForm />}
+      <ModaisGlobais isDispFormOpen={isDispFormOpen} />
     </div>
   );
+}
+
+function ModaisGlobais({ isDispFormOpen }: { isDispFormOpen: boolean }) {
+  const { closeDispForm } = useReTool();
+  if (!isDispFormOpen) return null;
+  return <LimiteDeErro onFechar={closeDispForm}><Suspense fallback={<CarregandoModal />}><DispositivoForm /></Suspense></LimiteDeErro>;
 }
 
 // Subcomponente de estilo do Link da Sidebar
@@ -213,7 +223,7 @@ function SidebarLink({ to, icon, label, shortcut, badge }: { to: string, icon: R
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             borderRadius: '4px',
             backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'var(--color-border)',
-            color: isActive ? 'white' : '#9ca3af',
+            color: isActive ? 'white' : '#4b5563',
             fontWeight: 700
           }}>
             {shortcut}

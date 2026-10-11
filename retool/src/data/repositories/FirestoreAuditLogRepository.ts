@@ -1,7 +1,7 @@
 import { db } from '../datasources/firebase';
 import {
   collection, onSnapshot, doc, setDoc, query, orderBy, limit, where, startAfter,
-  getDocs, getCountFromServer, serverTimestamp, Timestamp, QueryConstraint
+  getDocs, getCountFromServer, serverTimestamp, Timestamp, QueryConstraint, WriteBatch
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -32,6 +32,21 @@ function mapearLog(d: { id: string; data: () => any }): AuditLog {
     categoria: dados.categoria || categoriaDaAcao(dados.acao),
     resultado: dados.resultado || 'sucesso'
   };
+}
+
+/** Documento gravado em audit_logs (mesmo formato no registro avulso e em lote). */
+function montarRegistro(id: string, logData: AuditLogInput) {
+  const { conteudo, dadosAnteriores, ...base } = logData;
+  return sanitizarDadosAuditoria({
+    ...base,
+    ...(conteudo ? { conteudo } : {}),
+    ...(dadosAnteriores ? { dadosAnteriores } : {}),
+    id,
+    categoria: logData.categoria || categoriaDaAcao(logData.acao),
+    resultado: logData.resultado || 'sucesso',
+    dataHora: logData.dataHora || new Date().toISOString(),
+    dataHoraServidor: serverTimestamp()
+  });
 }
 
 export interface FiltrosAuditoria {
@@ -149,22 +164,21 @@ export class FirestoreAuditLogRepository implements IAuditLogRepository {
    */
   async registrarLog(logData: AuditLogInput): Promise<string> {
     const id = uuidv4();
-    const { conteudo, dadosAnteriores, ...base } = logData;
-    await setDoc(doc(db, 'audit_logs', id), sanitizarDadosAuditoria({
-      ...base,
-      ...(conteudo ? { conteudo } : {}),
-      ...(dadosAnteriores ? { dadosAnteriores } : {}),
-      id,
-      categoria: logData.categoria || categoriaDaAcao(logData.acao),
-      resultado: logData.resultado || 'sucesso',
-      dataHora: logData.dataHora || new Date().toISOString(),
-      dataHoraServidor: serverTimestamp()
-    }));
+    await setDoc(doc(db, 'audit_logs', id), montarRegistro(id, logData));
     return id;
   }
 
+  /**
+   * Acrescenta um registro de auditoria a um writeBatch (operações em massa:
+   * cada item continua com seu próprio registro, gravado junto com a alteração).
+   */
+  adicionarAoBatch(batch: WriteBatch, logData: AuditLogInput): void {
+    const id = uuidv4();
+    batch.set(doc(db, 'audit_logs', id), montarRegistro(id, logData));
+  }
+
   /** Assinatura em tempo real, sempre do registro mais recente para o mais antigo. */
-  subscribeLogs(callback: (logs: AuditLog[]) => void, maxCount = 100): () => void {
+  subscribeLogs(callback: (logs: AuditLog[]) => void, maxCount = 100, onError?: (e: unknown) => void): () => void {
     const q = query(
       collection(db, 'audit_logs'),
       orderBy('dataHora', 'desc'),
@@ -178,10 +192,12 @@ export class FirestoreAuditLogRepository implements IAuditLogRepository {
       callback(list.slice(0, maxCount));
     };
 
+    // Sem fallback para a coleção inteira: a trilha cresce sem limite e o
+    // listener de fallback nunca era encerrado. A ordenação usa o índice
+    // automático de campo único (dataHora), que sempre existe.
     return onSnapshot(q, emitir, (error) => {
-      console.warn('Fallback na ordenação de audit_logs:', error);
-      // Caso o índice do Firestore ainda não esteja criado, faz snapshot simples
-      return onSnapshot(collection(db, 'audit_logs'), emitir);
+      console.warn('Falha ao carregar audit_logs:', error);
+      onError?.(error);
     });
   }
 

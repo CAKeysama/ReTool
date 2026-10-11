@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useReTool } from '../context/ReToolContext';
+import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
 import { Notificacao } from '../domain/entities/notificacao';
 import { SituacaoUsuario, situacaoDoUsuario } from '../domain/entities/user';
 import { SolicitacaoCargoStatus } from '../domain/entities/solicitacaoCargo';
 import { corDoStatusReutilizacao, normalizarStatusReutilizacao, rotuloCurtoStatusReutilizacao } from '../domain/entities/reutilizacao';
+
+const reutilizacoesRepo = new FirestoreReutilizacoesRepository();
 
 interface NotificationsMenuProps {
   /** Ancoragem do painel: 'left' (sidebar) abre para a direita; 'right' abre para a esquerda. */
@@ -27,12 +29,15 @@ const PENDENTE = { label: 'Pendente', cor: '#b45309', fundo: '#fef3c7' };
 /** Status "vivo" da notificação, derivado da entidade referenciada. */
 function statusDaNotificacao(
   n: Notificacao,
-  reutilizacoes: { id: string; status?: string }[],
+  reutilizacoes: Map<string, { status?: string } | null> | null | 'erro',
   situacaoUsuarios: Map<string, SituacaoUsuario>,
   statusSolicitacoes: Map<string, SolicitacaoCargoStatus>
 ): { label: string; cor: string; fundo: string } {
   if (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') {
-    const reu = reutilizacoes.find(r => r.id === n.entidadeId);
+    if (reutilizacoes === 'erro') return { label: 'Status indisponível', cor: '#6b7280', fundo: '#f3f4f6' };
+    // Status ainda sendo buscado (só as reutilizações das notificações exibidas).
+    if (!reutilizacoes || !reutilizacoes.has(n.entidadeId || '')) return { label: '…', cor: '#6b7280', fundo: '#f3f4f6' };
+    const reu = reutilizacoes.get(n.entidadeId || '');
     if (!reu) return { label: 'Removida', cor: '#6b7280', fundo: '#f3f4f6' };
     const st = normalizarStatusReutilizacao(reu.status);
     const cor = corDoStatusReutilizacao(st);
@@ -58,10 +63,31 @@ function statusDaNotificacao(
 
 export function NotificationsMenu({ align = 'right' }: NotificationsMenuProps) {
   const { notifications, marcarNotificacaoLida, marcarNotificacaoResolvida, users, solicitacoesCargo, canGerenciarUsuarios } = useAuth();
-  const { reutilizacoes } = useReTool();
   const navigate = useNavigate();
 
   const [isOpen, setIsOpen] = useState(false);
+  // Status vivo das reutilizações citadas: lido só ao abrir o painel e só
+  // para as notificações exibidas (antes vinha da coleção inteira em memória).
+  const [reutilizacoes, setReutilizacoes] = useState<Map<string, { status?: string } | null> | null | 'erro'>(null);
+  const idsReutilizacao = notifications
+    .filter(n => (n.tipo === 'reutilizacao_nova' || n.tipo === 'reutilizacao_decidida') && n.entidadeId)
+    .map(n => n.entidadeId as string);
+  const chaveIds = Array.from(new Set(idsReutilizacao)).sort().join(',');
+  useEffect(() => {
+    if (!isOpen || !chaveIds) return;
+    let vivo = true;
+    setReutilizacoes(r => (r === 'erro' ? null : r));
+    const ids = chaveIds.split(',');
+    reutilizacoesRepo.obterPorIds(ids)
+      .then(lista => {
+        if (!vivo) return;
+        const m = new Map<string, { status?: string } | null>(ids.map(id => [id, null]));
+        for (const r of lista) m.set(r.id, r);
+        setReutilizacoes(m);
+      })
+      .catch(() => { if (vivo) setReutilizacoes('erro'); });
+    return () => { vivo = false; };
+  }, [isOpen, chaveIds]);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -235,7 +261,7 @@ export function NotificationsMenu({ align = 'right' }: NotificationsMenuProps) {
                   <div style={{ fontSize: '0.74rem', color: '#4b5563', marginTop: '2px', lineHeight: 1.4 }}>
                     {n.descricao}
                   </div>
-                  <div style={{ fontSize: '0.66rem', color: '#9ca3af', marginTop: '4px' }}>
+                  <div style={{ fontSize: '0.66rem', color: '#6b7280', marginTop: '4px' }}>
                     {formatarData(n.dataHora)}
                   </div>
 
@@ -269,7 +295,7 @@ export function NotificationsMenu({ align = 'right' }: NotificationsMenuProps) {
                     style={{
                       alignSelf: 'flex-start',
                       background: 'none', border: 'none', cursor: 'pointer',
-                      color: '#9ca3af', padding: '2px', flexShrink: 0
+                      color: '#6b7280', padding: '2px', flexShrink: 0
                     }}
                   >
                     <CheckCheck size={14} />

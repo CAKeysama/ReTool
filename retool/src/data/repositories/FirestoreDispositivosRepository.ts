@@ -1,266 +1,219 @@
 import { db } from '../datasources/firebase';
-import { collection, doc, writeBatch, onSnapshot, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, writeBatch, setDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { Dispositivo } from '../../domain/entities/dispositivo';
+import { Dispositivo, chaveCodigoDispositivo } from '../../domain/entities/dispositivo';
 import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
 import { Produto } from '../../domain/entities/produto';
-import { storageService } from '../services/FirebaseStorageService';
-import { IDispositivosRepository } from '../../domain/repositories/IDispositivosRepository';
+import { IDispositivosRepository, OpcoesImportacaoLote, ResultadoImportacaoLote } from '../../domain/repositories/IDispositivosRepository';
+import { importarLoteFirestore } from './importacaoDispositivosFirestore';
+import { MetaIndice, registrarNoIndice } from './FirestoreIndiceDispositivos';
 
-export class FirestoreDispositivosRepository implements IDispositivosRepository {
-  subscribeAll(callback: (dispositivos: Dispositivo[]) => void): () => void {
-    return onSnapshot(collection(db, 'dispositivos'), (snapshot) => {
-      callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Dispositivo)));
-    });
+// O Storage só é carregado quando um dispositivo é excluído (fora do bundle inicial).
+const apagarPastaDoDispositivo = async (id: string) => {
+  const { storageService } = await import('../services/FirebaseStorageService');
+  await storageService.deleteFolder(`retool/dispositivos/${id}`);
+};
+
+/** Itens por writeBatch nas operações em massa: cada item gera até 3 escritas (documento, auditoria, índice) e o limite é 500. */
+export const ITENS_POR_LOTE_EM_MASSA = 150;
+
+/**
+ * Recalcula `chaveCD` quando código ou dispositivo mudam (ou quando o
+ * documento ainda não a tem). Sem o documento atual e com só um dos dois
+ * campos, a chave não pode ser calculada: é apagada, e a importação volta a
+ * ler o banco inteiro até "Preparar importação rápida" (nunca uma chave errada).
+ */
+function comChaveAtualizada(data: Partial<Dispositivo>, atual: Dispositivo | null): Partial<Dispositivo> {
+  const { chaveCD: _ignorada, ...resto } = data;
+  void _ignorada;
+  const mexeNaChave = 'codigo' in resto || 'nome' in resto;
+  if (atual) {
+    const chave = chaveCodigoDispositivo(resto.codigo ?? atual.codigo, resto.nome ?? atual.nome);
+    return mexeNaChave || atual.chaveCD !== chave ? { ...resto, chaveCD: chave } : resto;
   }
+  if ('codigo' in resto && 'nome' in resto) return { ...resto, chaveCD: chaveCodigoDispositivo(resto.codigo, resto.nome) };
+  return mexeNaChave ? { ...resto, chaveCD: deleteField() as unknown as string } : resto;
+}
 
-  async add(data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }): Promise<string> {
+/**
+ * Escrita de dispositivos. Quando o catálogo de busca existe (`meta`), o
+ * documento e sua entrada no catálogo são gravados no MESMO writeBatch.
+ * Leituras ficam em FirestoreDispositivosConsultas.ts.
+ */
+export class FirestoreDispositivosRepository implements IDispositivosRepository {
+  async add(data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }, meta: MetaIndice | null = null): Promise<string> {
     const id = data.id || uuidv4();
-    const newDevice = { ...data, id, dataCriacao: new Date().toISOString() };
-    await setDoc(doc(db, 'dispositivos', id), newDevice);
+    const newDevice = { ...data, id, chaveCD: chaveCodigoDispositivo(data.codigo, data.nome), dataCriacao: new Date().toISOString() };
+    if (!meta) {
+      await setDoc(doc(db, 'dispositivos', id), newDevice);
+      return id;
+    }
+    const b = writeBatch(db);
+    b.set(doc(db, 'dispositivos', id), newDevice);
+    registrarNoIndice(b, meta, [{ id, dados: newDevice, novo: true }]);
+    await b.commit();
     return id;
   }
 
-  async update(id: string, data: Partial<Dispositivo>): Promise<void> {
-    await updateDoc(doc(db, 'dispositivos', id), data);
+  /** `atual` (documento antes da alteração) é necessário para manter o catálogo completo. */
+  async update(id: string, dataOriginal: Partial<Dispositivo>, atual: Dispositivo | null = null, meta: MetaIndice | null = null): Promise<void> {
+    const data = comChaveAtualizada(dataOriginal, atual);
+    if (!meta || !atual) {
+      await updateDoc(doc(db, 'dispositivos', id), data);
+      return;
+    }
+    const b = writeBatch(db);
+    b.update(doc(db, 'dispositivos', id), data);
+    registrarNoIndice(b, meta, [{ id, dados: { ...atual, ...data } }]);
+    await b.commit();
   }
 
-  async delete(id: string): Promise<void> {
-    await deleteDoc(doc(db, 'dispositivos', id));
-    await storageService.deleteFolder(`retool/dispositivos/${id}`);
+  /** Exclui o dispositivo, as reutilizações informadas e a entrada do catálogo de uma só vez. */
+  async delete(id: string, reutilizacaoIds: string[] = [], meta: MetaIndice | null = null): Promise<void> {
+    if (!meta && reutilizacaoIds.length === 0) {
+      await deleteDoc(doc(db, 'dispositivos', id));
+    } else {
+      const b = writeBatch(db);
+      b.delete(doc(db, 'dispositivos', id));
+      for (const r of reutilizacaoIds) b.delete(doc(db, 'reutilizacoes', r));
+      registrarNoIndice(b, meta, [{ id, dados: null }]);
+      await b.commit();
+    }
+    await apagarPastaDoDispositivo(id);
   }
 
-  async importarLote(
+  /**
+   * Altera vários dispositivos em lotes (ex.: desativar em massa).
+   * `extras(batch, item)` permite gravar a auditoria no mesmo lote.
+   */
+  async atualizarEmLote(
+    atuais: Dispositivo[],
+    patch: Partial<Dispositivo>,
+    meta: MetaIndice | null,
+    extras?: (b: ReturnType<typeof writeBatch>, d: Dispositivo) => void,
+    onProgresso?: (feitos: number, total: number) => void
+  ): Promise<{ sucesso: number; erros: number; falhas: string[] }> {
+    let sucesso = 0, erros = 0;
+    const falhas: string[] = [];
+    for (let i = 0; i < atuais.length; i += ITENS_POR_LOTE_EM_MASSA) {
+      const lote = atuais.slice(i, i + ITENS_POR_LOTE_EM_MASSA);
+      const b = writeBatch(db);
+      for (const d of lote) {
+        b.update(doc(db, 'dispositivos', d.id), patch);
+        extras?.(b, d);
+      }
+      registrarNoIndice(b, meta, lote.map(d => ({ id: d.id, dados: { ...d, ...patch } })));
+      try {
+        await b.commit();
+        sucesso += lote.length;
+      } catch (error) {
+        erros += lote.length;
+        falhas.push(error instanceof Error ? error.message : String(error));
+        if ((error as { code?: string })?.code === 'resource-exhausted') { erros += atuais.length - i - lote.length; break; }
+      }
+      onProgresso?.(Math.min(atuais.length, i + lote.length), atuais.length);
+    }
+    return { sucesso, erros, falhas };
+  }
+
+  /**
+   * Exclusão em massa com cascata: cada dispositivo sai junto com suas
+   * reutilizações e sua entrada no catálogo, em lotes. Pastas de anexos são
+   * apagadas depois, em segundo plano (3 por vez), sem segurar o retorno.
+   */
+  async excluirComVinculosEmLote(
+    itens: { dispositivo: Dispositivo; reutilizacaoIds: string[] }[],
+    meta: MetaIndice | null,
+    extras?: (b: ReturnType<typeof writeBatch>, d: Dispositivo) => void,
+    onProgresso?: (feitos: number, total: number) => void
+  ): Promise<{ excluidos: number; erros: number; falhas: string[] }> {
+    let excluidos = 0, erros = 0;
+    const falhas: string[] = [];
+    const apagados: string[] = [];
+    let i = 0;
+    while (i < itens.length) {
+      // Monta um lote respeitando o limite de 500 escritas por commit.
+      const b = writeBatch(db);
+      const lote: typeof itens = [];
+      // meta + no máximo uma operação por parte do índice tocada
+      let escritas = meta ? Math.min(meta.partes, ITENS_POR_LOTE_EM_MASSA) + 1 : 0;
+      while (i < itens.length && lote.length < ITENS_POR_LOTE_EM_MASSA) {
+        const custo = 3 + itens[i].reutilizacaoIds.length;
+        if (lote.length && escritas + custo > 480) break;
+        lote.push(itens[i]); escritas += custo; i++;
+      }
+      for (const it of lote) {
+        b.delete(doc(db, 'dispositivos', it.dispositivo.id));
+        for (const r of it.reutilizacaoIds) b.delete(doc(db, 'reutilizacoes', r));
+        extras?.(b, it.dispositivo);
+      }
+      registrarNoIndice(b, meta, lote.map(it => ({ id: it.dispositivo.id, dados: null })));
+      try {
+        await b.commit();
+        excluidos += lote.length;
+        apagados.push(...lote.map(it => it.dispositivo.id));
+      } catch (error) {
+        erros += lote.length;
+        falhas.push(error instanceof Error ? error.message : String(error));
+        if ((error as { code?: string })?.code === 'resource-exhausted') { erros += itens.length - i; break; }
+      }
+      onProgresso?.(excluidos + erros, itens.length);
+    }
+    // Os anexos saem em segundo plano: a exclusão já foi gravada e a tela não
+    // precisa esperar o Storage (pode levar minutos com milhares de pastas).
+    void (async () => {
+      for (let j = 0; j < apagados.length; j += 3) {
+        await Promise.all(apagados.slice(j, j + 3).map(id => apagarPastaDoDispositivo(id).catch(() => undefined)));
+      }
+    })();
+    return { excluidos, erros, falhas };
+  }
+
+  importarLote(
     novosDispositivos: Partial<Dispositivo>[],
     newCategoriasNomes: string[],
     newFamiliasNomes: string[],
     newProdutosNomes: string[],
     categoriasExistentes: Categoria[],
     familiasExistentes: Familia[],
-    produtosExistentes: Produto[]
-  ): Promise<{ sucesso: number; erros: number }> {
-    // 1. Criar novas entidades dinamicamente no Firestore
-    const categoriasCriadas = new Map<string, string>(); // nome -> id
-    const familiasCriadas = new Map<string, string>();
-    const produtosCriados = new Map<string, string>();
+    produtosExistentes: Produto[],
+    opcoes?: OpcoesImportacaoLote
+  ): Promise<ResultadoImportacaoLote> {
+    return importarLoteFirestore(
+      novosDispositivos, newCategoriasNomes, newFamiliasNomes, newProdutosNomes,
+      categoriasExistentes, familiasExistentes, produtosExistentes, opcoes
+    );
+  }
 
-    // A. Categorias
-    if (newCategoriasNomes.length > 0) {
-      let catBatch = writeBatch(db);
-      let catCount = 0;
-      
-      for (const nomeCat of newCategoriasNomes) {
-        const existingCat = categoriasExistentes.find(c => c.nome?.toLowerCase().trim() === nomeCat.toLowerCase().trim());
-        if (existingCat) {
-          categoriasCriadas.set(nomeCat, existingCat.id);
-          continue;
-        }
-
-        let alreadyCreatedId = null;
-        for (const [createdNome, createdId] of categoriasCriadas.entries()) {
-          if (createdNome.toLowerCase().trim() === nomeCat.toLowerCase().trim()) {
-            alreadyCreatedId = createdId;
-            break;
-          }
-        }
-        if (alreadyCreatedId) {
-          categoriasCriadas.set(nomeCat, alreadyCreatedId);
-          continue;
-        }
-
-        const catId = uuidv4();
-        catBatch.set(doc(db, 'categorias', catId), {
-          id: catId,
-          nome: nomeCat,
-          ativo: true
-        });
-        categoriasCriadas.set(nomeCat, catId);
-        catCount++;
-        
-        if (catCount === 500) {
-          await catBatch.commit();
-          catBatch = writeBatch(db);
-          catCount = 0;
-        }
-      }
-      if (catCount > 0) await catBatch.commit();
-    }
-
-    // B. Famílias
-    if (newFamiliasNomes.length > 0) {
-      let famBatch = writeBatch(db);
-      let famCount = 0;
-      for (const nomeFam of newFamiliasNomes) {
-        const existingFam = familiasExistentes.find(f => f.nome?.toLowerCase().trim() === nomeFam.toLowerCase().trim());
-        if (existingFam) {
-          familiasCriadas.set(nomeFam, existingFam.id);
-          continue;
-        }
-
-        let alreadyCreatedId = null;
-        for (const [createdNome, createdId] of familiasCriadas.entries()) {
-          if (createdNome.toLowerCase().trim() === nomeFam.toLowerCase().trim()) {
-            alreadyCreatedId = createdId;
-            break;
-          }
-        }
-        if (alreadyCreatedId) {
-          familiasCriadas.set(nomeFam, alreadyCreatedId);
-          continue;
-        }
-
-        const famId = uuidv4();
-        famBatch.set(doc(db, 'familias', famId), { id: famId, nome: nomeFam, ativo: true });
-        familiasCriadas.set(nomeFam, famId);
-        famCount++;
-        if (famCount === 500) { await famBatch.commit(); famBatch = writeBatch(db); famCount = 0; }
-      }
-      if (famCount > 0) await famBatch.commit();
-    }
-
-    // C. Produtos
-    if (newProdutosNomes.length > 0) {
-      let prodBatch = writeBatch(db);
-      let prodCount = 0;
-      for (const nomeProd of newProdutosNomes) {
-        const existingProd = produtosExistentes.find(p => p.nome?.toLowerCase().trim() === nomeProd.toLowerCase().trim());
-        if (existingProd) {
-          produtosCriados.set(nomeProd, existingProd.id);
-          continue;
-        }
-
-        let alreadyCreatedId = null;
-        for (const [createdNome, createdId] of produtosCriados.entries()) {
-          if (createdNome.toLowerCase().trim() === nomeProd.toLowerCase().trim()) {
-            alreadyCreatedId = createdId;
-            break;
-          }
-        }
-        if (alreadyCreatedId) {
-          produtosCriados.set(nomeProd, alreadyCreatedId);
-          continue;
-        }
-
-        const prodId = uuidv4();
-        prodBatch.set(doc(db, 'produtos', prodId), { id: prodId, nome: nomeProd, ativo: true });
-        produtosCriados.set(nomeProd, prodId);
-        prodCount++;
-        if (prodCount === 500) { await prodBatch.commit(); prodBatch = writeBatch(db); prodCount = 0; }
-      }
-      if (prodCount > 0) await prodBatch.commit();
-    }
-
-    // 2. Processar dispositivos em lotes de 500
-    let batch = writeBatch(db);
-    let opCount = 0;
-    let sucesso = 0;
-    
-    // Pegar dispositivos atuais para atualizar se existir
-    let currentDispositivos: Dispositivo[] = [];
-    const unsub = onSnapshot(collection(db, 'dispositivos'), (snapshot) => {
-      currentDispositivos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Dispositivo));
-    });
-    // Wait briefly or query manually (to be safe and pure since onSnapshot is async, but we can query it)
-    // Actually, since this runs in the context provider or we already have the state passed down, we don't need a new onSnapshot inside!
-    // Wait, the parameter "novosDispositivos" can match against the "dispositivos" array in the db.
-    // Let's pass the current devices from the call! Wait, can we? Let's check. Yes, it's already a parameter: we can add `currentDispositivos` as an argument or query it.
-    // Let's look at the method signature:
-    // importarLote(novosDispositivos, newCategoriasNomes, newFamiliasNomes, newProdutosNomes, categoriasExistentes, familiasExistentes, produtosExistentes)
-    // Let's just fetch all devices once using a simple getDocs query or pass currentDispositivos from the UI.
-    // Passing currentDispositivos from UI or another snapshot listener is very easy and aligns with current architecture. Let's update the signature to pass currentDispositivos as well!
-    unsub(); // Clean up dummy onSnapshot
-
-    // Wait! Let's get the list of current devices from the parameter or by querying. Let's query them using getDocs to make the repository call self-contained and not depend on UI state!
-    // Yes, querying via getDocs is much cleaner and avoids passing large arrays from React state.
-    // Wait, let's import getDocs and query from firebase.
-    // Let's do that!
-    
-    const { getDocs } = await import('firebase/firestore');
-    const dispSnapshot = await getDocs(collection(db, 'dispositivos'));
-    const dbDispositivos = dispSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Dispositivo));
-
-    for (const disp of novosDispositivos) {
-      if (disp.categoriaId) {
-        if (categoriasCriadas.has(disp.categoriaId)) {
-          disp.categoriaId = categoriasCriadas.get(disp.categoriaId);
-        } else {
-          let foundId = null;
-          for (const [nomeCat, catId] of categoriasCriadas.entries()) {
-            if (nomeCat.toLowerCase().trim() === disp.categoriaId.toLowerCase().trim()) {
-              foundId = catId;
-              break;
-            }
-          }
-          if (foundId) disp.categoriaId = foundId;
-        }
-      }
-      
-      if (disp.familiaId) {
-        if (familiasCriadas.has(disp.familiaId)) {
-          disp.familiaId = familiasCriadas.get(disp.familiaId);
-        } else {
-          let foundId = null;
-          for (const [nomeFam, famId] of familiasCriadas.entries()) {
-            if (nomeFam.toLowerCase().trim() === disp.familiaId.toLowerCase().trim()) {
-              foundId = famId;
-              break;
-            }
-          }
-          if (foundId) disp.familiaId = foundId;
-        }
-      }
-
-      if (disp.produtoId) {
-        if (produtosCriados.has(disp.produtoId)) {
-          disp.produtoId = produtosCriados.get(disp.produtoId);
-        } else {
-          let foundId = null;
-          for (const [nomeProd, prodId] of produtosCriados.entries()) {
-            if (nomeProd.toLowerCase().trim() === disp.produtoId.toLowerCase().trim()) {
-              foundId = prodId;
-              break;
-            }
-          }
-          if (foundId) disp.produtoId = foundId;
-        }
-      }
-
-      let existingDisp = null;
-      if (disp.codigo) {
-        existingDisp = dbDispositivos.find(d => d.codigo === disp.codigo);
-      }
-      if (!existingDisp && disp.nome) {
-        existingDisp = dbDispositivos.find(d => d.nome === disp.nome);
-      }
-
-      const docRef = existingDisp 
-        ? doc(db, 'dispositivos', existingDisp.id)
-        : doc(db, 'dispositivos', uuidv4());
-        
-      const dataToSave = existingDisp 
-        ? { ...disp } 
-        : { ...disp, dataCriacao: new Date().toISOString() };
-
-      if (!existingDisp) {
-        (dataToSave as any).id = docRef.id;
-      }
-
-      batch.set(docRef, dataToSave, { merge: true });
-      opCount++;
-      sucesso++;
-
-      if (opCount === 500) {
+  async excluirEmLote(
+    ids: string[],
+    meta: MetaIndice | null = null,
+    onProgresso?: (feitos: number, total: number) => void,
+    sinal?: AbortSignal
+  ): Promise<{ excluidos: number; erros: number; falhas: string[]; cancelado?: boolean }> {
+    let excluidos = 0;
+    let erros = 0;
+    const falhas: string[] = [];
+    // Com o catálogo, cada exclusão também remove a entrada (1 escrita a mais por item + a meta).
+    const porLote = meta ? 240 : 500;
+    onProgresso?.(0, ids.length);
+    for (let i = 0; i < ids.length; i += porLote) {
+      if (sinal?.aborted) return { excluidos, erros, falhas, cancelado: true };
+      const lote = ids.slice(i, i + porLote);
+      const batch = writeBatch(db);
+      for (const id of lote) batch.delete(doc(db, 'dispositivos', id));
+      registrarNoIndice(batch, meta, lote.map(id => ({ id, dados: null })));
+      try {
         await batch.commit();
-        batch = writeBatch(db);
-        opCount = 0;
+        excluidos += lote.length;
+      } catch (error) {
+        erros += lote.length;
+        falhas.push(error instanceof Error ? error.message : String(error));
+        console.error('Falha ao excluir lote de dispositivos:', error);
       }
+      onProgresso?.(excluidos + erros, ids.length);
     }
-
-    if (opCount > 0) {
-      await batch.commit();
-    }
-
-    return { sucesso, erros: 0 };
+    return { excluidos, erros, falhas };
   }
 }

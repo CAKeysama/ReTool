@@ -14,7 +14,7 @@ Em indústrias pesadas, o conhecimento sobre uma ferramenta costuma ficar com os
 
 Uma plataforma única, que aceita dados incompletos: a falta de um campo não impede o cadastro.
 
-- **Dispositivos:** cadastro flexível, imagens e PDFs, busca multidimensional, importação de planilhas (CSV/XLSX) sem duplicar classificações e ações em massa.
+- **Dispositivos:** cadastro flexível, imagens e PDFs, busca multidimensional, importação de planilhas (CSV/XLSX) sem duplicar classificações, em que cada combinação **Código + Dispositivo** vira um único registro (detalhes em [docs/IMPORTACAO_DISPOSITIVOS.md](./docs/IMPORTACAO_DISPOSITIVOS.md)), e ações em massa.
 - **Reutilizações:** fluxo entre Engenharia e Projetista com filas por perfil, histórico e *hard saving*.
 - **Controle de acesso:** cargos com permissões validadas no servidor (regras do Firestore); cadastro público como Convidado, sujeito a aprovação; solicitações de alteração de cargo; contas com senha temporária e troca obrigatória no primeiro acesso.
 - **Notificações e auditoria:** avisos em tempo real e Histórico de Ações imutável, com filtros, exclusivo da Administração.

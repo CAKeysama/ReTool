@@ -7,15 +7,19 @@ import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink, Send, C
 import { AccessibleModal } from '../components/AccessibleModal';
 import { SolicitarReutilizacaoModal } from '../components/SolicitarReutilizacaoModal';
 import { formatFileSize } from '../utils/fileValidators';
+import { useDispositivo, useReutilizacoesDoDispositivo } from '../presentation/hooks/useDispositivo';
+import { EstadoDados, SkeletonLinha, SkeletonTabela, classificarErro, mensagemDeErro } from '../components/feedback';
+import { gravarComPrazo } from '../utils/tempo';
 
 export function DispositivoDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { canCadastrar, canEditar, canExcluir, canSolicitar, isEngenharia } = usePermissions();
-  const { dispositivos, categorias, reutilizacoes, familias, produtos, addReutilizacao, deleteReutilizacao, addProduto, openDispForm, announce } = useReTool();
-  
-  const disp = dispositivos.find(p => p.id === id);
-  const dispReutilizacoes = reutilizacoes.filter(u => u.dispositivoId === id);
+  const { categorias, familias, produtos, addReutilizacao, deleteReutilizacao, addProduto, openDispForm, announce } = useReTool();
+
+  // Só o documento exibido e as reutilizações dele (antes: coleções inteiras).
+  const { dispositivo: disp, estado: estadoDisp, erro: erroDisp, tentarNovamente } = useDispositivo(id);
+  const { reutilizacoes: dispReutilizacoes, estado: estadoReu, erro: erroReu, tentarNovamente: tentarReu } = useReutilizacoesDoDispositivo(id);
   const categoria = categorias.find(c => c.id === disp?.categoriaId);
   const familia = familias.find(f => f.id === disp?.familiaId);
   const produto = produtos.find(p => p.id === disp?.produtoId);
@@ -35,6 +39,23 @@ export function DispositivoDetails() {
     descricaoAlteracao: ''
   });
   const [produtoCustomizado, setProdutoCustomizado] = useState('');
+  const [salvandoReutilizacao, setSalvandoReutilizacao] = useState(false);
+
+  if (estadoDisp === 'carregando') {
+    return (
+      <div aria-busy="true" aria-label="Carregando dispositivo">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: 'var(--spacing-xl)' }}>
+          <SkeletonLinha largura={260} altura={24} />
+          <SkeletonLinha largura={140} altura={14} />
+        </div>
+        <SkeletonTabela linhas={4} colunas={3} />
+      </div>
+    );
+  }
+
+  if (estadoDisp === 'erro') {
+    return <EstadoDados estado={classificarErro(erroDisp)} onTentarNovamente={tentarNovamente} />;
+  }
 
   if (!disp) {
     return (
@@ -68,21 +89,24 @@ export function DispositivoDetails() {
 
   const handleCreateReutilizacao = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (salvandoReutilizacao) return;
     if (!canCadastrar) {
       announce('Acesso negado: seu perfil não tem permissão para cadastrar reutilizações diretamente.');
       return;
     }
     let finalProdutoId = novaReutilizacao.produtoId;
     
+    if (finalProdutoId === 'custom' && !produtoCustomizado.trim()) {
+      alert('Por favor, digite o nome do novo produto.');
+      return;
+    }
+    setSalvandoReutilizacao(true);
+    try {
     if (finalProdutoId === 'custom') {
-      if (!produtoCustomizado.trim()) {
-        alert('Por favor, digite o nome do novo produto.');
-        return;
-      }
-      finalProdutoId = await addProduto({ nome: produtoCustomizado.trim() });
+      finalProdutoId = await gravarComPrazo(addProduto({ nome: produtoCustomizado.trim() }));
     }
 
-    await addReutilizacao({
+    await gravarComPrazo(addReutilizacao({
       dispositivoId: disp.id,
       data: novaReutilizacao.data,
       codigoPeca: novaReutilizacao.codigoPeca,
@@ -93,9 +117,15 @@ export function DispositivoDetails() {
       responsavel: novaReutilizacao.responsavel,
       numeroOs: novaReutilizacao.numeroOs,
       descricaoAlteracao: novaReutilizacao.descricaoAlteracao
-    });
+    }));
 
     setIsModalOpen(false);
+    } catch (err) {
+      console.error(err);
+      announce(mensagemDeErro(err, 'Não foi possível salvar a reutilização. Tente novamente.'));
+    } finally {
+      setSalvandoReutilizacao(false);
+    }
   };
 
   const getBadgeColor = (text: string) => {
@@ -104,6 +134,9 @@ export function DispositivoDetails() {
     return c === 0 ? 'badge badge-pink' : c === 1 ? 'badge badge-teal' : c === 2 ? 'badge badge-yellow' : 'badge badge-blue';
   };
 
+  // Enquanto as reutilizações não chegaram (ou falharam), o resumo mostra "…"/"—" em vez de zeros.
+  const resumoPronto = estadoReu === 'pronto';
+  const resumoVazio = estadoReu === 'erro' ? '—' : '…';
   const totalHardSaving = dispReutilizacoes.reduce((acc, curr) => acc + (curr.hardSaving || 0), 0);
   const sortedReutilizacoes = [...dispReutilizacoes].sort((a, b) => new Date(b.data || b.dataCriacao || '').getTime() - new Date(a.data || a.dataCriacao || '').getTime());
 
@@ -134,7 +167,7 @@ export function DispositivoDetails() {
           </button>
           <div>
             <h2 style={{ margin: 0, fontSize: '1.4rem' }}>{disp.nome || 'Sem Nome'}</h2>
-            <div style={{ color: '#9ca3af', fontSize: '0.85rem' }}>{disp.codigo || 'S/C'}</div>
+            <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{disp.codigo || 'S/C'}</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -181,22 +214,22 @@ export function DispositivoDetails() {
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Nº dispositivo</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Nº dispositivo</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>CÓDIGO PEÇA</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>CÓDIGO PEÇA</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.codigo || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>PESO dispositivo</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>PESO dispositivo</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.peso ? `${disp.peso}` : <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>PALAVRAS CHAVE</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>PALAVRAS CHAVE</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 {(disp.palavrasChave || []).map(tag => (
                   <span key={tag} className="badge badge-pink">{tag}</span>
@@ -208,30 +241,30 @@ export function DispositivoDetails() {
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Família do Produto</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Família do Produto</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{familia?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Produto</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Produto</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{produto?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>CATEGORIA</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>CATEGORIA</div>
               <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{categoria?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
             </div>
           </div>
 
           <div style={{ marginBottom: 'var(--spacing-md)' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>DESCRIÇÃO PEÇA</div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>DESCRIÇÃO PEÇA</div>
             <div style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', lineHeight: 1.6 }}>{disp.descricao || <span style={{color: '#d1d5db'}}>Não informada.</span>}</div>
           </div>
 
           {disp.observacoes && (
             <div style={{ marginBottom: 'var(--spacing-md)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '4px' }}>Observações (Legado)</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Observações (Legado)</div>
               <div style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', lineHeight: 1.6 }}>{disp.observacoes}</div>
             </div>
           )}
@@ -239,7 +272,7 @@ export function DispositivoDetails() {
           {/* Seção de Mídia Relacionada (Imagens e Documentos) */}
           {(disp.imagemPeca || disp.imagemDispositivo || (disp.anexos && disp.anexos.length > 0)) && (
             <div style={{ marginTop: 'var(--spacing-lg)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-md)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', marginBottom: 'var(--spacing-sm)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 'var(--spacing-sm)' }}>
                 Arquivos e Mídias Anexadas
               </div>
 
@@ -341,25 +374,25 @@ export function DispositivoDetails() {
           
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Reutilizações</span>
-            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{dispReutilizacoes.length}</span>
+            <span style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{resumoPronto ? dispReutilizacoes.length : resumoVazio}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Hard Saving Total</span>
-            <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>R$ {totalHardSaving.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>{resumoPronto ? `R$ ${totalHardSaving.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : resumoVazio}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Primeira Reutilização</span>
             <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.85rem' }}>
-              {primeiraReutilizacao ? formatDisplayDate(primeiraReutilizacao.data || primeiraReutilizacao.dataCriacao || '') : 'N/A'}
+              {!resumoPronto ? resumoVazio : primeiraReutilizacao ? formatDisplayDate(primeiraReutilizacao.data || primeiraReutilizacao.dataCriacao || '') : 'N/A'}
             </span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Última Reutilização</span>
             <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.85rem' }}>
-              {ultimaReutilizacao ? formatDisplayDate(ultimaReutilizacao.data || ultimaReutilizacao.dataCriacao || '') : 'N/A'}
+              {!resumoPronto ? resumoVazio : ultimaReutilizacao ? formatDisplayDate(ultimaReutilizacao.data || ultimaReutilizacao.dataCriacao || '') : 'N/A'}
             </span>
           </div>
           
@@ -375,7 +408,7 @@ export function DispositivoDetails() {
 
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Cadastro</span>
-            <span style={{ fontSize: '0.85rem', color: '#9ca3af' }}>{new Date(disp.dataCriacao || '').toLocaleDateString('pt-BR')}</span>
+            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>{new Date(disp.dataCriacao || '').toLocaleDateString('pt-BR')}</span>
           </div>
         </div>
 
@@ -423,12 +456,16 @@ export function DispositivoDetails() {
           </div>
         </div>
         
-        {dispReutilizacoes.length === 0 ? (
-          <div style={{ padding: 'var(--spacing-lg)', color: '#9ca3af', fontSize: '0.9rem', textAlign: 'center' }}>
+        {estadoReu === 'carregando' ? (
+          <SkeletonTabela linhas={3} colunas={6} />
+        ) : estadoReu === 'erro' ? (
+          <EstadoDados estado={classificarErro(erroReu)} compacto onTentarNovamente={tentarReu} />
+        ) : dispReutilizacoes.length === 0 ? (
+          <div style={{ padding: 'var(--spacing-lg)', color: '#6b7280', fontSize: '0.9rem', textAlign: 'center' }}>
             Nenhuma reutilização registrada ainda.
           </div>
         ) : (
-          <div>
+          <div className="tabela-rolavel" role="region" aria-label="Histórico de reutilizações" tabIndex={0}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.83rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid var(--color-border)' }}>
@@ -515,7 +552,7 @@ export function DispositivoDetails() {
                           R$ {(u.hardSaving || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                         <td style={{ padding: '12px 8px', color: corDestaque, maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.responsavel}>{u.responsavel || u.solicitanteNome || 'N/A'}</td>
-                        <td style={{ padding: '12px 8px', color: '#9ca3af' }}>
+                        <td style={{ padding: '12px 8px', color: '#6b7280' }}>
                           <ChevronDown size={16} style={{ transform: aberto ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', display: 'block' }} />
                         </td>
                         {canExcluir && (
@@ -537,34 +574,34 @@ export function DispositivoDetails() {
                           <td colSpan={7 + (canExcluir ? 1 : 0)} style={{ padding: '14px 18px' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px 24px', fontSize: '0.8rem', color: '#4b5563' }}>
                               <div>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Descrição da alteração realizada</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '3px' }}>Descrição da alteração realizada</div>
                                 <div style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{u.descricaoAlteracao || 'N/A'}</div>
                               </div>
                               <div>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Descrição da peça</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '3px' }}>Descrição da peça</div>
                                 <div>{u.descricaoPeca || 'N/A'}</div>
                               </div>
                               <div>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Produto</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '3px' }}>Produto</div>
                                 <div>{produtos.find(p => p.id === u.produtoId)?.nome || u.produtoId || 'N/A'}</div>
                               </div>
                               <div>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Peso da peça</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '3px' }}>Peso da peça</div>
                                 <div>{(u.pesoPeca || 0).toLocaleString('pt-BR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</div>
                               </div>
                               <div>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Nº OS</div>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '3px' }}>Nº OS</div>
                                 <div>{u.numeroOs || '—'}</div>
                               </div>
                               {u.solicitanteNome && (
                                 <div>
-                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Solicitante</div>
+                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '3px' }}>Solicitante</div>
                                   <div>{u.solicitanteNome}</div>
                                 </div>
                               )}
                               {u.aprovadorNome && (
                                 <div>
-                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '3px' }}>Análise</div>
+                                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: '3px' }}>Análise</div>
                                   <div>{u.aprovadorNome}{u.dataAprovacao ? ` em ${new Date(u.dataAprovacao).toLocaleDateString('pt-BR')}` : ''}</div>
                                 </div>
                               )}
@@ -705,7 +742,7 @@ export function DispositivoDetails() {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }}>
             <button type="button" className="btn" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: 'white' }}>Registrar Reutilização</button>
+            <button type="submit" className="btn btn-primary" disabled={salvandoReutilizacao} aria-busy={salvandoReutilizacao} style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: 'white' }}>{salvandoReutilizacao ? 'Registrando…' : 'Registrar Reutilização'}</button>
           </div>
         </form>
       </AccessibleModal>
