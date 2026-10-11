@@ -395,7 +395,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (situacao === 'pendente' || situacao === 'rejeitado') {
       throw new ErroValidacao('Cadastros pendentes ou rejeitados não têm senha redefinida pela Administração.');
     }
-    await contasService.enviarEmailRedefinicaoSenha(alvo.email);
+    try {
+      await contasService.enviarEmailRedefinicaoSenha(alvo.email);
+    } catch (e) {
+      if ((e as { code?: string })?.code === 'auth/user-not-found') {
+        throw new ErroValidacao(`Não existe conta de acesso para ${alvo.email} no Firebase Authentication.`);
+      }
+      throw e;
+    }
     await registrarAcaoAdministrativa({
       acao: 'redefinicao_senha',
       acaoDescricao: `Enviou o e-mail de redefinição de senha para ${alvo.nome || alvo.email}`,
@@ -406,8 +413,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Sem sessão não há auditoria (as regras exigem autoria): a tentativa só
-  // vira e-mail. O Firebase não revela se o e-mail existe.
-  const solicitarRedefinicaoSenha = (email: string) => contasService.enviarEmailRedefinicaoSenha(email);
+  // vira e-mail. Projetos sem a proteção contra enumeração de e-mails
+  // respondem "usuário não encontrado"; a tela trata como enviado para não
+  // revelar quais e-mails têm conta.
+  const solicitarRedefinicaoSenha = async (email: string) => {
+    try {
+      await contasService.enviarEmailRedefinicaoSenha(email);
+    } catch (e) {
+      if ((e as { code?: string })?.code !== 'auth/user-not-found') throw e;
+    }
+  };
 
   const solicitarAlteracaoCargo = async (perfil: UserRole, justificativa?: string) => {
     await solicitarCargoUseCase.execute({ usuario: userProfile, perfilSolicitado: perfil, justificativa });
