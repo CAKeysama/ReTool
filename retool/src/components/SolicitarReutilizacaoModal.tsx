@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { useReTool } from '../context/ReToolContext';
 import { useAuth } from '../context/AuthContext';
 import { Dispositivo } from '../domain/entities/dispositivo';
-import { X, Send, Cpu, AlertCircle } from 'lucide-react';
+import { X, Send, Cpu, AlertCircle, LoaderCircle } from 'lucide-react';
+import { useAsyncAction } from '../hooks/useAsyncAction';
+import { mensagemDeErro } from './feedback/EstadoDados';
+import { gravarComPrazo } from '../utils/tempo';
 
 interface SolicitarReutilizacaoModalProps {
   dispositivo: Dispositivo;
@@ -11,7 +14,7 @@ interface SolicitarReutilizacaoModalProps {
 }
 
 export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: SolicitarReutilizacaoModalProps) {
-  const { produtos, solicitarReutilizacao, announce } = useReTool();
+  const { produtos, solicitarReutilizacao } = useReTool();
   const { userProfile } = useAuth();
 
   const [codigoPeca, setCodigoPeca] = useState('');
@@ -21,46 +24,57 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
   const [pesoPeca, setPesoPeca] = useState<number | ''>('');
   const [hardSaving, setHardSaving] = useState<number | ''>('');
   const [descricaoAlteracao, setDescricaoAlteracao] = useState('');
-  const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const tituloId = useId();
+
+  // Envio com trava contra clique duplo; o sucesso só é anunciado depois da gravação.
+  const envio = useAsyncAction(async () => {
+    const solicitante = userProfile?.nome || 'Engenharia de Processo';
+
+    await gravarComPrazo(solicitarReutilizacao(
+      {
+        dispositivoId: dispositivo.id,
+        data: new Date().toISOString().split('T')[0],
+        codigoPeca: codigoPeca.trim(),
+        descricaoPeca: descricaoPeca.trim() || dispositivo.nome,
+        produtoId: produtoId || produtos[0]?.id || 'padrao',
+        pesoPeca: Number(pesoPeca) || 0,
+        hardSaving: Number(hardSaving) || 0,
+        responsavel: solicitante,
+        numeroOs: numeroOs.trim(),
+        descricaoAlteracao: descricaoAlteracao.trim()
+      },
+      solicitante,
+      userProfile?.uid
+    ));
+  });
+  const loading = envio.emAndamento;
+
+  const fechar = () => { if (!loading) onClose(); };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !loading) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, loading, onClose]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    if (loading) return;
     setErro('');
-
-    try {
-      if (!codigoPeca.trim() || !descricaoAlteracao.trim()) {
-        throw new Error('Preencha o código da peça e a descrição da alteração pretendida.');
-      }
-
-      const solicitante = userProfile?.nome || 'Engenharia de Processo';
-
-      await solicitarReutilizacao(
-        {
-          dispositivoId: dispositivo.id,
-          data: new Date().toISOString().split('T')[0],
-          codigoPeca: codigoPeca.trim(),
-          descricaoPeca: descricaoPeca.trim() || dispositivo.nome,
-          produtoId: produtoId || produtos[0]?.id || 'padrao',
-          pesoPeca: Number(pesoPeca) || 0,
-          hardSaving: Number(hardSaving) || 0,
-          responsavel: solicitante,
-          numeroOs: numeroOs.trim(),
-          descricaoAlteracao: descricaoAlteracao.trim()
-        },
-        solicitante,
-        userProfile?.uid
-      );
-
-      announce('Solicitação registrada! Envie para a análise do Projetista na Fila da Engenharia.');
+    if (!codigoPeca.trim() || !descricaoAlteracao.trim()) {
+      setErro('Preencha o código da peça e a descrição da alteração pretendida.');
+      return;
+    }
+    const r = await envio.executar();
+    if (r.ok) {
+      // A mensagem de sucesso é anunciada pelo contexto, após a gravação e a auditoria.
       onClose();
-    } catch (err: any) {
-      setErro(err.message || 'Erro ao enviar solicitação.');
-    } finally {
-      setLoading(false);
+    } else if (!r.ignorado) {
+      setErro(mensagemDeErro(r.erro, 'Erro ao enviar solicitação.'));
     }
   };
 
@@ -79,6 +93,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
       }}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={tituloId}
     >
       <div style={{
         backgroundColor: 'white',
@@ -114,7 +129,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
               <Cpu size={20} />
             </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '1.15rem', color: '#9a3412', fontWeight: 700 }}>
+              <h2 id={tituloId} style={{ margin: 0, fontSize: '1.15rem', color: '#9a3412', fontWeight: 700 }}>
                 Solicitar Reutilização de Dispositivo
               </h2>
               <div style={{ fontSize: '0.8rem', color: '#c2410c' }}>
@@ -124,7 +139,10 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
           </div>
 
           <button
-            onClick={onClose}
+            type="button"
+            onClick={fechar}
+            disabled={loading}
+            aria-label="Fechar"
             style={{
               background: 'none',
               border: 'none',
@@ -139,10 +157,12 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
         </div>
 
         {/* FORM */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto' }}>
-          <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <form onSubmit={handleSubmit} noValidate aria-busy={loading || undefined} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+          {/* A rolagem fica num <div>: o Chrome não rola um <fieldset> com overflow. */}
+          <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
+          <fieldset disabled={loading} style={{ border: 'none', minWidth: 0, margin: 0, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {erro && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontSize: '0.82rem', backgroundColor: '#fee2e2', padding: '10px', borderRadius: '6px' }}>
+              <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontSize: '0.82rem', backgroundColor: '#fee2e2', padding: '10px', borderRadius: '6px' }}>
                 <AlertCircle size={16} />
                 <span>{erro}</span>
               </div>
@@ -152,7 +172,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
               <strong>Fluxo de Aprovação:</strong> A Engenharia formula a solicitação de reutilização. Ela entrará com status <strong>Pendente</strong> e será analisada e aprovada pelo <strong>Projetista</strong> da Ferramentaria.
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="form-row-grid" style={{ gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
                   Código da Nova Peça *
@@ -181,7 +201,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="form-row-grid" style={{ gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
                   Descrição da Peça
@@ -214,7 +234,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="form-row-grid" style={{ gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
                   Peso Estimado (kg)
@@ -257,6 +277,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
                 style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', fontFamily: 'inherit' }}
               />
             </div>
+          </fieldset>
           </div>
 
           {/* FOOTER */}
@@ -270,7 +291,8 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
           }}>
             <button
               type="button"
-              onClick={onClose}
+              onClick={fechar}
+              disabled={loading}
               style={{
                 padding: '8px 16px',
                 borderRadius: 'var(--radius-sm)',
@@ -287,6 +309,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
             <button
               type="submit"
               disabled={loading}
+              aria-busy={loading || undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -298,11 +321,12 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
                 color: 'white',
                 fontWeight: 600,
                 fontSize: '0.85rem',
-                cursor: loading ? 'not-allowed' : 'pointer'
+                cursor: loading ? 'progress' : 'pointer',
+                opacity: loading ? 0.8 : 1
               }}
             >
-              <Send size={16} />
-              <span>{loading ? 'Enviando...' : 'Enviar Solicitação'}</span>
+              {loading ? <LoaderCircle size={16} className="estado-dados-girando" aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
+              <span>{loading ? 'Enviando…' : 'Enviar Solicitação'}</span>
             </button>
           </div>
         </form>

@@ -1,26 +1,40 @@
-import React from 'react';
-import { useDispositivosController } from '../presentation/hooks/useDispositivosController';
+import React, { Suspense, lazy } from 'react';
+import { LimiteDeErro, CarregandoModal } from '../components/LimiteDeErro';
+import { TAMANHOS_PAGINA, useDispositivosController } from '../presentation/hooks/useDispositivosController';
 import { FocusableList } from '../components/FocusableList';
-import { BulkActionModal, BulkItem } from '../components/BulkActionModal';
-import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks, CopyX } from 'lucide-react';
+import { Plus, Search, Box, Filter, ChevronDown, ChevronLeft, ChevronRight, Upload, ListChecks, CopyX, RefreshCw } from 'lucide-react';
 import { AccessibleModal } from '../components/AccessibleModal';
-import { ImportModal } from '../components/ImportModal';
-import { DuplicadosModal } from '../components/DuplicadosModal';
 import { usePermissions } from '../hooks/usePermissions';
+import { useReTool } from '../context/ReToolContext';
+import { SkeletonLista, EstadoDados, ConteudoAtualizavel, IndicadorAtualizacao, BarraProgresso, classificarErro } from '../components/feedback';
+
+// Modais pesados só são baixados quando abertos (a importação traz o leitor de planilhas).
+const ImportModal = lazy(() => import('../components/ImportModal').then(m => ({ default: m.ImportModal })));
+const DuplicadosModal = lazy(() => import('../components/DuplicadosModal').then(m => ({ default: m.DuplicadosModal })));
+const BulkActionModal = lazy(() => import('../components/BulkActionModal').then(m => ({ default: m.BulkActionModal })));
+
+const fmt = (n: number) => n.toLocaleString('pt-BR');
+
+/** Posição de rolagem da lista ao sair (para voltar no mesmo ponto). */
+let rolagemGuardada = 0;
 
 export function Dispositivos() {
   const { canCadastrar, canEditar, canExcluir, isAdmin } = usePermissions();
   const [isDuplicadosOpen, setIsDuplicadosOpen] = React.useState(false);
   const {
     categorias,
-    familias,
-    produtos,
+    nomesCategoria,
+    nomesFamilia,
+    nomesProduto,
     navigate,
     searchInputRef,
 
     // Filtros
     filterQuery,
     handleSearchChange,
+    limparBusca,
+    setBuscaFocada,
+    buscaPendente,
     filterCategoria,
     setFilterCategoria,
     filterProcesso,
@@ -28,18 +42,15 @@ export function Dispositivos() {
     showFilters,
     setShowFilters,
 
-    // Paginação
+    // Paginação / dados
     itemsPerPage,
     setItemsPerPage,
-    currentPage,
-    setCurrentPage,
-    totalPages,
-    filteredDispositivos,
-    paginatedDispositivos,
+    lista,
 
     // Modais individuais
     dispToDelete,
     setDispToDelete,
+    isDeleting,
     isImportOpen,
     setIsImportOpen,
 
@@ -53,25 +64,71 @@ export function Dispositivos() {
     setIsBulkConfirmOpen,
     isBulkLoading,
     bulkProgress,
-    bulkFilteredDispositivos,
+    bulkItems,
+    bulkEmptyMessage,
     toggleBulkSelect,
     toggleSelectAll,
     closeBulkModal,
     handleBulkDisable,
-    handleBulkDelete,
+    handleBulkDelete, cancelarEmMassa, bulkCarregando,
 
     // Ações
     handleDelete,
     getBadgeColor,
     openDispForm
   } = useDispositivosController();
+  const { reconstruirIndiceBusca, announce } = useReTool();
+  const [indiceProgresso, setIndiceProgresso] = React.useState<{ lidos: number; total: number | null } | null>(null);
 
-  const bulkItems: BulkItem[] = bulkFilteredDispositivos.map(d => ({
-    id: d.id,
-    label: d.nome || 'Sem nome',
-    sublabel: d.codigo,
-    inactive: d.ativo === false
-  }));
+  const cancelarIndice = React.useRef<AbortController | null>(null);
+  const atualizarIndice = async () => {
+    if (indiceProgresso) return;
+    const ctrl = new AbortController();
+    cancelarIndice.current = ctrl;
+    setIndiceProgresso({ lidos: 0, total: null });
+    try {
+      await reconstruirIndiceBusca(p => setIndiceProgresso(p), ctrl.signal);
+    } catch (e) {
+      if ((e as { name?: string })?.name === 'AbortError') {
+        announce('Atualização do índice cancelada. Nada foi gravado.');
+      } else if ((e as Error)?.message !== 'indice-alterado-durante-varredura') {
+        console.error(e);
+        announce('Não foi possível atualizar o índice de busca. Tente novamente.');
+      }
+    } finally {
+      cancelarIndice.current = null;
+      setIndiceProgresso(null);
+    }
+  };
+
+  // Busca preparando há muito tempo (rede lenta): oferece voltar para a lista.
+  const [preparoLento, setPreparoLento] = React.useState(false);
+  React.useEffect(() => {
+    if (lista.estado !== 'preparando-busca') { setPreparoLento(false); return; }
+    const t = setTimeout(() => setPreparoLento(true), 10_000);
+    return () => clearTimeout(t);
+  }, [lista.estado]);
+
+  // Volta dos detalhes na mesma posição da lista.
+  const restaurouRolagem = React.useRef(false);
+  React.useEffect(() => {
+    if (restaurouRolagem.current || lista.estado !== 'pronto') return;
+    restaurouRolagem.current = true;
+    if (rolagemGuardada > 0) requestAnimationFrame(() => window.scrollTo(0, rolagemGuardada));
+  }, [lista.estado]);
+  // Guarda enquanto rola (ao desmontar a página já encolheu e a rolagem foi zerada).
+  React.useEffect(() => {
+    const guardar = () => { if (restaurouRolagem.current) rolagemGuardada = window.scrollY; };
+    window.addEventListener('scroll', guardar, { passive: true });
+    return () => window.removeEventListener('scroll', guardar);
+  }, []);
+
+  const botaoFiltrosRef = React.useRef<HTMLButtonElement>(null);
+  const filtrando = !!(filterQuery.trim() || filterCategoria || filterProcesso);
+  const carregandoPrimeira = lista.estado === 'carregando' || lista.estado === 'preparando-busca';
+  const subtitulo = buscaPendente ? 'Buscando…' : lista.total === null
+    ? (carregandoPrimeira ? 'Carregando dispositivos…' : '')
+    : `${fmt(lista.total)} dispositivo${lista.total === 1 ? '' : 's'} ${filtrando ? 'encontrado' + (lista.total === 1 ? '' : 's') : 'cadastrado' + (lista.total === 1 ? '' : 's')}`;
 
   return (
     <>
@@ -79,7 +136,7 @@ export function Dispositivos() {
         <div className="flex-responsive-header">
           <div>
             <h2 style={{ fontSize: '1.8rem', fontWeight: '800' }}>Dispositivos</h2>
-            <div className="subtitle">{filteredDispositivos.length} dispositivos encontrados</div>
+            <div className="subtitle" aria-live="polite">{subtitulo}</div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
 
@@ -95,9 +152,37 @@ export function Dispositivos() {
               </button>
             )}
 
+            {canEditar && (lista.indiceAusente || lista.indiceDesatualizado || indiceProgresso) && (
+              <button
+                className="btn"
+                onClick={atualizarIndice}
+                disabled={!!indiceProgresso}
+                aria-label="Atualizar o índice de busca de dispositivos"
+                title={lista.indiceAusente ? 'A busca por trecho precisa do índice. Criá-lo lê todos os dispositivos uma vez.' : 'O índice de busca difere do banco ou cresceu muito desde a última atualização. Atualizar lê todos os dispositivos uma vez.'}
+                style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <RefreshCw size={18} className={indiceProgresso ? 'spin' : undefined} />
+                <span className="hide-on-mobile">
+                  {indiceProgresso
+                    ? `Atualizando índice${indiceProgresso.total ? ` ${Math.round((indiceProgresso.lidos / indiceProgresso.total) * 100)}%` : '…'}`
+                    : lista.indiceAusente ? 'Criar índice de busca' : 'Atualizar índice'}
+                </span>
+              </button>
+            )}
+            {indiceProgresso && (
+              <button
+                className="btn"
+                onClick={() => cancelarIndice.current?.abort()}
+                aria-label="Cancelar a atualização do índice de busca"
+                style={{ height: '40px', padding: '0 16px' }}
+              >
+                Cancelar
+              </button>
+            )}
+
             {isAdmin && (
               <button
-                className="btn hide-on-mobile"
+                className="btn"
                 onClick={() => setIsDuplicadosOpen(true)}
                 aria-label="Verificar dispositivos duplicados"
                 style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -109,7 +194,7 @@ export function Dispositivos() {
 
             {canExcluir && (
               <button
-                className="btn hide-on-mobile"
+                className="btn"
                 onClick={() => setIsBulkModalOpen(true)}
                 aria-label="Ações em massa"
                 style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -141,21 +226,32 @@ export function Dispositivos() {
               placeholder="Buscar por nome ou código..." 
               value={filterQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => setBuscaFocada(true)}
+              onBlur={() => setBuscaFocada(false)}
               style={{ paddingLeft: '44px', paddingRight: '16px', height: '44px', borderRadius: 'var(--radius)', borderColor: filterQuery ? 'var(--color-primary)' : 'var(--color-border)' }}
               aria-label="Filtro de busca por nome ou código"
+              aria-busy={buscaPendente || carregandoPrimeira}
             />
           </div>
 
-          <div style={{ position: 'relative' }}>
+          <div
+            style={{ position: 'relative' }}
+            onKeyDown={e => {
+              if (e.key === 'Escape' && showFilters) { e.stopPropagation(); setShowFilters(false); botaoFiltrosRef.current?.focus(); }
+            }}
+          >
             <button 
+              ref={botaoFiltrosRef}
               className="btn" 
               style={{ height: '44px', backgroundColor: 'var(--color-surface)', color: 'var(--color-text-body)' }}
               onClick={() => setShowFilters(!showFilters)}
+              aria-expanded={showFilters}
+              aria-controls="painel-filtros"
             >
               <Filter size={16} /> Filtros <ChevronDown size={14} />
             </button>
             {showFilters && (
-              <div style={{
+              <div id="painel-filtros" role="group" aria-label="Filtros" style={{
                 position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 20,
                 backgroundColor: 'white', padding: 'var(--spacing-md)', borderRadius: 'var(--radius)',
                 boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-border)', width: '250px',
@@ -189,41 +285,96 @@ export function Dispositivos() {
           </div>
         </div>
 
+        {/* Estados da lista: carregando ≠ vazio ≠ sem resultados ≠ erro */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', minHeight: '20px', marginBottom: '4px' }}>
+          <IndicadorAtualizacao ativo={buscaPendente || lista.estado === 'atualizando'} texto={buscaPendente ? 'Buscando…' : 'Atualizando…'} />
+        </div>
+        {lista.doCache && lista.itens.length > 0 && (
+          <div role="status" style={{ background: '#fff7e6', border: '1px solid #f0c36d', color: '#5c4400', borderRadius: 'var(--radius)', padding: '8px 12px', marginBottom: '8px', fontSize: '0.85rem' }}>
+            Sem conexão com o servidor: mostrando dados guardados neste navegador, que podem estar incompletos ou desatualizados.
+          </div>
+        )}
+        {lista.estado === 'erro' && lista.itens.length === 0 ? (
+          <EstadoDados estado={classificarErro(lista.erro)} onTentarNovamente={lista.tentarNovamente} />
+        ) : lista.estado === 'preparando-busca' ? (
+          <div>
+            <div style={{ marginBottom: 'var(--spacing-md)' }}>
+              {lista.indiceAusente ? (
+                <EstadoDados
+                  estado="vazio"
+                  compacto
+                  titulo="Busca por trecho indisponível"
+                  descricao={canEditar
+                    ? 'O índice de busca ainda não foi criado. Use "Criar índice de busca" (lê todos os dispositivos uma única vez).'
+                    : 'O índice de busca ainda não foi criado. Peça a uma Administradora ou Projetista para criá-lo.'}
+                />
+              ) : lista.progressoIndice ? (
+                <BarraProgresso
+                  feitos={lista.progressoIndice.partes}
+                  total={lista.progressoIndice.total}
+                  rotulo="Preparando a busca"
+                  detalhe={preparoLento
+                    ? 'A conexão está lenta. A busca continua baixando; você pode limpar a busca para voltar à lista.'
+                    : 'Primeiro acesso neste navegador: as próximas buscas serão imediatas.'}
+                />
+              ) : null}
+              {preparoLento && (
+                <button type="button" className="btn" style={{ marginTop: '8px' }} onClick={limparBusca}>Limpar busca e voltar à lista</button>
+              )}
+            </div>
+            {!lista.indiceAusente && <SkeletonLista linhas={Math.min(itemsPerPage, 6)} />}
+          </div>
+        ) : lista.estado === 'carregando' ? (
+          <SkeletonLista linhas={Math.min(itemsPerPage, 6)} />
+        ) : lista.itens.length === 0 ? (
+          (lista.doCache || !navigator.onLine) ? (
+            <EstadoDados
+              estado="erro"
+              titulo="Sem conexão com o servidor"
+              descricao="Não foi possível carregar os dispositivos porque não há conexão com o servidor e não há dados em cache."
+              onTentarNovamente={lista.tentarNovamente}
+            />
+          ) : filtrando
+            ? <EstadoDados estado="sem-resultados" descricao="Nenhum dispositivo corresponde à busca ou aos filtros." />
+            : <EstadoDados estado="vazio" titulo="Nenhum dispositivo cadastrado" descricao="Cadastre um dispositivo ou importe uma planilha." />
+        ) : (
+        <ConteudoAtualizavel atualizando={buscaPendente || lista.estado === 'atualizando'}>
         <FocusableList
-          items={paginatedDispositivos}
+          items={lista.itens}
+          getKey={(disp) => disp.id}
           ariaLabel="Lista de dispositivos. Use setas para navegar, Enter para detalhes."
           onItemAction={(disp) => navigate(`/dispositivos/${disp.id}`)}
           onDeleteItem={canExcluir ? (disp) => setDispToDelete(disp.id) : undefined}
           onEditItem={canEditar ? (disp) => openDispForm(disp.id) : undefined}
-          renderItem={(disp, idx, isFocused) => {
-            const cat = categorias.find(c => c.id === disp.categoriaId);
-            const fam = familias.find(f => f.id === disp.familiaId);
-            const prod = produtos.find(p => p.id === disp.produtoId);
+          renderItem={(disp) => {
+            const catNome = nomesCategoria.get(disp.categoriaId || '');
+            const famNome = nomesFamilia.get(disp.familiaId || '');
+            const prodNome = nomesProduto.get(disp.produtoId || '');
             return (
               <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 'var(--spacing-lg)' }}>
                 <div style={{ 
                   width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', 
                   backgroundColor: 'var(--color-hover)', display: 'flex', 
-                  alignItems: 'center', justifyContent: 'center', color: '#9ca3af' 
+                  alignItems: 'center', justifyContent: 'center', color: '#6b7280', flexShrink: 0
                 }}>
                   <Box size={20} />
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '1.05rem' }}>
                       {disp.nome || 'Nome não informado'}
                     </span>
-                    <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>
+                    <span style={{ color: '#6b7280', fontSize: '0.85rem' }}>
                       {disp.codigo || ''}
                     </span>
                   </div>
                   
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                    {cat?.nome && <span className={getBadgeColor(cat.nome)}>{cat.nome}</span>}
-                    {fam?.nome && <span className={getBadgeColor(fam.nome)}>{fam.nome}</span>}
-                    {prod?.nome && <span className="badge badge-blue">{prod.nome}</span>}
-                    {disp.peso && <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: 500 }}>{disp.peso}g</span>}
+                    {catNome && <span className={getBadgeColor(catNome)}>{catNome}</span>}
+                    {famNome && <span className={getBadgeColor(famNome)}>{famNome}</span>}
+                    {prodNome && <span className="badge badge-blue">{prodNome}</span>}
+                    {disp.peso && <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 500 }}>{disp.peso}g</span>}
                     {(disp.palavrasChave || []).map(tag => (
                       <span key={tag} className="badge badge-pink" style={{ fontSize: '0.75rem' }}>{tag}</span>
                     ))}
@@ -233,67 +384,69 @@ export function Dispositivos() {
             )
           }}
         />
+        </ConteudoAtualizavel>
+        )}
 
-        {/* CONTROLES DE PAGINAÇÃO */}
-        {filteredDispositivos.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--spacing-md)' }}>
+        {/* CONTROLES DE PAGINAÇÃO (cursor no servidor; sem opção "Tudo") */}
+        {(lista.itens.length > 0 || lista.pagina > 1) && (
+          <div className="paginacao" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: 'var(--spacing-md)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '0.85rem', color: 'var(--color-text-body)' }}>Itens por página:</span>
+              <label htmlFor="itens-por-pagina" style={{ fontSize: '0.85rem', color: 'var(--color-text-body)' }}>Itens por página:</label>
               <select 
+                id="itens-por-pagina"
                 className="input-field" 
                 style={{ width: 'auto', padding: '4px 8px', height: 'auto', fontSize: '0.85rem' }}
                 value={itemsPerPage}
-                onChange={(e) => setItemsPerPage(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                onChange={(e) => setItemsPerPage(Number(e.target.value))}
               >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value="all">Tudo</option>
+                {TAMANHOS_PAGINA.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
 
-            {itemsPerPage !== 'all' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  className="btn btn-icon"
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(p => p - 1)}
-                  aria-label="Página anterior"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: 600, minWidth: '45px', textAlign: 'center' }}>
-                  {currentPage} de {totalPages}
-                </span>
-                <button
-                  className="btn btn-icon"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setCurrentPage(p => p + 1)}
-                  aria-label="Próxima página"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                className="btn btn-icon"
+                disabled={!lista.temAnterior || lista.estado === 'atualizando'}
+                onClick={lista.anterior}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span style={{ fontSize: '0.85rem', color: 'var(--color-text-dark)', fontWeight: 600, minWidth: '45px', textAlign: 'center' }} aria-live="polite">
+                {lista.pagina}{lista.totalPaginas !== null ? ` de ${fmt(lista.totalPaginas)}` : ''}
+              </span>
+              <button
+                className="btn btn-icon"
+                disabled={!lista.temProxima || lista.estado === 'atualizando'}
+                onClick={lista.proxima}
+                aria-label="Próxima página"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         )}
 
         {/* Modal confirmação exclusão individual */}
-        <AccessibleModal isOpen={!!dispToDelete} onClose={() => setDispToDelete(null)} title="Confirmar exclusão">
+        <AccessibleModal isOpen={!!dispToDelete} onClose={() => { if (!isDeleting) setDispToDelete(null); }} title="Confirmar exclusão">
           <p>Tem certeza que deseja remover este dispositivo?</p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)' }}>
-            <button className="btn" onClick={() => setDispToDelete(null)}>Cancelar</button>
-            <button className="btn btn-primary" onClick={handleDelete}>Confirmar</button>
+            <button className="btn" onClick={() => setDispToDelete(null)} disabled={isDeleting}>Cancelar</button>
+            <button className="btn btn-primary" onClick={handleDelete} disabled={isDeleting} aria-busy={isDeleting}>
+              {isDeleting ? 'Excluindo…' : 'Confirmar'}
+            </button>
           </div>
         </AccessibleModal>
 
       </div>
 
-      <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />
-      <DuplicadosModal isOpen={isDuplicadosOpen} onClose={() => setIsDuplicadosOpen(false)} />
+      <LimiteDeErro compacto onFechar={() => { setIsImportOpen(false); setIsDuplicadosOpen(false); closeBulkModal(); }}>
+      <Suspense fallback={<CarregandoModal />}>
+      {isImportOpen && <ImportModal isOpen={isImportOpen} onClose={() => setIsImportOpen(false)} />}
+      {isDuplicadosOpen && <DuplicadosModal isOpen={isDuplicadosOpen} onClose={() => setIsDuplicadosOpen(false)} />}
 
       {/* Modal de Ações em Massa */}
-      <BulkActionModal
+      {isBulkModalOpen && <BulkActionModal
         isOpen={isBulkModalOpen}
         onClose={closeBulkModal}
         items={bulkItems}
@@ -306,10 +459,15 @@ export function Dispositivos() {
         onSetConfirmAction={setIsBulkConfirmOpen}
         onDisable={handleBulkDisable}
         onDelete={handleBulkDelete}
+        onCancelarExecucao={cancelarEmMassa}
+        carregandoItens={bulkCarregando}
         isLoading={isBulkLoading}
         progress={bulkProgress}
         canDisable={true}
-      />
+        emptyMessage={bulkEmptyMessage}
+      />}
+      </Suspense>
+      </LimiteDeErro>
 
       {canCadastrar && (
         <button className="fab-button" onClick={() => openDispForm()} aria-label="Cadastrar novo dispositivo">

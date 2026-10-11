@@ -1,0 +1,91 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "destinatarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reutilizacoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataCriacao",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reutilizacoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dispositivoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataCriacao",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reutilizacoes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "dispositivoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataCriacao",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "partes",
+      "fieldPath": "itens",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "indices",
+      "fieldPath": "categorias",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "indices",
+      "fieldPath": "familias",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "indices",
+      "fieldPath": "produtos",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "indices",
+      "fieldPath": "versoes",
+      "indexes": []
+    }
+  ]
+}

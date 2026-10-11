@@ -2,6 +2,7 @@ import '../../mocks/firebaseMock';
 import { FirestoreReutilizacoesRepository } from '../../../data/repositories/FirestoreReutilizacoesRepository';
 import { mockDbState, resetMockDb } from '../../mocks/firebaseMock';
 import { describe, beforeEach, test, expect } from '@jest/globals';
+import { planejarNormalizacaoReutilizacoes } from '../../../domain/services/consultaReutilizacoes';
 
 describe('FirestoreReutilizacoesRepository', () => {
   let repository: FirestoreReutilizacoesRepository;
@@ -76,5 +77,30 @@ describe('FirestoreReutilizacoesRepository', () => {
     mockDbState.reutilizacoes.push({ id: 'u1', dispositivoId: 'd1' });
     await repository.delete('u1');
     expect(mockDbState.reutilizacoes).toHaveLength(0);
+  });
+
+  test('contarProntidao conta total, status canônicos e dataCriacao string', async () => {
+    mockDbState.reutilizacoes.push(
+      { id: 'a', status: 'Reutilização aprovada', dataCriacao: '2026-01-01T00:00:00.000Z' },
+      { id: 'b', status: 'pendente', dataCriacao: '2026-01-01T00:00:00.000Z' },
+      { id: 'c', status: 'Em análise (Engenharia)' },
+      { id: 'd', status: 'Em análise (Projetista)', dataCriacao: '' }
+    );
+    expect(await repository.contarProntidao()).toEqual({ total: 4, comStatusCanonico: 3, comDataCriacao: 2 });
+  });
+
+  test('aplicarNormalizacao grava só os campos do plano, em lotes, com progresso', async () => {
+    for (let i = 0; i < 501; i++) mockDbState.reutilizacoes.push({ id: `r${i}`, status: 'pendente', descricaoAlteracao: `x${i}` });
+    const plano = planejarNormalizacaoReutilizacoes(
+      (await repository.listarDocumentosCrus()),
+      new Date('2026-10-05T00:00:00.000Z')
+    );
+    const progresso: number[] = [];
+    await repository.aplicarNormalizacao(plano, f => progresso.push(f));
+    expect(progresso).toEqual([0, 500, 501]);
+    expect(mockDbState.reutilizacoes[0]).toEqual({
+      id: 'r0', status: 'Em análise (Projetista)', descricaoAlteracao: 'x0', dataCriacao: '2026-10-05T00:00:00.000Z'
+    });
+    expect(await repository.contarProntidao()).toEqual({ total: 501, comStatusCanonico: 501, comDataCriacao: 501 });
   });
 });

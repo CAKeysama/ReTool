@@ -36,7 +36,7 @@ export function Sobre() {
           <span style={{ color: 'var(--color-gray-steel)' }}>Sobre o</span>
           <span style={{ color: 'var(--color-primary)' }}> Projeto</span>
         </h1>
-        <p style={{ color: '#9ca3af', fontSize: '0.9rem', fontWeight: 500 }}>
+        <p style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 500 }}>
           Identificação, Contexto e Objetivos do ReTool
         </p>
       </div>
@@ -49,14 +49,14 @@ export function Sobre() {
             1. Identificação
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.95rem' }}>
-            <div><span style={{ color: '#9ca3af', fontWeight: 600 }}>Nome:</span> ReTool</div>
-            <div><span style={{ color: '#9ca3af', fontWeight: 600 }}>Curso:</span> DSM</div>
-            <div><span style={{ color: '#9ca3af', fontWeight: 600 }}>Instituição:</span> Fatec Matão</div>
-            <div><span style={{ color: '#9ca3af', fontWeight: 600 }}>Parceira:</span> Baldan</div>
+            <div><span style={{ color: '#6b7280', fontWeight: 600 }}>Nome:</span> ReTool</div>
+            <div><span style={{ color: '#6b7280', fontWeight: 600 }}>Curso:</span> DSM</div>
+            <div><span style={{ color: '#6b7280', fontWeight: 600 }}>Instituição:</span> Fatec Matão</div>
+            <div><span style={{ color: '#6b7280', fontWeight: 600 }}>Parceira:</span> Baldan</div>
           </div>
           
           <div style={{ marginTop: 'var(--spacing-md)' }}>
-            <span style={{ color: '#9ca3af', fontWeight: 600, display: 'block', marginBottom: '4px', fontSize: '0.95rem' }}>Significado:</span>
+            <span style={{ color: '#6b7280', fontWeight: 600, display: 'block', marginBottom: '4px', fontSize: '0.95rem' }}>Significado:</span>
             <p>
               O nome <strong>ReTool</strong> associa o prefixo "Re" à ideia de reorganização, reutilização e revisão, juntamente ao termo "Tool" (ferramenta). O projeto visa estruturar informações que hoje podem estar dispersas ou depender de conhecimento tácito das equipes.
             </p>
@@ -129,14 +129,14 @@ export function Sobre() {
       {/* Logos no Rodapé */}
       <div style={{ marginTop: 'var(--spacing-xl)', paddingTop: 'var(--spacing-xl)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--spacing-2xl)', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-          <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Empresa Parceira</span>
+          <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Empresa Parceira</span>
           <img src={baldanLogo} alt="Baldan Implementos Agrícolas" style={{ height: '50px', objectFit: 'contain', opacity: 0.8 }} />
         </div>
         
         <div style={{ height: '40px', width: '1px', backgroundColor: 'var(--color-border)' }}></div>
         
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-          <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Instituição de Ensino</span>
+          <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Instituição de Ensino</span>
           <img src={fatecLogo} alt="Fatec Matão - Luiz Marchesan" style={{ height: '50px', objectFit: 'contain', opacity: 0.8 }} />
         </div>
       </div>

@@ -1,6 +1,11 @@
-import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import React, { useState, useRef, useEffect, useMemo, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
+import { useIndiceBusca } from '../presentation/hooks/useIndiceBusca';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { contarDispositivos } from '../data/repositories/FirestoreDispositivosConsultas';
+import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
+import { SkeletonLinha } from '../components/feedback';
 import { Search, Box, Wrench, Tag, Info, Plus, Bug, X } from 'lucide-react';
 import { useHotkeys } from '../hooks/useHotkeys';
 import { usePermissions } from '../hooks/usePermissions';
@@ -21,13 +26,43 @@ const BUG_EXPLOSION_PARTICLES = [
   { id: 12, x: 25, y: -25, size: 16, color: 'var(--color-primary)' },
 ];
 
+const reutilizacoesRepo = new FirestoreReutilizacoesRepository();
+/** Sugestões exibidas no autocomplete (a lista completa fica na tela de Dispositivos). */
+const MAX_SUGESTOES = 8;
+
+/** Totais dos cartões via count() no servidor (não baixa documentos). */
+type Total = number | null | 'erro';
+function useTotaisHome(revisao: number) {
+  const [totais, setTotais] = useState<{ dispositivos: Total; reutilizacoes: Total }>({ dispositivos: null, reutilizacoes: null });
+  const [tentativa, setTentativa] = useState(0);
+  useEffect(() => {
+    let vivo = true;
+    setTotais(t => ({ dispositivos: t.dispositivos === 'erro' ? null : t.dispositivos, reutilizacoes: t.reutilizacoes === 'erro' ? null : t.reutilizacoes }));
+    contarDispositivos().then(n => vivo && setTotais(t => ({ ...t, dispositivos: n }))).catch(() => vivo && setTotais(t => ({ ...t, dispositivos: 'erro' })));
+    reutilizacoesRepo.contar().then(n => vivo && setTotais(t => ({ ...t, reutilizacoes: n }))).catch(() => vivo && setTotais(t => ({ ...t, reutilizacoes: 'erro' })));
+
+    const aoReconectar = () => setTentativa(n => n + 1);
+    window.addEventListener('online', aoReconectar);
+
+    return () => {
+      vivo = false;
+      window.removeEventListener('online', aoReconectar);
+    };
+  }, [revisao, tentativa]);
+  return totais;
+}
+
 export function Home() {
-  const { dispositivos, reutilizacoes, categorias, familias, produtos, openDispForm } = useReTool();
+  const { categorias, openDispForm, revisaoDispositivos, referenciasProntas } = useReTool();
   const { canCadastrar, canEditar } = usePermissions();
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState(dispositivos);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const totais = useTotaisHome(revisaoDispositivos);
+  // O catálogo de busca só é aberto quando a pessoa começa a usar a busca.
+  const [buscaUsada, setBuscaUsada] = useState(false);
+  const indice = useIndiceBusca(buscaUsada);
+  const consulta = useDebouncedValue(query, 120);
   const [isHovered, setIsHovered] = useState(false);
   const [buttonState, setButtonState] = useState<'visible' | 'exploding' | 'hidden' | 'reassembling'>('visible');
 
@@ -70,50 +105,15 @@ export function Home() {
     onSearchFocus: () => inputRef.current?.focus()
   });
 
-  useEffect(() => {
-    if (!query) {
-      setSuggestions([]);
-      return;
-    }
-
-    const normalizeStr = (str: string | undefined | null) => {
-      if (!str) return '';
-      let res = str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      res = res.replace(/,/g, ".");
-      if (res.includes("avula")) {
-        res = res.replace(/avula/g, "avola");
-      }
-      return res;
-    };
-
-    const q = normalizeStr(query).trim();
-    const filtered = dispositivos.filter(p => {
-      const nome = normalizeStr(p.nome);
-      const codigo = normalizeStr(p.codigo);
-      const descricao = normalizeStr(p.descricao);
-      const fam = familias.find(f => f.id === p.familiaId);
-      const familia = normalizeStr(fam?.nome);
-      const prod = produtos.find(pr => pr.id === p.produtoId);
-      const produto = normalizeStr(prod?.nome);
-      const peso = normalizeStr(p.peso);
-      
-      const cat = categorias.find(c => c.id === p.categoriaId);
-      const categoriaNome = normalizeStr(cat?.nome);
-
-      const matchTags = (p.palavrasChave || []).some(tag => normalizeStr(tag).includes(q));
-
-      return nome.includes(q) ||
-             codigo.includes(q) ||
-             descricao.includes(q) ||
-             familia.includes(q) ||
-             produto.includes(q) ||
-             peso.includes(q) ||
-             categoriaNome.includes(q) ||
-             matchTags;
-    });
-    setSuggestions(filtered);
-    setActiveIndex(-1);
-  }, [query, dispositivos, categorias, familias, produtos]);
+  // Autocomplete: busca por trecho no catálogo, limitada a poucas sugestões.
+  const resultado = useMemo(() => {
+    if (!consulta.trim() || !indice.pronto) return { itens: [], total: 0 };
+    const todos = indice.buscar({ texto: consulta, incluirPeso: true }) || [];
+    return { itens: todos.slice(0, MAX_SUGESTOES), total: todos.length };
+  }, [consulta, indice.pronto, indice.buscar]);
+  const suggestions = resultado.itens;
+  useEffect(() => { setActiveIndex(-1); }, [consulta]);
+  const sugestoesCarregando = !!query.trim() && (!indice.pronto || query !== consulta) && indice.estado !== 'ausente';
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
@@ -156,7 +156,7 @@ export function Home() {
       />
 
       {/* Botão Institucional - Top Left (o top right é ocupado por perfil + notificações) */}
-      <div style={{ position: 'absolute', top: 'var(--spacing-xl)', left: 'var(--spacing-xl)' }}>
+      <div className="home-sobre" style={{ position: 'absolute', top: 'var(--spacing-xl)', left: 'var(--spacing-xl)' }}>
         <button
           className="btn"
           onClick={() => navigate('/sobre')}
@@ -177,7 +177,7 @@ export function Home() {
           <span style={{ color: 'var(--color-gray-steel)' }}>Re</span>
           <span style={{ color: 'var(--color-primary)' }}>Tool</span>
         </h1>
-        <p style={{ color: '#9ca3af', fontSize: '0.9rem', fontWeight: 500 }}>
+        <p style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 500 }}>
           Gestão de Dispositivos e Ferramentas Industriais
         </p>
       </div>
@@ -203,6 +203,8 @@ export function Home() {
               e.target.style.boxShadow = '0 6px 12px rgba(228, 13, 44, 0.08)';
               e.target.style.borderColor = 'var(--color-primary)';
               setShowSuggestions(true);
+              // O catálogo só é aberto ao digitar: o campo recebe foco sozinho
+              // ao abrir a Home e isso não deve custar leituras.
             }}
             onBlur={(e) => {
               e.target.style.boxShadow = '0 4px 6px rgba(0,0,0,0.02)';
@@ -212,12 +214,36 @@ export function Home() {
             placeholder="Buscar dispositivos por nome, código, descrição..."
             aria-label="Buscar dispositivos"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => { setQuery(e.target.value); setBuscaUsada(true); }}
+            aria-autocomplete="list"
+            aria-expanded={showSuggestions && suggestions.length > 0}
             onKeyDown={handleKeyDown}
           />
         </div>
 
         {/* Sugestões do Autocomplete */}
+        {showSuggestions && sugestoesCarregando && suggestions.length === 0 && (
+          <div role="status" style={{
+            position: 'absolute', top: '65px', left: 0, right: 0, backgroundColor: 'white',
+            border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-lg)',
+            padding: '12px 20px', zIndex: 10, color: '#6b7280', fontSize: '0.85rem'
+          }}>
+            {indice.progresso
+              ? `Preparando a busca (${indice.progresso.partes} de ${indice.progresso.total} partes)…`
+              : 'Buscando…'}
+          </div>
+        )}
+
+        {showSuggestions && !sugestoesCarregando && !!consulta.trim() && indice.pronto && suggestions.length === 0 && (
+          <div role="status" style={{
+            position: 'absolute', top: '65px', left: 0, right: 0, backgroundColor: 'white',
+            border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-lg)',
+            padding: '12px 20px', zIndex: 10, color: '#6b7280', fontSize: '0.85rem'
+          }}>
+            Nenhum dispositivo encontrado para "{consulta}".
+          </div>
+        )}
+
         {showSuggestions && suggestions.length > 0 && (
           <ul
             role="listbox"
@@ -246,9 +272,19 @@ export function Home() {
                   <Search size={14} color="#9ca3af" />
                   <strong style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{peca.nome || 'Nome não informado'}</strong>
                 </div>
-                <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{peca.codigo || ''}</span>
+                <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{peca.codigo || ''}</span>
               </li>
             ))}
+            {resultado.total > suggestions.length && (
+              <li
+                role="option"
+                aria-selected={false}
+                style={{ padding: '10px 20px', cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 600, fontSize: '0.85rem', borderTop: '1px solid var(--color-border)' }}
+                onClick={() => navigate(`/dispositivos?q=${encodeURIComponent(query)}`)}
+              >
+                Ver todos os {resultado.total.toLocaleString('pt-BR')} resultados
+              </li>
+            )}
           </ul>
         )}
       </div>
@@ -266,7 +302,7 @@ export function Home() {
       </div>
 
       {/* Cartões Coloridos */}
-      <div style={{
+      <div className="home-cartoes-faixa" style={{
         display: 'flex',
         gap: 'var(--spacing-md)',
         overflowX: 'auto',
@@ -276,22 +312,23 @@ export function Home() {
         padding: '0 var(--spacing-lg)', /* Para dar uma borda de respiro na rolagem */
         WebkitOverflowScrolling: 'touch' /* Suavidade no iOS */
       }}>
-        <div style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
-          <HomeCard count={dispositivos.length} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
-          <HomeCard count={reutilizacoes.length} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
+        <div className="home-cartoes" style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
+          <HomeCard count={totais.dispositivos} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
+          <HomeCard count={totais.reutilizacoes} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
           {(canCadastrar || canEditar) && (
-            <HomeCard count={categorias.length} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
+            <HomeCard count={referenciasProntas ? categorias.length : null} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />
           )}
         </div>
       </div>
 
       {/* Texto de Atalho Footer */}
-      <div style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#d1d5db', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-        Pressione <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#9ca3af', fontWeight: 600 }}>/</span> para focar a busca de qualquer tela
+      <div className="hide-on-mobile" style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#6b7280', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+        Pressione <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#6b7280', fontWeight: 600 }}>/</span> para focar a busca de qualquer tela
       </div>
 
       {/* Botão de Bug Flutuante no Chão de Fábrica com Hover Tooltip & Efeitos de Explosão */}
       <div 
+        className="home-bug"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         style={{
@@ -416,7 +453,7 @@ export function Home() {
   );
 }
 
-function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count: number, label: string, colorType: 'pink' | 'teal' | 'yellow', icon: React.ReactNode, onClick: () => void, shortcut: string }) {
+function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count: Total, label: string, colorType: 'pink' | 'teal' | 'yellow', icon: React.ReactNode, onClick: () => void, shortcut: string }) {
   const isPink = colorType === 'pink';
   const isTeal = colorType === 'teal';
 
@@ -454,11 +491,19 @@ function HomeCard({ count, label, colorType, icon, onClick, shortcut }: { count:
       </div>
 
       <div>
-        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: textColor, lineHeight: 1 }}>{count}</div>
+        <div style={{ fontSize: '1.5rem', fontWeight: 800, color: textColor, lineHeight: 1, minHeight: '1.5rem' }} aria-busy={count === null}>
+          {count === null ? (
+            <SkeletonLinha largura={56} altura={22} />
+          ) : typeof count === 'number' ? (
+            count.toLocaleString('pt-BR')
+          ) : (
+            '—'
+          )}
+        </div>
         <div style={{ fontSize: '0.8rem', color: textColor, fontWeight: 500, marginTop: '2px' }}>{label}</div>
       </div>
 
-      <div style={{ position: 'absolute', bottom: '12px', right: '12px', fontSize: '0.6rem', color: textColor, opacity: 0.5, fontWeight: 'bold' }}>
+      <div style={{ position: 'absolute', bottom: '12px', right: '12px', fontSize: '0.6rem', color: textColor, opacity: 0.85, fontWeight: 'bold' }}>
         {shortcut}
       </div>
     </div>

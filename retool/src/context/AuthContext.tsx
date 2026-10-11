@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import {
   User as FirebaseUser,
   onAuthStateChanged,
@@ -51,7 +51,8 @@ interface AuthContextType {
   roleConfig: RoleConfig;
   loading: boolean;
   users: UserProfile[];
-  auditLogs: AuditLog[];
+  /** true depois da primeira resposta da lista de usuários (vazia ≠ carregando). */
+  usuariosProntos: boolean;
   login: (email: string, pass: string) => Promise<void>;
   register: (email: string, pass: string, nome: string, perfilSolicitado?: UserRole) => Promise<void>;
   logout: () => Promise<void>;
@@ -111,24 +112,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [notifications, setNotifications] = useState<Notificacao[]>([]);
 
-  // Carrega lista de usuários em tempo real para administração.
-  // A trilha de auditoria é carregada SOMENTE pelo perfil Admin (leitura exclusiva).
-  useEffect(() => {
-    const unsubUsers = usersRepo.subscribeAll(setUsers);
-    let unsubLogs: (() => void) | undefined;
-    if (userProfile?.perfil === 'admin') {
-      unsubLogs = auditRepo.subscribeLogs(setAuditLogs);
-    } else {
-      setAuditLogs([]);
+  const [usuariosProntos, setUsuariosProntos] = useState(false);
+
+  // Lista de usuários em tempo real, só depois do login (antes do login a
+  // regra recusa e o listener morria sem nunca mais voltar).
+    useEffect(() => {
+    if (!userProfile?.uid) {
+      setUsers([]);
+      setUsuariosProntos(false);
+      return;
     }
-    return () => {
-      unsubUsers();
-      unsubLogs?.();
-    };
-  }, [userProfile?.perfil]);
+    return usersRepo.subscribeAll(
+      lista => { setUsers(lista); setUsuariosProntos(true); },
+      () => setUsuariosProntos(true)
+    );
+  }, [userProfile?.uid]);
+
+  // A trilha de auditoria é lida só quando o modal de auditoria abre (ver AuditLogsModal).
 
   // Notificações do usuário autenticado, em tempo real
   useEffect(() => {
@@ -250,7 +252,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Tier diferente de Gerência: avisa a Administração para análise.
       if (perfilSolicitado !== 'gerencia') {
-        const admins = users.filter(u => u.perfil === 'admin' && u.ativo);
+        // Consulta só as administradoras ativas (a lista de usuários em tempo
+        // real só existe depois do login).
+        let admins: UserProfile[] = [];
+        try {
+          admins = await usersRepo.listarAdminsAtivos();
+        } catch (e) {
+          console.warn('Falha ao localizar a Administração:', e);
+        }
         for (const admin of admins) {
           try {
             await notificationsRepo.criar({
@@ -490,16 +499,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const currentRole: UserRole = userProfile?.perfil || 'gerencia';
   const roleConfig = ROLES_CONFIG[currentRole] || ROLES_CONFIG.gerencia;
 
-  return (
-    <AuthContext.Provider
-      value={{
+  // Valor estável: telas que só leem permissões não renderizam de novo a
+  // cada mudança de estado interna do provider.
+  const valor = useMemo<AuthContextType>(() => ({
         firebaseUser,
         userProfile,
         currentRole,
         roleConfig,
         loading,
         users,
-        auditLogs,
         login,
         register,
         logout,
@@ -520,9 +528,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         canAprovar: roleConfig.canAprovar,
         canSolicitar: roleConfig.canSolicitar,
         canGerenciarUsuarios: roleConfig.canGerenciarUsuarios,
-        canVerLogs: roleConfig.canVerLogs
-      }}
-    >
+        canVerLogs: roleConfig.canVerLogs,
+    usuariosProntos,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [firebaseUser, userProfile, currentRole, loading, users, notifications, usuariosProntos,
+    registrarExclusaoComAuditoria]);
+
+  return (
+    <AuthContext.Provider value={valor}>
       {children}
     </AuthContext.Provider>
   );

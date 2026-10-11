@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ROLES_CONFIG, UserRole, UserProfile } from '../domain/entities/user';
 import { 
@@ -6,8 +6,20 @@ import {
   Users, 
   UserPlus,
   AlertCircle,
-  Trash2
+  Trash2,
+  Search,
+  LoaderCircle
 } from 'lucide-react';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { EstadoDados, SkeletonTabela, mensagemDeErro } from './feedback';
+
+/** Linhas renderizadas por bloco; o restante entra com "Mostrar mais". */
+const LIMITE_LINHAS = 50;
+/** Sem sinal de "pronto" do contexto, desiste do skeleton depois disso. */
+
+function normalizar(texto: string | undefined): string {
+  return (texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 
 interface UsersManagementModalProps {
   isOpen: boolean;
@@ -15,7 +27,39 @@ interface UsersManagementModalProps {
 }
 
 export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalProps) {
-  const { users, updateUserRole, toggleUserStatus, createUserByAdmin, deleteUser, userProfile } = useAuth();
+  const { users, usuariosProntos, updateUserRole, toggleUserStatus, createUserByAdmin, deleteUser, userProfile } = useAuth();
+  const carregandoUsuarios = !usuariosProntos;
+
+  // Filtro (com debounce) e renderização limitada
+  const [filtro, setFiltroBruto] = useState('');
+  const filtroAplicado = useDebouncedValue(filtro, 250);
+  const [limite, setLimite] = useState(LIMITE_LINHAS);
+  const setFiltro = (v: string) => { setFiltroBruto(v); setLimite(LIMITE_LINHAS); };
+
+  const usuariosFiltrados = useMemo(() => {
+    const q = normalizar(filtroAplicado.trim());
+    if (!q) return users;
+    return users.filter(u => normalizar(u.nome).includes(q) || normalizar(u.email).includes(q));
+  }, [users, filtroAplicado]);
+  const usuariosVisiveis = useMemo(() => usuariosFiltrados.slice(0, limite), [usuariosFiltrados, limite]);
+
+  // Ações por linha (perfil / bloqueio) com trava por usuário
+  const [processando, setProcessando] = useState<Record<string, 'perfil' | 'status'>>({});
+  const executarNaLinha = async (user: UserProfile, tipo: 'perfil' | 'status', acao: () => Promise<void>, sucesso: string) => {
+    if (processando[user.uid]) return;
+    setProcessando(prev => ({ ...prev, [user.uid]: tipo }));
+    setErroLista('');
+    setSucessoMsg('');
+    try {
+      await acao();
+      setSucessoMsg(sucesso);
+    } catch (err: unknown) {
+      console.error(err);
+      setErroLista(`${user.nome}: ${mensagemDeErro(err, 'não foi possível concluir a alteração.')}`);
+    } finally {
+      setProcessando(prev => { const n = { ...prev }; delete n[user.uid]; return n; });
+    }
+  };
   
   // Estado para criar novo usuário diretamente pela administradora
   const [showAddForm, setShowAddForm] = useState(false);
@@ -33,7 +77,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
   const [erroLista, setErroLista] = useState('');
 
   const handleConfirmDelete = async () => {
-    if (!userToDelete) return;
+    if (!userToDelete || deleting) return;
     setDeleting(true);
     setErroLista('');
     const alvo = userToDelete;
@@ -43,17 +87,30 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
       setUserToDelete(null);
     } catch (err: unknown) {
       console.error(err);
-      setErroLista('Não foi possível excluir o usuário. Tente novamente.');
+      setErroLista(mensagemDeErro(err, 'Não foi possível excluir o usuário. Tente novamente.'));
       setUserToDelete(null);
     } finally {
       setDeleting(false);
     }
   };
 
+  // Esc fecha a confirmação (se não estiver excluindo) ou o próprio modal.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (userToDelete) { if (!deleting) setUserToDelete(null); }
+      else if (!loadingAdd) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, userToDelete, deleting, loadingAdd, onClose]);
+
   if (!isOpen) return null;
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loadingAdd) return;
     setLoadingAdd(true);
     setErroAdd('');
     setSucessoMsg('');
@@ -69,7 +126,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
       setNovaSenha('');
       setShowAddForm(false);
     } catch (err: any) {
-      setErroAdd(err.message || 'Erro ao cadastrar usuário.');
+      setErroAdd(mensagemDeErro(err, 'Erro ao cadastrar usuário.'));
     } finally {
       setLoadingAdd(false);
     }
@@ -153,21 +210,21 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
 
         {/* MENSAGENS DE STATUS */}
         {sucessoMsg && (
-          <div style={{ padding: '10px 24px', backgroundColor: '#dcfce7', color: '#15803d', fontSize: '0.85rem', fontWeight: 600 }}>
+          <div role="status" style={{ padding: '10px 24px', backgroundColor: '#dcfce7', color: '#15803d', fontSize: '0.85rem', fontWeight: 600 }}>
             {sucessoMsg}
           </div>
         )}
         {erroLista && (
-          <div style={{ padding: '10px 24px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 600 }}>
+          <div role="alert" style={{ padding: '10px 24px', backgroundColor: '#fee2e2', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 600 }}>
             {erroLista}
           </div>
         )}
 
         {/* CORPO / LISTA DE USUÁRIOS */}
         <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '8px', flexWrap: 'wrap' }}>
             <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#374151' }}>
-              Usuários Registrados ({users.length})
+              Usuários Registrados ({carregandoUsuarios ? '…' : users.length})
             </div>
             <button
               type="button"
@@ -203,13 +260,13 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
               </div>
 
               {erroAdd && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontSize: '0.8rem' }}>
+                <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontSize: '0.8rem' }}>
                   <AlertCircle size={16} />
                   <span>{erroAdd}</span>
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-row-grid" style={{ gap: '12px' }}>
                 <div>
                   <label className="input-label">
                     Nome Completo
@@ -221,6 +278,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     onChange={e => setNovoNome(e.target.value)}
                     placeholder="Ex: Ana Beatriz"
                     className="input-field"
+                    disabled={loadingAdd}
                   />
                 </div>
                 <div>
@@ -234,11 +292,12 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     onChange={e => setNovoEmail(e.target.value)}
                     placeholder="usuario@empresa.com"
                     className="input-field"
+                    disabled={loadingAdd}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-row-grid" style={{ gap: '12px' }}>
                 <div>
                   <label className="input-label">
                     Senha Inicial (mín. 6 dígitos)
@@ -250,6 +309,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     onChange={e => setNovaSenha(e.target.value)}
                     placeholder="••••••••"
                     className="input-field"
+                    disabled={loadingAdd}
                   />
                 </div>
                 <div>
@@ -260,6 +320,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     value={novoPerfil}
                     onChange={e => setNovoPerfil(e.target.value as UserRole)}
                     className="input-field"
+                    disabled={loadingAdd}
                   >
                     {(Object.keys(ROLES_CONFIG) as UserRole[]).map(role => (
                       <option key={role} value={role}>
@@ -274,6 +335,7 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                 <button
                   type="submit"
                   disabled={loadingAdd}
+                  aria-busy={loadingAdd || undefined}
                   className="btn"
                   style={{
                     backgroundColor: '#7c3aed',
@@ -283,15 +345,51 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     cursor: loadingAdd ? 'not-allowed' : 'pointer'
                   }}
                 >
-                  {loadingAdd ? 'Cadastrando...' : 'Confirmar e Salvar'}
+                  {loadingAdd && <LoaderCircle size={16} className="estado-dados-girando" aria-hidden="true" />}
+                  {loadingAdd ? 'Cadastrando…' : 'Confirmar e Salvar'}
                 </button>
               </div>
             </form>
           )}
 
+          {/* FILTRO */}
+          {users.length > 0 && (
+            <div style={{ position: 'relative', marginBottom: '12px' }}>
+              <label htmlFor="filtro-usuarios" className="sr-only">Filtrar usuários por nome ou e-mail</label>
+              <Search size={14} aria-hidden="true" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', pointerEvents: 'none' }} />
+              <input
+                id="filtro-usuarios"
+                type="search"
+                className="input-field"
+                placeholder="Filtrar por nome ou e-mail…"
+                value={filtro}
+                onChange={e => setFiltro(e.target.value)}
+                autoComplete="off"
+                style={{ paddingLeft: 32, minHeight: 36, fontSize: '0.88rem' }}
+              />
+            </div>
+          )}
+
           {/* TABELA DE USUÁRIOS */}
-          <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          {carregandoUsuarios ? (
+            <>
+              <span className="sr-only" role="status">Carregando usuários…</span>
+              <SkeletonTabela linhas={5} colunas={4} />
+            </>
+          ) : users.length === 0 ? (
+            <EstadoDados
+              estado="vazio"
+              compacto
+              titulo="Nenhum usuário encontrado"
+              descricao="Use o botão acima para cadastrar os colaboradores da equipe."
+            />
+          ) : usuariosFiltrados.length === 0 ? (
+            <EstadoDados estado="sem-resultados" compacto titulo={`Nenhum usuário corresponde a “${filtroAplicado.trim()}”`} descricao="">
+              <button type="button" className="btn" onClick={() => setFiltro('')}>Limpar filtro</button>
+            </EstadoDados>
+          ) : (
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflowX: 'auto' }}>
+            <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }}>
                   <th style={{ padding: '12px 16px', fontWeight: 600, color: '#4b5563' }}>Colaborador</th>
@@ -301,8 +399,9 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                 </tr>
               </thead>
               <tbody>
-                {users.map(user => {
+                {usuariosVisiveis.map(user => {
                   const roleConf = ROLES_CONFIG[user.perfil] || ROLES_CONFIG.gerencia;
+                  const emAndamento = processando[user.uid];
                   return (
                     <tr key={user.uid} style={{ borderBottom: '1px solid #f3f4f6' }}>
                       <td style={{ padding: '12px 16px' }}>
@@ -318,7 +417,14 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                       <td style={{ padding: '12px 16px' }}>
                         <select
                           value={user.perfil}
-                          onChange={e => updateUserRole(user.uid, e.target.value as UserRole)}
+                          disabled={!!emAndamento}
+                          aria-busy={emAndamento === 'perfil' || undefined}
+                          aria-label={`Perfil de acesso de ${user.nome}`}
+                          onChange={e => {
+                            const perfil = e.target.value as UserRole;
+                            executarNaLinha(user, 'perfil', () => updateUserRole(user.uid, perfil),
+                              `Perfil de ${user.nome} alterado para ${ROLES_CONFIG[perfil].titulo}.`);
+                          }}
                           style={{
                             padding: '6px 10px',
                             borderRadius: '6px',
@@ -327,7 +433,8 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                             color: roleConf.badgeText,
                             fontWeight: 600,
                             fontSize: '0.8rem',
-                            cursor: 'pointer'
+                            cursor: emAndamento ? 'progress' : 'pointer',
+                            opacity: emAndamento === 'perfil' ? 0.6 : 1
                           }}
                         >
                           {(Object.keys(ROLES_CONFIG) as UserRole[]).map(r => (
@@ -363,7 +470,10 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                       <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                         <button
                           type="button"
-                          onClick={() => toggleUserStatus(user.uid, !user.ativo)}
+                          onClick={() => executarNaLinha(user, 'status', () => toggleUserStatus(user.uid, !user.ativo),
+                            user.ativo ? `Acesso de ${user.nome} bloqueado.` : `Acesso de ${user.nome} aprovado.`)}
+                          disabled={!!emAndamento}
+                          aria-busy={emAndamento === 'status' || undefined}
                           title={user.ativo ? 'Bloquear usuário no ReTool' : 'Aprovar/desbloquear usuário'}
                           className="btn"
                           style={{
@@ -376,13 +486,14 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                             fontWeight: 600
                           }}
                         >
-                          {user.ativo ? 'Bloquear Acesso' : 'Aprovar Acesso'}
+                          {emAndamento === 'status' && <LoaderCircle size={12} className="estado-dados-girando" aria-hidden="true" />}
+                          {emAndamento === 'status' ? 'Salvando…' : user.ativo ? 'Bloquear Acesso' : 'Aprovar Acesso'}
                         </button>
 
                         <button
                           type="button"
                           onClick={() => { setErroLista(''); setSucessoMsg(''); setUserToDelete(user); }}
-                          disabled={user.uid === userProfile?.uid}
+                          disabled={user.uid === userProfile?.uid || !!emAndamento}
                           title={user.uid === userProfile?.uid ? 'Não é possível excluir a própria conta' : 'Excluir usuário'}
                           aria-label={`Excluir usuário ${user.nome}`}
                           className="btn btn-icon"
@@ -401,17 +512,16 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                     </tr>
                   );
                 })}
-
-                {users.length === 0 && (
-                  <tr>
-                    <td colSpan={4} style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
-                      Nenhum usuário cadastrado no Firestore. Use o botão acima para cadastrar os colaboradores da equipe.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
+          )}
+          {!carregandoUsuarios && usuariosFiltrados.length > usuariosVisiveis.length && (
+            <div className="lista-mostrar-mais">
+              <span>Exibindo {usuariosVisiveis.length} de {usuariosFiltrados.length}</span>
+              <button type="button" className="btn" onClick={() => setLimite(l => l + LIMITE_LINHAS)}>Mostrar mais</button>
+            </div>
+          )}
         </div>
 
         {/* FOOTER */}
@@ -490,10 +600,12 @@ export function UsersManagementModal({ isOpen, onClose }: UsersManagementModalPr
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={deleting}
+                aria-busy={deleting || undefined}
                 className="btn btn-primary"
                 style={{ fontWeight: 600, fontSize: '0.82rem', cursor: deleting ? 'not-allowed' : 'pointer' }}
               >
-                {deleting ? 'Excluindo...' : 'Excluir'}
+                {deleting && <LoaderCircle size={16} className="estado-dados-girando" aria-hidden="true" />}
+                {deleting ? 'Excluindo…' : 'Excluir'}
               </button>
             </div>
           </div>
