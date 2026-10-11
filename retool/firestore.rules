@@ -347,13 +347,13 @@ service cloud.firestore {
           && d.versoes is map && d.versoes.size() <= 200
           && d.total is int && d.total >= 0;
       }
-      allow get: if signedIn();
+      allow get: if canConsultar();
       allow create, update: if canEditar() && metaValida();
       allow delete: if isAdmin();
 
       // Partes do índice: { itens: { idDoDispositivo: entradaCompacta } }.
       match /partes/{parteId} {
-        allow get, list: if signedIn();
+        allow get, list: if canConsultar();
         allow create, update: if canEditar()
           && parteId.matches('^[0-9]{1,3}$') && int(parteId) < 200
           && request.resource.data.keys().hasOnly(['itens'])
@@ -365,7 +365,7 @@ service cloud.firestore {
 
     // Categorias, famílias e produtos num único documento.
     match /indices/classificacoes {
-      allow get: if signedIn();
+      allow get: if canConsultar();
       allow create, update: if canEditar()
         && request.resource.data.keys().hasOnly(['categorias', 'familias', 'produtos', 'atualizadoEm'])
         && request.resource.data.categorias is map

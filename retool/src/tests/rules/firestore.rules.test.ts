@@ -448,3 +448,29 @@ describe('Operações administrativas exigem Administração', () => {
     await assertFails(deleteDoc(doc(db('proj'), 'dispositivos', 'd1')));
   });
 });
+
+describe('Catálogos de busca e classificações (indices)', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const fs = ctx.firestore();
+      await setDoc(doc(fs, 'indices', 'dispositivos'), { partes: 1, versoes: { '0': 1 }, total: 1 });
+      await setDoc(doc(fs, 'indices', 'dispositivos', 'partes', '0'), { itens: { d1: { n: 'Dispositivo 1' } } });
+      await setDoc(doc(fs, 'indices', 'classificacoes'), { categorias: {}, familias: {}, produtos: {} });
+    });
+  });
+
+  test('contas operacionais leem os catálogos', async () => {
+    await assertSucceeds(getDoc(doc(db('ger'), 'indices', 'dispositivos')));
+    await assertSucceeds(getDocs(collection(db('eng'), 'indices', 'dispositivos', 'partes')));
+    await assertSucceeds(getDoc(doc(db('proj'), 'indices', 'classificacoes')));
+  });
+
+  test('pendente, bloqueado, rejeitado e senha temporária não leem os catálogos', async () => {
+    for (const uid of ['convidado', 'legado', 'bloqueado', 'rejeitado', 'temp']) {
+      await assertFails(getDoc(doc(db(uid), 'indices', 'dispositivos')));
+      await assertFails(getDoc(doc(db(uid), 'indices', 'dispositivos', 'partes', '0')));
+      await assertFails(getDocs(collection(db(uid), 'indices', 'dispositivos', 'partes')));
+      await assertFails(getDoc(doc(db(uid), 'indices', 'classificacoes')));
+    }
+  });
+});
