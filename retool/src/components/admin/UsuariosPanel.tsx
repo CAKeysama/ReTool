@@ -18,11 +18,11 @@ interface SenhaExibida {
 
 /**
  * Gestão de contas pela Administração: criação com senha temporária
- * gerada pelo sistema, nova senha temporária (Cloud Function), alteração
- * de cargo, bloqueio e exclusão.
+ * gerada pelo sistema, e-mail de redefinição de senha (Firebase Auth),
+ * alteração de cargo, bloqueio e exclusão.
  */
 export function UsuariosPanel() {
-  const { users, estadoUsuarios, userProfile, criarContaComSenhaTemporaria, redefinirSenhaTemporaria, updateUserRole, toggleUserStatus, deleteUser } = useAuth();
+  const { users, estadoUsuarios, userProfile, criarContaComSenhaTemporaria, enviarRedefinicaoSenha, updateUserRole, toggleUserStatus, deleteUser } = useAuth();
   const navigate = useNavigate();
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -104,18 +104,12 @@ export function UsuariosPanel() {
   const handleConfirmReset = async () => {
     if (!userToReset) return;
     const alvo = userToReset;
-    setProcessandoUid(alvo.uid);
-    setAviso(null);
-    try {
-      const senhaTemporaria = await redefinirSenhaTemporaria(alvo.uid);
-      setSenhaExibida({ titulo: `Nova senha temporária: ${alvo.nome}`, email: alvo.email, senhaTemporaria });
-      setCopiado(false);
-    } catch (err) {
-      setAviso({ tipo: 'erro', texto: traduzirErroAuth(err) });
-    } finally {
-      setProcessandoUid(null);
-      setUserToReset(null);
-    }
+    await executar(
+      alvo.uid,
+      () => enviarRedefinicaoSenha(alvo.uid),
+      `E-mail de redefinição de senha enviado para ${alvo.email}. O link permite definir uma nova senha.`
+    );
+    setUserToReset(null);
   };
 
   const handleConfirmDelete = async () => {
@@ -331,8 +325,8 @@ export function UsuariosPanel() {
                           type="button"
                           onClick={() => { setAviso(null); setUserToReset(user); }}
                           disabled={ocupado}
-                          title="Gerar nova senha temporária"
-                          aria-label={`Gerar nova senha temporária para ${user.nome}`}
+                          title="Enviar e-mail de redefinição de senha"
+                          aria-label={`Enviar e-mail de redefinição de senha para ${user.nome}`}
                           className="btn btn-icon"
                           style={{ width: 30, height: 30, minHeight: 30, marginLeft: '6px', borderColor: '#fcd34d', backgroundColor: '#fffbeb', color: '#b45309' }}
                         >
@@ -370,7 +364,7 @@ export function UsuariosPanel() {
         </div>
       </div>
 
-      {/* CONFIRMAÇÃO DE NOVA SENHA TEMPORÁRIA */}
+      {/* CONFIRMAÇÃO DO E-MAIL DE REDEFINIÇÃO DE SENHA */}
       {userToReset && (
         <div
           className="modal-overlay"
@@ -381,18 +375,18 @@ export function UsuariosPanel() {
         >
           <div style={{ backgroundColor: 'white', borderRadius: 'var(--radius)', maxWidth: '440px', width: '100%', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}>
             <h3 id="reset-user-title" style={{ margin: '0 0 12px', fontSize: '1rem', color: '#111827', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <KeyRound size={18} color="#b45309" /> Gerar nova senha temporária
+              <KeyRound size={18} color="#b45309" /> Redefinir senha por e-mail
             </h3>
             <p style={{ margin: '0 0 20px', fontSize: '0.85rem', color: '#4b5563', lineHeight: 1.5 }}>
-              A senha atual de <strong>{userToReset.nome}</strong> ({userToReset.email}) deixará de valer, as sessões abertas serão
-              encerradas e a troca de senha será obrigatória no próximo acesso.
+              O Firebase enviará para <strong>{userToReset.nome}</strong> ({userToReset.email}) um link para definir uma nova senha.
+              A senha atual continua valendo até a pessoa usar o link, e ninguém mais vê a nova senha.
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button type="button" onClick={() => setUserToReset(null)} disabled={processandoUid === userToReset.uid} className="btn" style={{ fontWeight: 600, fontSize: '0.82rem' }}>
                 Cancelar
               </button>
               <button type="button" onClick={handleConfirmReset} disabled={processandoUid === userToReset.uid} className="btn btn-primary" style={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                {processandoUid === userToReset.uid ? 'Gerando...' : 'Gerar nova senha'}
+                {processandoUid === userToReset.uid ? 'Enviando...' : 'Enviar e-mail'}
               </button>
             </div>
           </div>

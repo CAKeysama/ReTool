@@ -13,8 +13,7 @@
     "deploy": "npm run build && npx firebase-tools deploy",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "test:rules": "node scripts/emuladores.mjs regras",
-    "test:funcoes": "node scripts/emuladores.mjs funcoes"
+    "test:rules": "node scripts/emuladores.mjs regras"
   },
   "dependencies": {
     "firebase": "^12.12.1",

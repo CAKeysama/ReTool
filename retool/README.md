@@ -16,13 +16,13 @@ Uma plataforma única, que aceita dados incompletos: a falta de um campo não im
 
 - **Dispositivos:** cadastro flexível, imagens e PDFs, busca multidimensional, importação de planilhas (CSV/XLSX) sem duplicar classificações, em que cada combinação **Código + Dispositivo** vira um único registro (detalhes em [docs/IMPORTACAO_DISPOSITIVOS.md](./docs/IMPORTACAO_DISPOSITIVOS.md)), e ações em massa.
 - **Reutilizações:** fluxo entre Engenharia e Projetista com filas por perfil, histórico e *hard saving*.
-- **Controle de acesso:** cargos com permissões validadas no servidor (regras do Firestore); cadastro público como Convidado, sujeito a aprovação; solicitações de alteração de cargo; contas com senha temporária e troca obrigatória no primeiro acesso.
+- **Controle de acesso:** cargos com permissões validadas no servidor (regras do Firestore); cadastro público como Convidado, sujeito a aprovação; solicitações de alteração de cargo; contas com senha temporária e troca obrigatória no primeiro acesso; "Esqueci minha senha" pelo e-mail de redefinição do Firebase.
 - **Notificações e auditoria:** avisos em tempo real e Histórico de Ações imutável, com filtros, exclusivo da Administração.
 - **Teclado e acessibilidade:** atalhos globais e navegação por setas nas listas.
 
 ## Tecnologias
 
-React 19 · Vite · TypeScript · Firebase (Authentication, Cloud Firestore, Cloud Storage, Cloud Functions e Hosting) · Jest. Detalhes em [Arquitetura](https://github.com/CAKeysama/ReTool/wiki/Arquitetura).
+React 19 · Vite · TypeScript · Firebase (Authentication, Cloud Firestore, Cloud Storage e Hosting, no plano gratuito) · Jest. Detalhes em [Arquitetura](https://github.com/CAKeysama/ReTool/wiki/Arquitetura).
 
 ## Início rápido
 
@@ -40,7 +40,6 @@ Para rodar sem tocar em dados reais, use os emuladores (`npm run emuladores` e `
 ```bash
 npm test               # domínio, casos de uso e repositórios (Firestore em memória)
 npm run test:rules     # regras do Firestore e consultas do histórico (emulador; requer Java)
-npm run test:funcoes   # Cloud Function (emuladores; requer Java)
 ```
 
 Veja [Testes](https://github.com/CAKeysama/ReTool/wiki/Testes) e [Build e Deploy](https://github.com/CAKeysama/ReTool/wiki/Build-e-Deploy).

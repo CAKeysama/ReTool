@@ -1,4 +1,4 @@
-// Testes contra os emuladores do Firebase (npm run test:rules / npm run test:funcoes).
+// Testes das regras contra o emulador do Firestore (npm run test:rules).
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
@@ -9,7 +9,7 @@ module.exports = {
       }
     }],
   },
-  testMatch: ['<rootDir>/src/tests/rules/**/*.test.ts', '<rootDir>/src/tests/funcoes/**/*.test.ts'],
+  testMatch: ['<rootDir>/src/tests/rules/**/*.test.ts'],
   testTimeout: 30000,
   // Os arquivos compartilham o mesmo emulador e limpam o banco: execução em série.
   maxWorkers: 1,

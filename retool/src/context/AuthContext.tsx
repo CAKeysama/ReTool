@@ -23,7 +23,7 @@ import { FirestoreUsersRepository } from '../data/repositories/FirestoreUsersRep
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 import { FirestoreNotificationsRepository } from '../data/repositories/FirestoreNotificationsRepository';
 import { FirestoreSolicitacoesCargoRepository } from '../data/repositories/FirestoreSolicitacoesCargoRepository';
-import { FirebaseContasService, traduzirErroFuncao } from '../data/services/FirebaseContasService';
+import { FirebaseContasService } from '../data/services/FirebaseContasService';
 import { SolicitarCadastroUseCase } from '../application/usecases/SolicitarCadastroUseCase';
 import { DecidirCadastroUseCase } from '../application/usecases/DecidirCadastroUseCase';
 import { CriarContaAdministrativaUseCase, ContaAuthCriada, ContaCriada } from '../application/usecases/CriarContaAdministrativaUseCase';
@@ -69,8 +69,6 @@ const decidirCargoUseCase = new DecidirSolicitacaoCargoUseCase(solicitacoesCargo
 
 /** Traduz códigos do Firebase Auth para mensagens amigáveis. */
 export function traduzirErroAuth(err: unknown): string {
-  const erroFuncao = traduzirErroFuncao(err);
-  if (erroFuncao) return erroFuncao;
   const code = (err as { code?: string })?.code || '';
   switch (code) {
     case 'auth/invalid-credential':
@@ -89,6 +87,8 @@ export function traduzirErroAuth(err: unknown): string {
       return 'Falha de conexão. Verifique sua internet e tente novamente.';
     case 'auth/user-disabled':
       return 'Esta conta foi desativada pela Administradora. Contate o suporte.';
+    case 'auth/missing-email':
+      return 'Informe o e-mail da conta.';
     case 'auth/requires-recent-login':
       return 'Por segurança, entre novamente e repita a operação.';
     case 'permission-denied':
@@ -120,7 +120,10 @@ interface AuthContextType {
   criarContaComSenhaTemporaria: (nome: string, email: string, perfil: UserRole) => Promise<ContaCriada>;
   concluirTrocaSenha: (senhaAtual: string, novaSenha: string, confirmacao: string) => Promise<void>;
   /** Exclusivo da Administração (Cloud Function): nova senha temporária para outra conta, devolvida uma única vez. */
-  redefinirSenhaTemporaria: (uid: string) => Promise<string>;
+  /** Administração: envia o e-mail de redefinição de senha a outra conta. */
+  enviarRedefinicaoSenha: (uid: string) => Promise<void>;
+  /** Tela de login: envia o e-mail de redefinição para quem esqueceu a senha. */
+  solicitarRedefinicaoSenha: (email: string) => Promise<void>;
   solicitarAlteracaoCargo: (perfil: UserRole, justificativa?: string) => Promise<void>;
   decidirSolicitacaoCargo: (id: string, aprovar: boolean, motivo?: string) => Promise<void>;
   // Notificações do usuário autenticado
@@ -383,12 +386,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserProfile({ ...userProfile, trocaSenhaObrigatoria: false });
   };
 
-  const redefinirSenhaTemporaria = async (uid: string) => {
-    // Pré-checagem de UX; a autorização real é refeita na Cloud Function.
+  const enviarRedefinicaoSenha = async (uid: string) => {
     exigirAdministracao();
-    if (uid === userProfile!.uid) throw new ErroPermissao('A própria senha não é redefinida por aqui.');
-    return contasService.redefinirSenhaTemporaria(uid);
+    if (uid === userProfile!.uid) throw new ErroPermissao('Para a própria senha, use "Esqueci minha senha" na tela de login.');
+    const alvo = users.find(u => u.uid === uid);
+    if (!alvo?.email) throw new ErroValidacao('Usuário sem e-mail cadastrado.');
+    const situacao = situacaoDoUsuario(alvo);
+    if (situacao === 'pendente' || situacao === 'rejeitado') {
+      throw new ErroValidacao('Cadastros pendentes ou rejeitados não têm senha redefinida pela Administração.');
+    }
+    await contasService.enviarEmailRedefinicaoSenha(alvo.email);
+    await registrarAcaoAdministrativa({
+      acao: 'redefinicao_senha',
+      acaoDescricao: `Enviou o e-mail de redefinição de senha para ${alvo.nome || alvo.email}`,
+      tipoEntidade: 'usuario',
+      entidadeId: uid,
+      entidadeNome: alvo.nome || uid
+    });
   };
+
+  // Sem sessão não há auditoria (as regras exigem autoria): a tentativa só
+  // vira e-mail. O Firebase não revela se o e-mail existe.
+  const solicitarRedefinicaoSenha = (email: string) => contasService.enviarEmailRedefinicaoSenha(email);
 
   const solicitarAlteracaoCargo = async (perfil: UserRole, justificativa?: string) => {
     await solicitarCargoUseCase.execute({ usuario: userProfile, perfilSolicitado: perfil, justificativa });
@@ -490,7 +509,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         decidirCadastro,
         criarContaComSenhaTemporaria,
         concluirTrocaSenha,
-        redefinirSenhaTemporaria,
+        enviarRedefinicaoSenha,
+        solicitarRedefinicaoSenha,
         solicitarAlteracaoCargo,
         decidirSolicitacaoCargo,
         updateUserRole,

@@ -3,20 +3,6 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "*.log"
-      ],
-      "predeploy": [
-        "npm --prefix \"$RESOURCE_DIR\" run build"
-      ]
-    }
-  ],
   "hosting": {
     "public": "dist",
     "ignore": [
@@ -42,10 +28,6 @@
     "firestore": {
       "host": "127.0.0.1",
       "port": 8181
-    },
-    "functions": {
-      "host": "127.0.0.1",
-      "port": 5001
     },
     "storage": {
       "host": "127.0.0.1",
