@@ -4,6 +4,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReToolProvider } from './context/ReToolContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
+import { AguardandoAprovacao } from './pages/AguardandoAprovacao';
+import { TrocaSenhaObrigatoria } from './pages/TrocaSenhaObrigatoria';
+import { telaDaSessao } from './domain/entities/user';
 import { SkeletonCards, SkeletonLinha } from './components/feedback';
 import { LimiteDeErro, liberarRecargaAutomatica } from './components/LimiteDeErro';
 
@@ -14,6 +17,7 @@ const DispositivoDetails = lazy(() => import('./pages/DispositivoDetails').then(
 const Categorias = lazy(() => import('./pages/Categorias').then(m => ({ default: m.Categorias })));
 const Reutilizacoes = lazy(() => import('./pages/Reutilizacoes').then(m => ({ default: m.Reutilizacoes })));
 const Sobre = lazy(() => import('./pages/Sobre').then(m => ({ default: m.Sobre })));
+const Administracao = lazy(() => import('./pages/Administracao').then(m => ({ default: m.Administracao })));
 
 function CarregandoPagina() {
   return (
@@ -77,13 +81,20 @@ function ProtectedLayout() {
     );
   }
 
-  if (!userProfile) {
-    return <Navigate to="/login" replace />;
+  switch (telaDaSessao(userProfile)) {
+    case 'login':
+      return <Navigate to="/login" replace />;
+    // Convidado aguardando aprovação: nenhuma rota do sistema é renderizada.
+    case 'aguardando_aprovacao':
+      return <AguardandoAprovacao />;
+    // Senha temporária: somente a troca de senha está disponível.
+    case 'troca_senha':
+      return <TrocaSenhaObrigatoria />;
+    default:
+      preCarregarTelas();
+      liberarRecargaAutomatica();
+      return <Layout />;
   }
-
-  preCarregarTelas();
-  liberarRecargaAutomatica();
-  return <Layout />;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
@@ -136,6 +147,14 @@ function App() {
                 } 
               />
               <Route path="reutilizacoes" element={pagina(<Reutilizacoes />)} />
+              <Route
+                path="administracao/:aba?"
+                element={
+                  <RoleRoute allowedRoles={['admin']}>
+                    {pagina(<Administracao />)}
+                  </RoleRoute>
+                }
+              />
             </Route>
             <Route path="*" element={<Navigate to="/dispositivos" replace />} />
           </Routes>

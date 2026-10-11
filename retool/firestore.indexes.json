@@ -59,6 +59,444 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "acao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "acao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "acao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "acao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "acao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "acao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "acao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "acao",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usuarioUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoEntidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resultado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dataHora",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

@@ -110,7 +110,7 @@ export class FirestoreReutilizacoesRepository implements IReutilizacoesRepositor
    */
   async contarProntidao(): Promise<ContagensProntidao> {
     const col = collection(db, 'reutilizacoes');
-    const contar = (nome: string, q: Parameters<typeof getCountFromServer>[0]) =>
+    const contar = (nome: string, q: Query) =>
       medirConsulta(nome, () => getCountFromServer(q), () => 0).then(s => s.data().count);
     const [total, comStatusCanonico, comDataCriacao] = await Promise.all([
       contar('reutilizacoes:count', col),

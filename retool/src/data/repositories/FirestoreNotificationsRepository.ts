@@ -4,8 +4,9 @@ import { collection, onSnapshot, doc, setDoc, updateDoc, query, where, orderBy, 
 /** Notificações mais recentes carregadas por pessoa (antes: todas, a cada abertura do app). */
 export const LIMITE_NOTIFICACOES = 50;
 import { Notificacao } from '../../domain/entities/notificacao';
+import { INotificationsRepository } from '../../domain/repositories/IAcessosRepositories';
 
-export class FirestoreNotificationsRepository {
+export class FirestoreNotificationsRepository implements INotificationsRepository {
   /** Criação idempotente (id determinístico) — nunca duplica. */
   async criar(notificacao: Notificacao): Promise<void> {
     await setDoc(doc(db, 'notifications', notificacao.id), notificacao);

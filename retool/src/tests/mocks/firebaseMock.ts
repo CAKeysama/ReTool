@@ -8,16 +8,16 @@ export const mockDbState = {
   produtos: [] as any[],
   reutilizacoes: [] as any[],
   audit_logs: [] as any[],
+  users: [] as any[],
+  notifications: [] as any[],
+  solicitacoes_cargo: [] as any[],
+  pendencias_cargo: [] as any[],
 };
 
 export const resetMockDb = () => {
-  mockDbState.dispositivos = [];
-  mockDbState.categorias = [];
-  mockDbState.tipos = [];
-  mockDbState.familias = [];
-  mockDbState.produtos = [];
-  mockDbState.reutilizacoes = [];
-  mockDbState.audit_logs = [];
+  (Object.keys(mockDbState) as (keyof typeof mockDbState)[]).forEach(col => {
+    mockDbState[col] = [];
+  });
 };
 
 // Mock do módulo 'uuid' globalmente para evitar SyntaxError por causa do ESM
@@ -40,32 +40,132 @@ jest.mock('../../config/firebase', () => ({
   storage: {},
 }));
 
+type Restricao =
+  | { tipo: 'where'; campo: string; op: string; valor: any }
+  | { tipo: 'orderBy'; campo: string; direcao: 'asc' | 'desc' }
+  | { tipo: 'limit'; n: number }
+  | { tipo: 'startAfter'; cursor: any };
+
+function comparar(a: any, b: any): number {
+  if (a === b) return 0;
+  if (a === undefined || a === null) return -1;
+  if (b === undefined || b === null) return 1;
+  return a < b ? -1 : 1;
+}
+
+/** documentId() vira '__name__' no mock: compara pelo id do documento. */
+const valorDoCampo = (item: any, campo: string) => (campo === '__name__' ? item.id : item[campo]);
+
+function atende(item: any, r: Extract<Restricao, { tipo: 'where' }>): boolean {
+  const v = valorDoCampo(item, r.campo);
+  switch (r.op) {
+    case '==': return v === r.valor;
+    case 'in': return Array.isArray(r.valor) && r.valor.includes(v);
+    case '>=': return v !== undefined && comparar(v, r.valor) >= 0;
+    case '<=': return v !== undefined && comparar(v, r.valor) <= 0;
+    case '>': return v !== undefined && comparar(v, r.valor) > 0;
+    case '<': return v !== undefined && comparar(v, r.valor) < 0;
+    default: throw new Error(`Operador não suportado no mock: ${r.op}`);
+  }
+}
+
+/** Aplica where/orderBy/startAfter/limit sobre a coleção em memória. */
+function executarConsulta(ref: { name: string; restricoes?: Restricao[] }): any[] {
+  const col = ref.name as keyof typeof mockDbState;
+  let itens = [...(mockDbState[col] || [])];
+  const restricoes = ref.restricoes || [];
+  for (const r of restricoes) {
+    if (r.tipo === 'where') itens = itens.filter(item => atende(item, r));
+  }
+  const ordem = restricoes.filter((r): r is Extract<Restricao, { tipo: 'orderBy' }> => r.tipo === 'orderBy');
+  if (ordem.length > 0) {
+    itens.sort((a, b) => {
+      for (const o of ordem) {
+        const c = comparar(valorDoCampo(a, o.campo), valorDoCampo(b, o.campo));
+        if (c !== 0) return o.direcao === 'desc' ? -c : c;
+      }
+      return 0;
+    });
+  }
+  const apos = restricoes.find((r): r is Extract<Restricao, { tipo: 'startAfter' }> => r.tipo === 'startAfter');
+  if (apos) {
+    if (apos.cursor && typeof apos.cursor === 'object') {
+      // Cursor = documento (paginação do histórico).
+      const idx = itens.findIndex(item => item.id === apos.cursor.id);
+      itens = idx >= 0 ? itens.slice(idx + 1) : itens;
+    } else if (ordem[0]) {
+      // Cursor = valor do primeiro campo ordenado (ex.: orderBy(documentId())).
+      const o = ordem[0];
+      itens = itens.filter(item => {
+        const c = comparar(valorDoCampo(item, o.campo), apos.cursor);
+        return o.direcao === 'desc' ? c < 0 : c > 0;
+      });
+    }
+  }
+  const limite = restricoes.find((r): r is Extract<Restricao, { tipo: 'limit' }> => r.tipo === 'limit');
+  if (limite) itens = itens.slice(0, limite.n);
+  return itens;
+}
+
+const snapshotDeDocs = (itens: any[]) => ({
+  docs: itens.map(item => ({ id: item.id, data: () => item })),
+  size: itens.length,
+  empty: itens.length === 0,
+  metadata: { fromCache: false, hasPendingWrites: false }
+});
+
+function snapshotDeDoc(docRef: { colName: string; id: string }) {
+  const col = docRef.colName as keyof typeof mockDbState;
+  const item = (mockDbState[col] || []).find((i: any) => i.id === docRef.id);
+  return { id: docRef.id, exists: () => !!item, data: () => item, metadata: { hasPendingWrites: false } };
+}
+
+function gravar(docRef: any, data: any, merge = false) {
+  const col = docRef.colName as keyof typeof mockDbState;
+  if (!mockDbState[col]) return;
+  const idx = mockDbState[col].findIndex((item: any) => item.id === docRef.id);
+  if (idx >= 0) {
+    mockDbState[col][idx] = merge
+      ? { ...mockDbState[col][idx], ...data, id: docRef.id }
+      : { ...data, id: docRef.id };
+  } else {
+    mockDbState[col].push({ ...data, id: docRef.id });
+  }
+}
+
+function atualizar(docRef: any, data: any) {
+  const col = docRef.colName as keyof typeof mockDbState;
+  if (!mockDbState[col]) return;
+  const item = mockDbState[col].find((i: any) => i.id === docRef.id);
+  // Como no Firestore real, atualizar documento inexistente falha.
+  if (!item) throw Object.assign(new Error(`No document to update: ${col}/${docRef.id}`), { code: 'not-found' });
+  Object.assign(item, data);
+  for (const [k, v] of Object.entries(data)) if ((v as any)?.__deleteField) delete item[k];
+}
+
+function remover(docRef: any) {
+  const col = docRef.colName as keyof typeof mockDbState;
+  if (mockDbState[col]) {
+    mockDbState[col] = mockDbState[col].filter((item: any) => item.id !== docRef.id);
+  }
+}
+
 jest.mock('firebase/firestore', () => {
   return {
     getFirestore: jest.fn(() => ({})),
     collection: jest.fn((db: any, name: string) => ({ name })),
-    // As restrições ficam anotadas na consulta (`restricoes`); getDocs só as
-    // aplica na leitura paginada por id (orderBy(documentId()) + startAfter + limit).
-    query: jest.fn((colRef: any, ...constraints: any[]) => ({ ...colRef, restricoes: [...(colRef?.restricoes || []), ...constraints] })),
-    orderBy: jest.fn((campo?: any, ..._args: any[]) => ({ tipo: 'orderBy', campo })),
-    limit: jest.fn((n?: any) => ({ tipo: 'limit', n })),
+    // As restrições ficam anotadas na consulta (`restricoes`) e são
+    // aplicadas por executarConsulta em getDocs/onSnapshot/count.
+    query: jest.fn((colRef: any, ...restricoes: any[]) => ({
+      ...colRef,
+      name: colRef.name,
+      restricoes: [...(colRef.restricoes || []), ...restricoes]
+    })),
+    where: jest.fn((campo: string, op: string, valor: any) => ({ tipo: 'where', campo, op, valor })),
+    orderBy: jest.fn((campo: string, direcao: 'asc' | 'desc' = 'asc') => ({ tipo: 'orderBy', campo, direcao })),
+    limit: jest.fn((n: number) => ({ tipo: 'limit', n })),
+    startAfter: jest.fn((cursor: any) => ({ tipo: 'startAfter', cursor })),
     documentId: jest.fn(() => '__name__'),
-    where: jest.fn((campo?: any, op?: any, valor?: any) => ({ tipo: 'where', campo, op, valor })),
-    // count() aplica os where ('==', 'in', '>') anotados na consulta.
-    getCountFromServer: jest.fn(async (colRef: any) => {
-      const col = colRef.name as keyof typeof mockDbState;
-      const filtros: any[] = (colRef.restricoes || []).filter((r: any) => r?.tipo === 'where');
-      const passa = (item: any) => filtros.every(f => {
-        const v = item[f.campo];
-        if (f.op === '==') return v === f.valor;
-        if (f.op === 'in') return (f.valor as any[]).includes(v);
-        if (f.op === '>') return typeof v === typeof f.valor && v > f.valor;
-        return true;
-      });
-      const count = (mockDbState[col] || []).filter(passa).length;
-      return { data: () => ({ count }) };
-    }),
-    startAfter: jest.fn((valor?: any) => ({ tipo: 'startAfter', valor })),
     deleteField: jest.fn(() => ({ __deleteField: true })),
     serverTimestamp: jest.fn(() => ({
       __serverTimestampMock: true,
@@ -83,70 +183,27 @@ jest.mock('firebase/firestore', () => {
       }
     },
     doc: jest.fn((db: any, colName: string, id: string) => ({ colName, id })),
-    setDoc: jest.fn(async (docRef: any, data: any) => {
-      const col = docRef.colName as keyof typeof mockDbState;
-      if (mockDbState[col]) {
-        const idx = mockDbState[col].findIndex((item: any) => item.id === docRef.id);
-        if (idx >= 0) {
-          mockDbState[col][idx] = { ...data, id: docRef.id };
-        } else {
-          mockDbState[col].push({ ...data, id: docRef.id });
-        }
-      }
-    }),
-    updateDoc: jest.fn(async (docRef: any, data: any) => {
-      const col = docRef.colName as keyof typeof mockDbState;
-      if (mockDbState[col]) {
-        const item = mockDbState[col].find((item: any) => item.id === docRef.id);
-        if (item) {
-          Object.assign(item, data);
-          for (const [k, v] of Object.entries(data)) if ((v as any)?.__deleteField) delete item[k];
-        }
-      }
-    }),
-    deleteDoc: jest.fn(async (docRef: any) => {
-      const col = docRef.colName as keyof typeof mockDbState;
-      if (mockDbState[col]) {
-        mockDbState[col] = mockDbState[col].filter((item: any) => item.id !== docRef.id);
-      }
-    }),
-    onSnapshot: jest.fn((colRef: any, ...args: any[]) => {
-      // Aceita a forma com opções (onSnapshot(ref, { includeMetadataChanges }, cb)).
-      const callback = args.find(a => typeof a === 'function');
-      const col = colRef.name as keyof typeof mockDbState;
-      const docs = (mockDbState[col] || []).map(item => ({
-        id: item.id,
-        data: () => item
-      }));
-      callback({ docs, metadata: { fromCache: false } });
+    getDoc: jest.fn(async (docRef: any) => snapshotDeDoc(docRef)),
+    setDoc: jest.fn(async (docRef: any, data: any) => gravar(docRef, data)),
+    updateDoc: jest.fn(async (docRef: any, data: any) => atualizar(docRef, data)),
+    deleteDoc: jest.fn(async (docRef: any) => remover(docRef)),
+    onSnapshot: jest.fn((ref: any, opcoesOuCallback: any, talvezCallback?: any) => {
+      // Aceita as duas assinaturas: (ref, cb, erro?) e (ref, opções, cb, erro?).
+      const callback = typeof opcoesOuCallback === 'function' ? opcoesOuCallback : talvezCallback;
+      if (ref.colName) callback(snapshotDeDoc(ref));
+      else callback(snapshotDeDocs(executarConsulta(ref)));
       return () => {}; // return unsubscribe function
     }),
-    getDocsFromServer: jest.fn(async (colRef: any) => {
+    getDocs: jest.fn(async (ref: any) => snapshotDeDocs(executarConsulta(ref))),
+    // Delega a getDocs: testes que simulam falha em getDocs valem para os dois.
+    getDocsFromServer: jest.fn(async (ref: any) => {
       const fs = jest.requireMock('firebase/firestore') as any;
-      return fs.getDocs(colRef);
+      return fs.getDocs(ref);
     }),
-    getDocs: jest.fn(async (colRef: any) => {
-      const col = colRef.name as keyof typeof mockDbState;
-      let itens = [...(mockDbState[col] || [])];
-      const restricoes: any[] = colRef.restricoes || [];
-      // where '==' / 'in' (como o servidor: igualdade exata, sem normalizar).
-      for (const f of restricoes.filter(r => r?.tipo === 'where')) {
-        const campo = f.campo === '__name__' ? 'id' : f.campo;
-        if (f.op === '==') itens = itens.filter(i => i[campo] === f.valor);
-        if (f.op === 'in') itens = itens.filter(i => (f.valor as any[]).includes(i[campo]));
-      }
-      if (restricoes.some(r => r?.tipo === 'orderBy' && r.campo === '__name__')) {
-        itens.sort((a, b) => (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0));
-        const depois = restricoes.find(r => r?.tipo === 'startAfter');
-        if (depois) itens = itens.filter(i => String(i.id) > String(depois.valor));
-        const lim = restricoes.find(r => r?.tipo === 'limit' && typeof r.n === 'number');
-        if (lim) itens = itens.slice(0, lim.n);
-      }
-      const docs = itens.map(item => ({
-        id: item.id,
-        data: () => item
-      }));
-      return { docs, size: docs.length, empty: docs.length === 0 };
+    getCountFromServer: jest.fn(async (ref: any) => {
+      const semLimite = { ...ref, restricoes: (ref.restricoes || []).filter((r: any) => r.tipo === 'where') };
+      const count = executarConsulta(semLimite).length;
+      return { data: () => ({ count }) };
     }),
     writeBatch: jest.fn(() => {
       const operations: any[] = [];
@@ -154,34 +211,26 @@ jest.mock('firebase/firestore', () => {
         set: jest.fn((docRef: any, data: any, options: any) => {
           operations.push({ type: 'set', docRef, data, options });
         }),
+        update: jest.fn((docRef: any, data: any) => {
+          operations.push({ type: 'update', docRef, data });
+        }),
         delete: jest.fn((docRef: any) => {
           operations.push({ type: 'delete', docRef });
         }),
-        update: jest.fn((docRef: any, data: any) => {
-          operations.push({ type: 'set', docRef, data, options: { merge: true } });
-        }),
         commit: jest.fn(async () => {
+          // Atomicidade: valida os updates antes de aplicar qualquer operação.
           for (const op of operations) {
-            if (op.type === 'set') {
+            if (op.type === 'update') {
               const col = op.docRef.colName as keyof typeof mockDbState;
-              if (mockDbState[col]) {
-                const idx = mockDbState[col].findIndex((item: any) => item.id === op.docRef.id);
-                if (idx >= 0) {
-                  if (op.options && op.options.merge) {
-                    mockDbState[col][idx] = { ...mockDbState[col][idx], ...op.data, id: op.docRef.id };
-                  } else {
-                    mockDbState[col][idx] = { ...op.data, id: op.docRef.id };
-                  }
-                } else {
-                  mockDbState[col].push({ ...op.data, id: op.docRef.id });
-                }
-              }
-            } else if (op.type === 'delete') {
-              const col = op.docRef.colName as keyof typeof mockDbState;
-              if (mockDbState[col]) {
-                mockDbState[col] = mockDbState[col].filter((item: any) => item.id !== op.docRef.id);
+              if (mockDbState[col] && !mockDbState[col].some((i: any) => i.id === op.docRef.id)) {
+                throw Object.assign(new Error(`No document to update: ${col}/${op.docRef.id}`), { code: 'not-found' });
               }
             }
+          }
+          for (const op of operations) {
+            if (op.type === 'set') gravar(op.docRef, op.data, !!op.options?.merge);
+            else if (op.type === 'update') atualizar(op.docRef, op.data);
+            else if (op.type === 'delete') remover(op.docRef);
           }
         })
       };

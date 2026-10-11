@@ -198,7 +198,7 @@ async function metaParaEscrita(): Promise<MetaIndice | null> {
 }
 
 export const ReToolProvider = ({ children }: { children: ReactNode }) => {
-  const { userProfile, currentRole, users, criarNotificacao } = useAuth();
+  const { userProfile, currentRole, users, criarNotificacao, isOperacional, canSolicitar } = useAuth();
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [tipos, setTipos] = useState<Tipo[]>([]);
   const [familias, setFamilias] = useState<Familia[]>([]);
@@ -239,7 +239,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
   // leitura e o listener morria sem voltar (lista vazia até recarregar a página).
   // Dispositivos e reutilizações NÃO são mais assinados aqui: cada tela consulta
   // só o que exibe (ver PERFORMANCE.md).
-  const uid = userProfile?.uid;
+  // Somente contas operacionais leem os dados: convidados pendentes, contas
+  // com troca de senha pendente e sessões encerradas não assinam nada.
+  const uid = isOperacional ? userProfile?.uid : undefined;
   const [tentativaRef, setTentativaRef] = useState(0);
   /** O catálogo `indices/classificacoes` existe e confere: gravações o mantêm. */
   const catalogoClassifAtivo = useRef(false);
@@ -734,8 +736,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     solicitanteNome: string,
     solicitanteId?: string
   ) => {
-    if (currentRole === 'gerencia') {
-      announce('Acesso negado: perfil de Gerência possui acesso somente de consulta.');
+    if (!canSolicitar) {
+      announce('Acesso negado: seu perfil possui acesso somente de consulta.');
       return;
     }
     const solicitanteUid = solicitanteId || userProfile?.uid || 'eng';

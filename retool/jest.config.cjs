@@ -12,6 +12,8 @@ module.exports = {
     '^uuid$': require.resolve('uuid'),
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  // As regras exigem o emulador do Firestore: `npm run test:rules`.
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/src/tests/rules/'],
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],

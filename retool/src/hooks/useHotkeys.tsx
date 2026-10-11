@@ -9,6 +9,7 @@ import { usePermissions } from './usePermissions';
   D -> Dispositivos
   U -> Reutilizações
   C -> Categorias
+  A -> Administração (somente Administração)
   N -> Novo registro (requer permissão de cadastro)
   Esc -> Close
 */
@@ -21,7 +22,7 @@ interface HotkeysConfig {
 
 export function useHotkeys(config?: HotkeysConfig) {
   const navigate = useNavigate();
-  const { canCadastrar, canEditar } = usePermissions();
+  const { canCadastrar, canEditar, canGerenciarUsuarios } = usePermissions();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -73,6 +74,11 @@ export function useHotkeys(config?: HotkeysConfig) {
             navigate('/categorias');
           }
           break;
+        case 'a':
+          if (canGerenciarUsuarios) {
+            navigate('/administracao');
+          }
+          break;
         case 'n':
           if (canCadastrar && config?.onNewRecord) {
             e.preventDefault();
@@ -84,5 +90,5 @@ export function useHotkeys(config?: HotkeysConfig) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate, config, canCadastrar, canEditar]);
+  }, [navigate, config, canCadastrar, canEditar, canGerenciarUsuarios]);
 }

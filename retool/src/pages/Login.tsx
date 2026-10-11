@@ -1,30 +1,46 @@
 import React, { useState } from 'react';
 import { useAuth, traduzirErroAuth } from '../context/AuthContext';
-import { ROLES_CONFIG, UserRole } from '../domain/entities/user';
-import { useNavigate } from 'react-router-dom';
 import { 
   Lock, 
   Mail, 
   User, 
   ArrowRight,
   AlertCircle,
-  Info,
-  CheckCircle2
+  CheckCircle2,
+  Info
 } from 'lucide-react';
 
 export function Login() {
-  const { login, register } = useAuth();
-  const navigate = useNavigate();
+  const { login, register, solicitarRedefinicaoSenha } = useAuth();
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nome, setNome] = useState('');
-  const [perfilSolicitado, setPerfilSolicitado] = useState<UserRole>('gerencia');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
+  const [enviandoRedefinicao, setEnviandoRedefinicao] = useState(false);
+
+  const handleEsqueciSenha = async () => {
+    setErro('');
+    setSucesso('');
+    if (!email.trim()) {
+      setErro('Informe seu e-mail acima para receber o link de redefinição de senha.');
+      return;
+    }
+    setEnviandoRedefinicao(true);
+    try {
+      await solicitarRedefinicaoSenha(email);
+      // Mesma mensagem exista ou não a conta (não revela e-mails cadastrados).
+      setSucesso(`Se houver uma conta com ${email.trim().toLowerCase()}, você receberá um e-mail com o link para definir uma nova senha. Confira também a caixa de spam.`);
+    } catch (err: unknown) {
+      setErro(traduzirErroAuth(err));
+    } finally {
+      setEnviandoRedefinicao(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,14 +53,12 @@ export function Login() {
         if (!nome.trim()) throw new Error('Por favor, informe seu nome completo.');
         if (password.length < 6) throw new Error('A senha deve conter no mínimo 6 caracteres.');
         if (password !== confirmPassword) throw new Error('As senhas informadas não coincidem.');
-        await register(email, password, nome, perfilSolicitado);
-        setSucesso('Conta criada com sucesso! Seu acesso está aguardando aprovação da Administradora — você poderá entrar assim que for liberado.');
-        setIsRegistering(false);
-        setPassword('');
-        setConfirmPassword('');
+        // O cargo nunca é escolhido aqui: a conta nasce como Convidado e a
+        // sessão segue para a tela "Cadastro em análise".
+        await register(email, password, nome);
       } else {
+        // Após o login a rota pública redireciona conforme a situação da conta.
         await login(email, password);
-        navigate('/dispositivos');
       }
     } catch (err: unknown) {
       console.error(err);
@@ -171,7 +185,7 @@ export function Login() {
             </h2>
             <p style={{ color: '#64748b', fontSize: '0.86rem', marginTop: '6px' }}>
               {isRegistering 
-                ? 'Cadastre seu usuário institucional. O acesso é liberado após aprovação da Administradora.' 
+                ? 'Cadastre seu usuário institucional. Você entra como Convidado e o cargo é definido pela Administração na aprovação.' 
                 : 'Informe seu e-mail institucional e senha para entrar.'}
             </p>
           </div>
@@ -190,26 +204,9 @@ export function Login() {
             <Info size={16} color="#2563eb" style={{ flexShrink: 0, marginTop: '2px' }} />
             <div style={{ fontSize: '0.74rem', color: '#475569', lineHeight: 1.5 }}>
               Contas institucionais são provisionadas e aprovadas pela Administração do sistema.
-              Novos cadastros entram com acesso restrito até a liberação.
+              Novos cadastros entram como Convidado, sem acesso aos dados, até a aprovação.
             </div>
           </div>
-
-          {sucesso && (
-            <div role="status" style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '8px',
-              padding: '10px 14px',
-              backgroundColor: '#dcfce7',
-              color: '#15803d',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: '0.82rem',
-              marginBottom: '18px'
-            }}>
-              <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
-              <span>{sucesso}</span>
-            </div>
-          )}
 
           {erro && (
             <div role="alert" style={{
@@ -225,6 +222,23 @@ export function Login() {
             }}>
               <AlertCircle size={16} />
               <span>{erro}</span>
+            </div>
+          )}
+
+          {sucesso && (
+            <div role="status" style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+              padding: '10px 14px',
+              backgroundColor: '#dcfce7',
+              color: '#15803d',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.82rem',
+              marginBottom: '18px'
+            }}>
+              <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>{sucesso}</span>
             </div>
           )}
 
@@ -299,6 +313,18 @@ export function Login() {
                   }}
                 />
               </div>
+              {!isRegistering && (
+                <div style={{ textAlign: 'right', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={handleEsqueciSenha}
+                    disabled={enviandoRedefinicao}
+                    style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-primary)', fontSize: '0.78rem', fontWeight: 600, cursor: enviandoRedefinicao ? 'not-allowed' : 'pointer', textDecoration: 'underline' }}
+                  >
+                    {enviandoRedefinicao ? 'Enviando...' : 'Esqueci minha senha'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {isRegistering && (
@@ -321,25 +347,6 @@ export function Login() {
               </div>
             )}
 
-            {isRegistering && (
-              <div>
-                <label className="input-label">
-                  Perfil Solicitado
-                </label>
-                <select
-                  value={perfilSolicitado}
-                  onChange={e => setPerfilSolicitado(e.target.value as UserRole)}
-                  className="input-field"
-                >
-                  {(Object.keys(ROLES_CONFIG) as UserRole[]).map(r => (
-                    <option key={r} value={r}>
-                      {ROLES_CONFIG[r].titulo}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={loading}
@@ -359,6 +366,7 @@ export function Login() {
               onClick={() => {
                 setIsRegistering(!isRegistering);
                 setErro('');
+                setSucesso('');
               }}
               style={{
                 marginLeft: '6px',

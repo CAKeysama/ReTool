@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ReTool — Regras de Segurança do Storage
-// Acesso a anexos exige sessão ativa; escrita/exclusão respeitam o RBAC
+// Acesso a anexos exige conta operacional; escrita/exclusão respeitam o RBAC
 // (cadastro/edição: admin+projetista; exclusão: somente admin).
 
 service firebase.storage {
@@ -16,10 +16,15 @@ service firebase.storage {
         return firestore.get(/databases/(default)/documents/users/(request.auth.uid)).data;
       }
 
+      // Conta operacional: ativa, aprovada, com cargo definido e sem troca
+      // de senha pendente (convidados em análise não acessam anexos).
       function isActiveUser() {
         return signedIn()
           && firestore.exists(/databases/(default)/documents/users/(request.auth.uid))
-          && userDoc().ativo == true;
+          && userDoc().ativo == true
+          && userDoc().get('perfil', '') in ['admin', 'projetista', 'engenharia', 'gerencia']
+          && userDoc().get('statusAprovacao', 'aprovado') == 'aprovado'
+          && userDoc().get('trocaSenhaObrigatoria', false) != true;
       }
 
       function canCadastrar() {
