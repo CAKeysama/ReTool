@@ -9,6 +9,7 @@
     "emuladores": "node scripts/emuladores.mjs iniciar",
     "build": "vite build",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "deploy": "npm run build && npx firebase-tools deploy",
     "test": "jest",
