@@ -13,7 +13,8 @@ module.exports = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   // As regras exigem o emulador do Firestore: `npm run test:rules`.
-  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/src/tests/rules/'],
+  // Os testes de navegador rodam no Playwright: `npm run test:e2e`.
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/src/tests/rules/', '<rootDir>/e2e/'],
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],
