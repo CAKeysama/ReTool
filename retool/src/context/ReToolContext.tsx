@@ -19,6 +19,7 @@ import {
   obterDispositivo, obterDispositivosPorIds, obterDispositivosPorCodigo, varrerDispositivos, varrerColecao, ProgressoVarredura, contarDispositivos
 } from '../data/repositories/FirestoreDispositivosConsultas';
 import { ITENS_POR_PARTE } from '../domain/services/buscaDispositivos';
+import { alteraImagem, camposAlterados } from '../domain/services/alteracoesDispositivo';
 import { contarComChave, prepararChavesImportacao, ResultadoPreparoChaves } from '../data/repositories/importacaoDispositivosFirestore';
 import { MetaIndice, lerMetaIndiceDoServidor, reconstruirIndice, metaRef, parteRef } from '../data/repositories/FirestoreIndiceDispositivos';
 import { indiceBusca } from '../data/repositories/IndiceBuscaStore';
@@ -458,9 +459,11 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     const atual = await obterDispositivo(id);
+    // Auditoria e propagação olham só o que de fato difere do documento atual.
+    const alterados = atual ? camposAlterados(atual, data) : data;
     await dispositivosRepo.update(id, data, atual, await metaParaEscrita());
-    await registrarAuditoria('edicao', 'dispositivo', id, atual?.nome || id, 'Editou dispositivo', { valoresAlterados: data }, atual || undefined);
-    await propagarImagensPorCodigo(id, data.codigo ?? atual?.codigo, data, false);
+    await registrarAuditoria('edicao', 'dispositivo', id, atual?.nome || id, 'Editou dispositivo', { valoresAlterados: alterados }, atual || undefined);
+    if (alteraImagem(alterados)) await propagarImagensPorCodigo(id, data.codigo ?? atual?.codigo, alterados, false);
     tocarDispositivos();
     if (!silent) announce('Dispositivo atualizado com sucesso');
   };
