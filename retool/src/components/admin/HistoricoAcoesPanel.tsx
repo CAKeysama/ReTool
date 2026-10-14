@@ -6,7 +6,7 @@ import {
   ACOES_POR_CATEGORIA, ROTULO_ACAO, ROTULO_CATEGORIA, ROTULO_TIPO_ENTIDADE, categoriaDaAcao
 } from '../../domain/entities/auditLog';
 import { useHistoricoAuditoriaController } from '../../presentation/hooks/useHistoricoAuditoriaController';
-import { Aviso, EstadoCarregando, EstadoErro } from '../Feedback';
+import { Aviso, EstadoCarregando, EstadoErro } from '../FeedbackAdmin';
 import { Pill, RoleBadge } from '../Badges';
 import { tabelaAdmin } from './estilos';
 

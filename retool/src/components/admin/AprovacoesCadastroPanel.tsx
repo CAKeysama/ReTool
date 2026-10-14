@@ -3,7 +3,7 @@ import { Check, X } from 'lucide-react';
 import { useAuth, traduzirErroAuth } from '../../context/AuthContext';
 import { PERFIS_ATRIBUIVEIS, ROLES_CONFIG, UserProfile, UserRole, situacaoDoUsuario } from '../../domain/entities/user';
 import { EmptyState } from '../Tabs';
-import { Aviso, EstadoCarregando, EstadoErro } from '../Feedback';
+import { Aviso, EstadoCarregando, EstadoErro } from '../FeedbackAdmin';
 import { Pill, RoleBadge, SituacaoBadge, formatarDataHora } from '../Badges';
 import { cartaoAdmin, estiloBotaoAcao, tabelaAdmin } from './estilos';
 

@@ -4,7 +4,7 @@ import { AccessibleModal } from './AccessibleModal';
 import { useAuth, traduzirErroAuth } from '../context/AuthContext';
 import { PERFIS_ATRIBUIVEIS, ROLES_CONFIG, UserRole } from '../domain/entities/user';
 import { JUSTIFICATIVA_MAX } from '../domain/entities/solicitacaoCargo';
-import { Aviso, EstadoCarregando, EstadoErro } from './Feedback';
+import { Aviso, EstadoCarregando, EstadoErro } from './FeedbackAdmin';
 import { RoleBadge, SolicitacaoStatusBadge, formatarDataHora } from './Badges';
 
 /**
