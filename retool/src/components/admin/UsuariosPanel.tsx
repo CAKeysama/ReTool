@@ -6,7 +6,7 @@ import {
   PERFIS_ATRIBUIVEIS, ROLES_CONFIG, UserProfile, UserRole, SituacaoUsuario,
   configDoPerfil, situacaoDoUsuario, isPerfilAtribuivel
 } from '../../domain/entities/user';
-import { Aviso, EstadoCarregando, EstadoErro } from '../Feedback';
+import { Aviso, EstadoCarregando, EstadoErro } from '../FeedbackAdmin';
 import { Pill, SituacaoBadge, SITUACAO_VISUAL } from '../Badges';
 import { estiloBotaoAcao, tabelaAdmin } from './estilos';
 

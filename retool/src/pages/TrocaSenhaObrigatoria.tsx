@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { KeyRound, Check, Circle } from 'lucide-react';
 import { useAuth, traduzirErroAuth } from '../context/AuthContext';
 import { TelaAcessoRestrito } from '../components/TelaAcessoRestrito';
-import { Aviso } from '../components/Feedback';
+import { Aviso } from '../components/FeedbackAdmin';
 import { TAMANHO_MINIMO_SENHA } from '../domain/services/senhaTemporaria';
 
 /**
