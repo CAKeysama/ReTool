@@ -146,6 +146,8 @@ export interface FiltroBusca {
   /** Texto livre (busca por trecho em todos os campos). */
   texto?: string;
   categoriaId?: string;
+  familiaId?: string;
+  produtoId?: string;
   /** Processo industrial (trecho em descrição, nome ou palavras-chave). */
   processo?: string;
   /** Autocomplete da Home: também procura no peso. */
@@ -167,10 +169,14 @@ export function filtrarEntradas(
   const q = normalizarBusca(filtro.texto).replace(/\s+/g, ' ').trim();
   const proc = normalizarBusca(filtro.processo).trim();
   const cat = filtro.categoriaId || '';
+  const fam = filtro.familiaId || '';
+  const prod = filtro.produtoId || '';
   const out: EntradaIndice[] = [];
   for (let i = 0; i < preparadas.length; i++) {
     const p = preparadas[i];
     if (cat && p.entrada.categoriaId !== cat) continue;
+    if (fam && p.entrada.familiaId !== fam) continue;
+    if (prod && p.entrada.produtoId !== prod) continue;
     if (q && (filtro.incluirPeso ? p.textoHome : p.texto).indexOf(q) < 0) continue;
     if (proc && p.processo.indexOf(proc) < 0) continue;
     out.push(p.entrada);

@@ -96,6 +96,26 @@ describe('buscaDispositivos', () => {
     }
   });
 
+  it('filtra por família e produto (sozinhos e combinados com categoria e texto)', () => {
+    const lista = gerar(2000);
+    const prep = prepararEntradas(lista, nomes);
+    for (const fam of ['', 'f1', 'f2']) {
+      for (const prod of ['', 'p1', 'p2']) {
+        for (const cat of ['', 'c2']) {
+          for (const q of ['', 'barra']) {
+            const esperado = filtroOriginal(lista, nomes, q, cat, '')
+              .filter(e => (!fam || e.familiaId === fam) && (!prod || e.produtoId === prod))
+              .map(e => e.id);
+            const obtido = filtrarEntradas(prep, { texto: q, categoriaId: cat, familiaId: fam, produtoId: prod }).map(e => e.id);
+            expect(obtido).toEqual(esperado);
+          }
+        }
+      }
+    }
+    // Sanidade: o filtro realmente restringe.
+    expect(filtrarEntradas(prep, { familiaId: 'f1' }).length).toBeLessThan(lista.length);
+  });
+
   it('para no limite pedido', () => {
     const prep = prepararEntradas(gerar(500), nomes);
     expect(filtrarEntradas(prep, { texto: 'daf' }, 8)).toHaveLength(8);
