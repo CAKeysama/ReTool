@@ -48,4 +48,36 @@ describe('FirebaseStorageService', () => {
       service.deleteFolder('retool/dispositivos/disp-123')
     ).resolves.toBeUndefined();
   });
+
+  describe('deleteFolder com arquivos ainda usados', () => {
+    const pasta = 'retool/dispositivos/disp-123';
+    const arquivos = [
+      `${pasta}/imagem_peca/u1_usada.png`,
+      `${pasta}/imagem_peca/u2_sobrando.png`,
+      `${pasta}/documento_pdf/u3_manual.pdf`,
+    ];
+
+    beforeEach(() => {
+      const { listAll } = jest.requireMock('firebase/storage') as { listAll: jest.Mock };
+      listAll.mockImplementation(async (r: { fullPath: string }) => r.fullPath === pasta
+        ? { items: arquivos.map(fullPath => ({ fullPath })), prefixes: [] }
+        : { items: [], prefixes: [] });
+    });
+
+    const apagados = () => (jest.requireMock('firebase/storage') as { deleteObject: jest.Mock })
+      .deleteObject.mock.calls.map(([item]) => (item as { fullPath: string }).fullPath).sort();
+
+    it('preserva o que `manter` indicar e apaga o resto', async () => {
+      await service.deleteFolder(pasta, async caminho => caminho.endsWith('u1_usada.png'));
+      expect(apagados()).toEqual([arquivos[2], arquivos[1]].sort());
+    });
+
+    it('preserva o arquivo quando a checagem falha (nunca apaga por engano)', async () => {
+      await service.deleteFolder(pasta, async caminho => {
+        if (caminho.endsWith('.png')) throw new Error('sem conexão');
+        return false;
+      });
+      expect(apagados()).toEqual([arquivos[2]]);
+    });
+  });
 });

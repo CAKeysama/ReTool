@@ -1,7 +1,7 @@
 import { db } from '../datasources/firebase';
 import {
   collection, onSnapshot, doc, setDoc, query, orderBy, limit, where, startAfter,
-  getDocs, getCountFromServer, serverTimestamp, Timestamp, QueryConstraint, WriteBatch
+  getDocs, getCountFromServer, serverTimestamp, Timestamp, QueryConstraint, WriteBatch, Transaction
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -169,12 +169,16 @@ export class FirestoreAuditLogRepository implements IAuditLogRepository {
   }
 
   /**
-   * Acrescenta um registro de auditoria a um writeBatch (operações em massa:
-   * cada item continua com seu próprio registro, gravado junto com a alteração).
+   * Acrescenta um registro de auditoria a um writeBatch ou a uma transação
+   * (operações em massa e propagação de imagens: cada item continua com seu
+   * próprio registro, gravado junto com a alteração).
    */
-  adicionarAoBatch(batch: WriteBatch, logData: AuditLogInput): void {
+  adicionarAoBatch(batch: WriteBatch | Transaction, logData: AuditLogInput): void {
     const id = uuidv4();
-    batch.set(doc(db, 'audit_logs', id), montarRegistro(id, logData));
+    const ref = doc(db, 'audit_logs', id);
+    const registro = montarRegistro(id, logData);
+    if (batch instanceof Transaction) batch.set(ref, registro);
+    else batch.set(ref, registro);
   }
 
   /** Assinatura em tempo real, sempre do registro mais recente para o mais antigo. */

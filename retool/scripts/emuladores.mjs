@@ -14,7 +14,8 @@ import { readFileSync } from 'node:fs';
 
 const MODOS = {
   iniciar: { emuladores: 'auth,firestore,storage' },
-  regras: { emuladores: 'firestore', testes: 'jest --config jest.rules.config.cjs src/tests/rules' },
+  // Storage junto: as regras do Storage consultam o perfil no Firestore.
+  regras: { emuladores: 'firestore,storage', testes: 'jest --config jest.rules.config.cjs src/tests/rules' },
   e2e: { emuladores: 'auth,firestore,storage', testes: 'playwright test' },
 };
 

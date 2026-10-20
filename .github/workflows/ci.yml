@@ -62,7 +62,7 @@ jobs:
           path: ~/.cache/firebase/emulators
           key: emuladores-firebase-${{ hashFiles('retool/package-lock.json') }}
       - run: npm ci
-      - name: Regras do Firestore (emulador)
+      - name: Regras do Firestore e do Storage (emulador)
         run: npm run test:rules
 
   e2e:

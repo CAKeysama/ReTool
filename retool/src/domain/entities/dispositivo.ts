@@ -28,9 +28,22 @@ export type CampoImagemDispositivo = 'imagemPeca' | 'imagemDispositivo';
 
 export const CAMPOS_IMAGEM_DISPOSITIVO: CampoImagemDispositivo[] = ['imagemPeca', 'imagemDispositivo'];
 
-/** Normaliza o Número da Peça usado como chave da linha (ignora caixa e espaços). */
+/**
+ * Normaliza o Número da Peça usado como chave da linha de imagens. É o mesmo
+ * critério do Código na chave Código + Dispositivo (`normalizarValorChave`):
+ * a linha da propagação é a mesma que a importação e os Duplicados enxergam.
+ */
 export function normalizarNumeroPeca(codigo?: string): string {
-  return (codigo || '').trim().toLowerCase();
+  return normalizarValorChave(codigo);
+}
+
+/**
+ * Início comum da `chaveCD` de todos os documentos com este Número da Peça
+ * (já normalizado): `["<codigo>",`. Uma consulta por intervalo nesse prefixo
+ * acha a linha inteira no servidor, qualquer que seja a grafia gravada.
+ */
+export function prefixoChaveDaLinha(numeroPecaNormalizado: string): string {
+  return JSON.stringify([numeroPecaNormalizado]).slice(0, -1) + ',';
 }
 
 // Caracteres invisíveis comuns em planilhas: zero-width (U+200B–U+200D),
@@ -43,7 +56,7 @@ export const INVISIVEIS = /[​-‍﻿­⁠\u0000-\u0008\u000B\u000C\u000E-\u001
  *
  * Equivalentes (mesma chave): espaços nas pontas, espaços repetidos/NBSP/tab,
  * caracteres invisíveis, forma Unicode (NFC) e maiúsculas/minúsculas — mesmo
- * critério de `normalizarNumeroPeca()` e do "Remover Duplicatas" do Excel.
+ * critério do "Remover Duplicatas" do Excel (e da linha de imagens, `normalizarNumeroPeca()`).
  *
  * Distintos (chaves diferentes): zeros à esquerda ("0041" ≠ "41"), casas
  * decimais ("1.10" ≠ "1.1"), acentuação ("PEÇA" ≠ "PECA") e qualquer outro
@@ -73,57 +86,176 @@ export interface PatchPropagacaoImagem {
   /** Dispositivo que deve receber a imagem. */
   id: string;
   patch: Partial<Dispositivo>;
-  /** 'propagacao' = upload da origem preencheu célula vazia da linha; 'heranca' = registro novo herdou imagem já existente na linha. */
+  /** 'propagacao' = upload da origem chegou a outro dispositivo da linha; 'heranca' = registro novo herdou imagem já existente na linha. */
   origem: 'propagacao' | 'heranca';
+  /**
+   * Por campo, o valor que o alvo pode ter (além de vazio) e ainda assim
+   * receber o patch: a imagem anterior da origem, que o alvo seguia. A
+   * gravação confere de novo, em transação (`patchAindaAplicavel`).
+   */
+  substitui?: Partial<Record<CampoImagemDispositivo, string>>;
+}
+
+/**
+ * Imagem que representa a linha num campo: a mais usada entre os
+ * dispositivos informados (empate: a do dispositivo de menor id, para o
+ * resultado não depender da ordem da consulta).
+ */
+export function imagemDaLinha(dispositivos: Partial<Dispositivo>[], campo: CampoImagemDispositivo): string | undefined {
+  const usos = new Map<string, { n: number; primeiroId: string }>();
+  for (const d of dispositivos) {
+    const url = d[campo];
+    if (!url) continue;
+    const id = d.id || '';
+    const u = usos.get(url);
+    if (u) {
+      u.n++;
+      if (id < u.primeiroId) u.primeiroId = id;
+    } else {
+      usos.set(url, { n: 1, primeiroId: id });
+    }
+  }
+  let melhor: { url: string; n: number; primeiroId: string } | undefined;
+  for (const [url, u] of usos) {
+    if (!melhor || u.n > melhor.n || (u.n === melhor.n && u.primeiroId < melhor.primeiroId)) melhor = { url, ...u };
+  }
+  return melhor?.url;
 }
 
 /**
  * Propagação automática de imagens por Número da Peça (Part Number).
  *
- * - Gatilho: upload bem-sucedido salvo na origem (`payload` com imagem preenchida).
- * - A imagem preenche apenas células VAZIAS dos demais dispositivos da mesma
- *   linha (mesmo número de peça) — nunca sobrescreve imagens existentes e
- *   nunca toca dispositivos de outras linhas.
- * - Na criação (`isNew`), células vazias da origem herdam a imagem que já
- *   exista na linha, mantendo a linha visualmente íntegra.
+ * - Gatilho: imagem nova gravada na origem (`payload` com o campo preenchido).
+ *   A edição passa só os campos que mudaram (`camposAlterados`), então salvar
+ *   outros campos de um dispositivo com imagem não repropaga nada.
+ * - A imagem chega aos demais dispositivos da mesma linha que estão VAZIOS
+ *   naquele campo ou que ainda usam a imagem anterior da origem (`anteriores`:
+ *   seguiam a imagem da linha e acompanham a troca). Uma imagem diferente,
+ *   escolhida para aquele dispositivo, nunca é sobrescrita; outra linha
+ *   nunca é tocada.
+ * - Na criação (`isNew`), campos vazios da origem herdam a imagem da linha
+ *   (`imagemDaLinha`), mantendo a linha visualmente íntegra.
  * - Limpeza intencional (payload vazio em edição) não dispara nada.
+ *
+ * Um patch por dispositivo (os dois campos juntos), para uma única gravação.
  */
 export function calcularPropagacaoImagens(
   linha: Dispositivo[],
   origemId: string,
   codigoOrigem: string | undefined,
   payload: Partial<Dispositivo>,
-  isNew: boolean
+  isNew: boolean,
+  anteriores: Partial<Dispositivo> = {}
 ): PatchPropagacaoImagem[] {
   // Sem Número da Peça não existe linha a propagar; isola apenas os
   // dispositivos cuja chave é idêntica à da origem (nunca cruza linhas).
   const chave = normalizarNumeroPeca(codigoOrigem);
   if (!chave) return [];
-  const mesmaLinha = linha.filter(d => normalizarNumeroPeca(d.codigo) === chave);
+  const outros = linha.filter(d => d.id !== origemId && normalizarNumeroPeca(d.codigo) === chave);
 
-  const resultados: PatchPropagacaoImagem[] = [];
+  const porAlvo = new Map<string, PatchPropagacaoImagem>();
+  const incluir = (
+    id: string,
+    campo: CampoImagemDispositivo,
+    url: string,
+    origem: PatchPropagacaoImagem['origem'],
+    substitui?: string
+  ) => {
+    const p = porAlvo.get(id) ?? { id, patch: {}, origem };
+    p.patch[campo] = url;
+    if (substitui) p.substitui = { ...p.substitui, [campo]: substitui };
+    porAlvo.set(id, p);
+  };
 
   for (const campo of CAMPOS_IMAGEM_DISPOSITIVO) {
     const novaImagem = payload[campo];
 
     if (novaImagem) {
-      for (const alvo of mesmaLinha) {
-        if (alvo.id === origemId || alvo[campo]) continue;
-        const patch: Partial<Dispositivo> = {};
-        patch[campo] = novaImagem;
-        resultados.push({ id: alvo.id, patch, origem: 'propagacao' });
+      const antiga = anteriores[campo] && anteriores[campo] !== novaImagem ? anteriores[campo] : undefined;
+      for (const alvo of outros) {
+        const atual = alvo[campo];
+        if (!atual) incluir(alvo.id, campo, novaImagem, 'propagacao');
+        else if (antiga && atual === antiga) incluir(alvo.id, campo, novaImagem, 'propagacao', antiga);
       }
     } else if (isNew) {
-      const fonte = mesmaLinha.find(d => d.id !== origemId && !!d[campo]);
-      if (fonte && fonte[campo]) {
-        const patch: Partial<Dispositivo> = {};
-        patch[campo] = fonte[campo];
-        resultados.push({ id: origemId, patch, origem: 'heranca' });
-      }
+      const daLinha = imagemDaLinha(outros, campo);
+      if (daLinha) incluir(origemId, campo, daLinha, 'heranca');
     }
   }
 
-  return resultados;
+  return Array.from(porAlvo.values());
+}
+
+/**
+ * Confere um patch contra o documento lido na hora de gravar (dentro da
+ * transação): só ficam os campos que continuam vazios ou com a imagem que o
+ * patch substitui, e só se o dispositivo ainda pertence à linha. Protege
+ * contra alterações feitas por outra pessoa entre a leitura da linha e a
+ * gravação. `null` = nada a gravar.
+ */
+export function patchAindaAplicavel(
+  atual: Partial<Dispositivo> | null,
+  p: PatchPropagacaoImagem,
+  numeroPecaNormalizado: string
+): Partial<Dispositivo> | null {
+  if (!atual || normalizarNumeroPeca(atual.codigo) !== numeroPecaNormalizado) return null;
+  const aplicavel: Partial<Dispositivo> = {};
+  for (const campo of CAMPOS_IMAGEM_DISPOSITIVO) {
+    const nova = p.patch[campo];
+    if (!nova) continue;
+    const valor = atual[campo];
+    if (valor === nova) continue;
+    if (!valor || (p.substitui?.[campo] && valor === p.substitui[campo])) aplicavel[campo] = nova;
+  }
+  return Object.keys(aplicavel).length ? aplicavel : null;
+}
+
+/**
+ * Importação: dispositivos NOVOS sem imagem herdam a imagem da sua linha
+ * (mesmo critério do cadastro manual), a partir das `fontes` já conhecidas
+ * (documentos do banco). Altera `novos` no lugar e devolve quantos
+ * receberam alguma imagem. Dispositivos existentes nunca são tocados.
+ */
+export function herdarImagensDaLinha(novos: Partial<Dispositivo>[], fontes: Iterable<Partial<Dispositivo>>): number {
+  const porLinha = new Map<string, Partial<Dispositivo>[]>();
+  for (const f of fontes) {
+    if (!f.imagemPeca && !f.imagemDispositivo) continue;
+    const chave = normalizarNumeroPeca(f.codigo);
+    if (!chave) continue;
+    const lista = porLinha.get(chave);
+    if (lista) lista.push(f); else porLinha.set(chave, [f]);
+  }
+  let herdaram = 0;
+  for (const novo of novos) {
+    const linha = porLinha.get(normalizarNumeroPeca(novo.codigo));
+    if (!linha) continue;
+    let mudou = false;
+    for (const campo of CAMPOS_IMAGEM_DISPOSITIVO) {
+      if (novo[campo]) continue;
+      const url = imagemDaLinha(linha, campo);
+      if (url) {
+        novo[campo] = url;
+        mudou = true;
+      }
+    }
+    if (mudou) herdaram++;
+  }
+  return herdaram;
+}
+
+/** Arquivo de imagem de dispositivo no Storage (`.../imagem_peca/...` ou `.../imagem_dispositivo/...`). */
+export function ehCaminhoDeImagem(caminhoStorage: string): boolean {
+  return /\/(imagem_peca|imagem_dispositivo)\//.test(caminhoStorage);
+}
+
+/**
+ * Link de download sem o token: o token de um arquivo pode ser trocado
+ * (ex.: revogado no Console) sem mudar o caminho. Comparar por este prefixo
+ * acha quem ainda usa o arquivo.
+ */
+export function urlSemToken(url: string): string {
+  const i = url.indexOf('?');
+  return i < 0 ? url : url.slice(0, i);
 }
 
 

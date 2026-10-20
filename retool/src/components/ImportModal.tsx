@@ -114,6 +114,7 @@ function ResumoFinal({ resultado, enviados }: { resultado: ResultadoImportacaoLo
             <li><strong>{fmt(resultado.sucesso)}</strong> de {fmt(Math.max(resultado.sucesso, enviados - ignorados))} registros com mudanças gravados ({fmt(resultado.inseridos)} novos, {fmt(resultado.atualizados)} atualizados)</li>
             {ignorados > 0 && <li><strong>{fmt(ignorados)}</strong> já estavam iguais no banco e não foram regravados</li>}
           </>}
+        {!!resultado.imagensHerdadas && <li><strong>{fmt(resultado.imagensHerdadas)}</strong> novos entraram com a imagem da sua linha (mesmo código da peça)</li>}
         {naoGravados > 0 && <li><strong>{fmt(naoGravados)}</strong> não gravados</li>}
         {resultado.erros > 0 && <li><strong>{fmt(resultado.erros)}</strong> com erro de gravação</li>}
         {resultado.documentosLidos !== undefined && (

@@ -29,6 +29,8 @@ export interface ResultadoImportacaoLote {
   leituraParcial?: boolean;
   /** Documentos efetivamente gravados (combinações repetidas na lista contam 1). */
   documentosGravados?: number;
+  /** Dispositivos novos que entraram já com a imagem da sua linha (mesmo Número da Peça). */
+  imagensHerdadas?: number;
 }
 
 /** Progresso real de uma importação (contado pelo trabalho já feito). */

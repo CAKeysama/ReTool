@@ -10,6 +10,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { obterDispositivo } from '../data/repositories/FirestoreDispositivosConsultas';
 import { EstadoDados, SkeletonLista, classificarErro, mensagemDeErro } from '../components/feedback';
 import { gravarComPrazo } from '../utils/tempo';
+import { camposAlterados } from '../domain/services/alteracoesDispositivo';
 
 /**
  * Verifica a permissão antes de montar o formulário (os hooks do formulário
@@ -144,6 +145,16 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
   const [mostrarErrosCampos, setMostrarErrosCampos] = useState(false);
   const codigoRef = useRef<HTMLInputElement>(null);
 
+  // Uma gravação que estourou o prazo pode terminar depois que este
+  // formulário foi fechado e outro aberto: fechar o formulário global nesse
+  // momento fecharia o outro. Só fecha se este formulário ainda está aberto.
+  const abertoRef = useRef(true);
+  useEffect(() => {
+    abertoRef.current = true;
+    return () => { abertoRef.current = false; };
+  }, []);
+  const fecharSeAindaAberto = () => { if (abertoRef.current) closeDispForm(); };
+
   // Fecha só depois que o banco confirmou; em erro, mantém o que foi digitado.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,18 +165,30 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
       announce(errosCampos.nome || errosCampos.codigo || '', true);
       return;
     }
+    // Na edição, grava só o que mudou em relação ao documento carregado (não
+    // apaga alterações feitas por outra pessoa enquanto o formulário estava aberto).
+    const alteracoes = isEditing ? camposAlterados(dispEdicao, formData) : null;
+    if (alteracoes && Object.keys(alteracoes).length === 0) {
+      announce('Nenhuma alteração para salvar.');
+      closeDispForm();
+      return;
+    }
     setSalvando(true);
     setErroSalvar(null);
     // Gravação que só termina depois do prazo: troca o aviso pela confirmação.
-    const concluiuDepois = () => { setErroSalvar(null); closeDispForm(); };
+    const concluiuDepois = () => {
+      if (!abertoRef.current) return;
+      setErroSalvar(null);
+      closeDispForm();
+    };
     try {
       if (isEditing && editingDispId) {
-        await gravarComPrazo(updateDispositivo(editingDispId, formData), concluiuDepois);
+        await gravarComPrazo(updateDispositivo(editingDispId, alteracoes || {}), concluiuDepois);
       } else {
         // Mesmo id em uma nova tentativa: não duplica se a primeira chegar depois.
         await gravarComPrazo(addDispositivo({ ...formData, id: deviceStorageId }), concluiuDepois);
       }
-      closeDispForm();
+      fecharSeAindaAberto();
     } catch (err) {
       console.error(err);
       setErroSalvar(mensagemDeErro(err, 'Não foi possível salvar o dispositivo. Tente novamente.'));

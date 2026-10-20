@@ -131,11 +131,20 @@ o app volta a ler as coleções e quem pode editar o recria.
   linhas visíveis.
 - Notificações: as 50 mais recentes da pessoa (índice composto
   `destinatarioUid` + `dataHora`).
-- Propagação de imagens por Número da Peça: consulta `codigo in [original,
-  sem espaços, MAIÚSCULAS, minúsculas]` (até 500); se o catálogo de busca já
-  estiver carregado na sessão, ele também aponta grafias mistas ("Abc",
-  " abc "), lidas por id. Sem catálogo carregado, uma grafia mista não
-  recebe a imagem automaticamente.
+- Propagação de imagens por Número da Peça: só quando uma imagem muda (a
+  edição grava só os campos alterados). A linha é lida no servidor por
+  intervalo no prefixo da `chaveCD` (qualquer grafia do código) e pelas
+  grafias exatas do código (documentos antigos sem `chaveCD`), paginada, sem
+  limite silencioso; o catálogo, se já estiver carregado, ainda aponta
+  documentos antigos com grafia mista. A gravação é em transações de até 100
+  dispositivos (1 leitura + 2 escritas cada: documento e auditoria), sem
+  tocar o catálogo (ele não guarda imagens).
+- Importação: dispositivos novos herdam a imagem da linha no próprio lote
+  (0 escritas a mais). Leitura completa: 0 leituras a mais; parcial: lê só
+  as linhas dos códigos novos.
+- Exclusão de dispositivo: antes de apagar cada imagem da pasta no Storage,
+  2 consultas (`limit(1)`) conferem se outro dispositivo ainda usa o link;
+  se usar, o arquivo fica.
 - Lista de usuárias: só depois do login.
 
 ### Reutilizações: filas e histórico no servidor

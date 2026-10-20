@@ -1,5 +1,5 @@
 import { db } from '../datasources/firebase';
-import { doc, writeBatch, setDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
+import { doc, getDoc, writeBatch, setDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { Dispositivo, chaveCodigoDispositivo } from '../../domain/entities/dispositivo';
 import { Categoria } from '../../domain/entities/categoria';
@@ -10,9 +10,14 @@ import { importarLoteFirestore } from './importacaoDispositivosFirestore';
 import { MetaIndice, registrarNoIndice } from './FirestoreIndiceDispositivos';
 
 // O Storage só é carregado quando um dispositivo é excluído (fora do bundle inicial).
+// Imagens propagadas para outros dispositivos da linha ficam: eles usam o
+// mesmo arquivo, que mora na pasta de quem fez o upload.
 const apagarPastaDoDispositivo = async (id: string) => {
-  const { storageService } = await import('../services/FirebaseStorageService');
-  await storageService.deleteFolder(`retool/dispositivos/${id}`);
+  const [{ storageService }, { arquivoAindaUsado }] = await Promise.all([
+    import('../services/FirebaseStorageService'),
+    import('../services/arquivosEmUso'),
+  ]);
+  await storageService.deleteFolder(`retool/dispositivos/${id}`, arquivoAindaUsado);
 };
 
 /** Itens por writeBatch nas operações em massa: cada item gera até 3 escritas (documento, auditoria, índice) e o limite é 500. */
@@ -49,9 +54,12 @@ export class FirestoreDispositivosRepository implements IDispositivosRepository 
       await setDoc(doc(db, 'dispositivos', id), newDevice);
       return id;
     }
+    // Nova tentativa com o mesmo id (a primeira estourou o prazo mas chegou):
+    // o documento já existe e não pode ser contado de novo no catálogo.
+    const jaExiste = !!data.id && (await getDoc(doc(db, 'dispositivos', id))).exists();
     const b = writeBatch(db);
     b.set(doc(db, 'dispositivos', id), newDevice);
-    registrarNoIndice(b, meta, [{ id, dados: newDevice, novo: true }]);
+    registrarNoIndice(b, meta, [{ id, dados: newDevice, novo: !jaExiste }]);
     await b.commit();
     return id;
   }
