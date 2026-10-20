@@ -179,6 +179,12 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(228, 13, 44, 0.1);
 }
+/* Campo preenchido pelo sistema e não editável. */
+.input-field[readonly] {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  cursor: not-allowed;
+}
 .input-label {
   display: block; font-size: 0.85rem; font-weight: 600;
   margin-bottom: 4px; color: var(--color-text-dark);

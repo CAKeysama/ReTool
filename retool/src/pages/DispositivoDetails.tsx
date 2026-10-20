@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
+import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { corDoStatusReutilizacao, rotuloCurtoStatusReutilizacao } from '../domain/entities/reutilizacao';
 import { ArrowLeft, Edit, Plus, Box, Key, Trash, FileText, ExternalLink, Send, ChevronDown } from 'lucide-react';
@@ -16,6 +17,9 @@ export function DispositivoDetails() {
   const navigate = useNavigate();
   const { canCadastrar, canEditar, canExcluir, canSolicitar, isEngenharia } = usePermissions();
   const { categorias, familias, produtos, addReutilizacao, deleteReutilizacao, addProduto, openDispForm, announce } = useReTool();
+  const { userProfile } = useAuth();
+  // O responsável é sempre quem está registrando (não editável).
+  const nomeUsuario = userProfile?.nome || userProfile?.email || '';
 
   // Só o documento exibido e as reutilizações dele (antes: coleções inteiras).
   const { dispositivo: disp, estado: estadoDisp, erro: erroDisp, tentarNovamente } = useDispositivo(id);
@@ -75,11 +79,11 @@ export function DispositivoDetails() {
     setNovaReutilizacao({
       data: new Date().toISOString().split('T')[0],
       codigoPeca: disp.codigo || '',
-      descricaoPeca: disp.nome || '',
+      descricaoPeca: '',
       produtoId: disp.produtoId || '',
       pesoPeca: isNaN(defaultPeso) ? 0 : defaultPeso,
       hardSaving: 0,
-      responsavel: '',
+      responsavel: nomeUsuario,
       numeroOs: '',
       descricaoAlteracao: ''
     });
@@ -114,7 +118,7 @@ export function DispositivoDetails() {
       produtoId: finalProdutoId,
       pesoPeca: Number(novaReutilizacao.pesoPeca),
       hardSaving: Number(novaReutilizacao.hardSaving),
-      responsavel: novaReutilizacao.responsavel,
+      responsavel: nomeUsuario,
       numeroOs: novaReutilizacao.numeroOs,
       descricaoAlteracao: novaReutilizacao.descricaoAlteracao
     }));
@@ -723,11 +727,12 @@ export function DispositivoDetails() {
             </div>
             <div>
               <label htmlFor="u_resp" className="input-label">Responsável</label>
-              <input 
-                id="u_resp" type="text" className="input-field" placeholder="Ex: João Silva" required
-                value={novaReutilizacao.responsavel} 
-                onChange={e => setNovaReutilizacao({...novaReutilizacao, responsavel: e.target.value})} 
+              <input
+                id="u_resp" type="text" className="input-field" readOnly aria-readonly="true"
+                aria-describedby="u_resp_ajuda"
+                value={nomeUsuario}
               />
+              <div id="u_resp_ajuda" className="input-helper">Preenchido com o seu usuário.</div>
             </div>
           </div>
 

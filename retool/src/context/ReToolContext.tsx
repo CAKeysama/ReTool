@@ -722,8 +722,14 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       announce('Acesso negado: Engenharia deve utilizar a opção Solicitar Reutilização.');
       return;
     }
+    // Responsável é sempre quem registra; o valor vindo do formulário não vale.
+    // As regras do Firestore exigem solicitanteId == usuário logado na criação.
+    const responsavel = userProfile?.nome || userProfile?.email || data.responsavel;
     const novoId = await reutilizacoesRepo.add({
       ...data,
+      responsavel,
+      solicitanteNome: responsavel,
+      solicitanteId: userProfile?.uid,
       status: data.status || 'Reutilização aprovada'
     });
     const dispNome = (await nomeDoDispositivo(data.dispositivoId)) || data.dispositivoId;

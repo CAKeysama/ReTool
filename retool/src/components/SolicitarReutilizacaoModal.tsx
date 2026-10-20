@@ -36,7 +36,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
         dispositivoId: dispositivo.id,
         data: new Date().toISOString().split('T')[0],
         codigoPeca: codigoPeca.trim(),
-        descricaoPeca: descricaoPeca.trim() || dispositivo.nome,
+        descricaoPeca: descricaoPeca.trim(),
         produtoId: produtoId || produtos[0]?.id || 'padrao',
         pesoPeca: Number(pesoPeca) || 0,
         hardSaving: Number(hardSaving) || 0,
