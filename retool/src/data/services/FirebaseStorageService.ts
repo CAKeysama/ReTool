@@ -80,25 +80,40 @@ export class FirebaseStorageService implements IStorageService {
     }
   }
 
-  async deleteFolder(folderPath: string): Promise<void> {
+  /**
+   * Exclui os arquivos da pasta e das subpastas. `manter(caminho)` preserva
+   * arquivos que ainda são usados (ex.: imagem propagada para outros
+   * dispositivos); se a própria checagem falhar, o arquivo é preservado:
+   * um arquivo sobrando é melhor que uma imagem quebrada.
+   */
+  async deleteFolder(folderPath: string, manter?: (caminho: string) => Promise<boolean>): Promise<void> {
     if (!folderPath) return;
 
     try {
       const folderRef = ref(storage, folderPath);
       const listResult = await listAll(folderRef);
 
-      // Exclui todos os arquivos da pasta atual
-      const deleteFilesPromises = listResult.items.map((item) =>
-        deleteObject(item).catch((err) => {
+      // Exclui os arquivos da pasta atual (menos os preservados)
+      const deleteFilesPromises = listResult.items.map(async (item) => {
+        if (manter) {
+          let preservar = true;
+          try {
+            preservar = await manter(item.fullPath);
+          } catch (err) {
+            console.warn(`Não foi possível conferir se o arquivo ainda é usado; ele foi mantido (${item.fullPath}):`, err);
+          }
+          if (preservar) return;
+        }
+        await deleteObject(item).catch((err) => {
           if (err?.code !== 'storage/object-not-found') {
             console.warn(`Erro ao excluir item do Storage (${item.fullPath}):`, err);
           }
-        })
-      );
+        });
+      });
 
       // Exclui recursivamente quaisquer subpastas
       const deleteSubfoldersPromises = listResult.prefixes.map((subfolder) =>
-        this.deleteFolder(subfolder.fullPath)
+        this.deleteFolder(subfolder.fullPath, manter)
       );
 
       await Promise.all([...deleteFilesPromises, ...deleteSubfoldersPromises]);

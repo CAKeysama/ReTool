@@ -16,8 +16,9 @@ import { FirestoreProdutosRepository } from '../data/repositories/FirestoreProdu
 import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
 import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAuditLogRepository';
 import {
-  obterDispositivo, obterDispositivosPorIds, obterDispositivosPorCodigo, varrerDispositivos, varrerColecao, ProgressoVarredura, contarDispositivos
+  obterDispositivo, obterDispositivosPorIds, varrerDispositivos, varrerColecao, ProgressoVarredura, contarDispositivos
 } from '../data/repositories/FirestoreDispositivosConsultas';
+import { aplicarPatchesDeImagem, obterLinhaPorCodigo } from '../data/repositories/FirestoreImagensLinha';
 import { ITENS_POR_PARTE } from '../domain/services/buscaDispositivos';
 import { alteraImagem, camposAlterados } from '../domain/services/alteracoesDispositivo';
 import { contarComChave, prepararChavesImportacao, ResultadoPreparoChaves } from '../data/repositories/importacaoDispositivosFirestore';
@@ -390,25 +391,27 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  // Propagação automática de imagens por Número da Peça: um único upload
-  // alimenta todas as células vazias da mesma linha (nunca sobrescreve
-  // imagens existentes nem toca dispositivos de outras linhas). A linha é
-  // consultada no servidor pelo código (não há mais a coleção em memória).
+  // Propagação automática de imagens por Número da Peça (regra em
+  // domain/entities/dispositivo.ts): a imagem nova chega aos dispositivos da
+  // mesma linha que estão vazios ou que seguiam a imagem anterior da origem;
+  // imagens próprias e outras linhas nunca são tocadas. A linha é lida no
+  // servidor e a gravação confere cada dispositivo de novo, em transação.
+  // Devolve os ids que receberam imagem (a própria origem, quando herdou).
   const propagarImagensPorCodigo = async (
     origemId: string,
     codigo: string | undefined,
     payload: Partial<Dispositivo>,
-    isNew: boolean
-  ) => {
+    isNew: boolean,
+    anteriores: Partial<Dispositivo> = {}
+  ): Promise<string[]> => {
     const chave = normalizarNumeroPeca(codigo);
-    if (!chave) return;
+    if (!chave) return [];
     const temImagem = !!(payload.imagemPeca || payload.imagemDispositivo);
-    if (!temImagem && !isNew) return; // nada a propagar (evita a consulta)
-    const linha = (await obterDispositivosPorCodigo(codigo || '')).filter(d => normalizarNumeroPeca(d.codigo) === chave);
-    // A consulta acima só acha as grafias exatas (original, sem espaços,
-    // MAIÚSCULA, minúscula). Se o catálogo de busca já está carregado nesta
-    // sessão, ele aponta também as grafias mistas ("Abc", " abc ") sem custo
-    // extra de consulta; os documentos que faltarem são lidos por id.
+    if (!temImagem && !isNew) return []; // nada a propagar (evita a consulta)
+    const linha = await obterLinhaPorCodigo(codigo);
+    // Documentos antigos, ainda sem chaveCD e com grafia mista ("Abc"), só
+    // aparecem pelo catálogo de busca quando ele já está carregado nesta
+    // sessão; os que faltarem são lidos por id.
     const snapIndice = indiceBusca.obter();
     if (indiceBusca.acompanhando() && snapIndice.estado === 'pronto') {
       const conhecidos = new Set(linha.map(d => d.id));
@@ -420,25 +423,39 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         linha.push(...extras.filter(d => normalizarNumeroPeca(d.codigo) === chave));
       }
     }
-    const patches = calcularPropagacaoImagens(linha, origemId, codigo, payload, isNew);
-    if (patches.length === 0) return;
+    const patches = calcularPropagacaoImagens(linha, origemId, codigo, payload, isNew, anteriores);
+    if (patches.length === 0) return [];
 
-    const meta = await metaParaEscrita();
-    for (const p of patches) {
-      const alvo = linha.find(d => d.id === p.id) || null;
-      await dispositivosRepo.update(p.id, p.patch, alvo, meta);
-      await registrarAuditoria(
+    const { aplicados } = await aplicarPatchesDeImagem(patches, codigo, (tx, p, aplicado, atual) => {
+      const campos = Object.keys(aplicado) as (keyof Dispositivo)[];
+      auditRepo.adicionarAoBatch(tx, dadosAuditoria(
         'edicao',
         'dispositivo',
         p.id,
-        alvo?.nome || alvo?.codigo || p.id,
-        p.origem === 'propagacao'
-          ? 'Imagem propagada automaticamente (mesmo número de peça)'
-          : 'Imagem herdada automaticamente da linha (mesmo número de peça)',
-        { origemId, numeroPeca: codigo, campos: Object.keys(p.patch) }
-      );
+        atual.nome || atual.codigo || p.id,
+        p.origem === 'heranca'
+          ? 'Imagem herdada automaticamente da linha (mesmo número de peça)'
+          : 'Imagem propagada automaticamente (mesmo número de peça)',
+        { origemId, numeroPeca: codigo, campos, valoresAlterados: aplicado },
+        Object.fromEntries(campos.map(c => [c, atual[c] || '']))
+      ));
+    });
+    return aplicados;
+  };
+
+  // O dispositivo já foi salvo: uma falha na propagação não pode parecer
+  // falha ao salvar (o formulário mostraria erro e a pessoa salvaria de novo).
+  const propagarEAvisar = async (...args: Parameters<typeof propagarImagensPorCodigo>) => {
+    const [origemId, codigo] = args;
+    try {
+      const receberam = await propagarImagensPorCodigo(...args);
+      const outros = receberam.filter(id => id !== origemId).length;
+      if (receberam.includes(origemId)) announce(`O dispositivo recebeu a imagem já usada na linha ${codigo}.`);
+      if (outros > 0) announce(`Imagem copiada para ${outros} outro(s) dispositivo(s) da linha ${codigo}.`);
+    } catch (e) {
+      console.error('Falha ao propagar imagens:', e);
+      announce(`Dispositivo salvo, mas a imagem não foi copiada para os outros dispositivos da linha ${codigo}. Envie a imagem de novo para tentar outra vez.`);
     }
-    announce(`Imagens sincronizadas em ${patches.length} dispositivo(s) da linha ${codigo}.`);
   };
 
   const addDispositivo = async (data: Omit<Dispositivo, 'id' | 'dataCriacao'> & { id?: string }) => {
@@ -448,7 +465,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     }
     const novoId = await dispositivosRepo.add(data, await metaParaEscrita());
     await registrarAuditoria('criacao', 'dispositivo', novoId, data.nome, 'Cadastrou dispositivo', { ...data });
-    await propagarImagensPorCodigo(novoId, data.codigo, data, true);
+    await propagarEAvisar(novoId, data.codigo, data, true);
     tocarDispositivos();
     announce('Dispositivo adicionado com sucesso');
   };
@@ -463,7 +480,8 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     const alterados = atual ? camposAlterados(atual, data) : data;
     await dispositivosRepo.update(id, data, atual, await metaParaEscrita());
     await registrarAuditoria('edicao', 'dispositivo', id, atual?.nome || id, 'Editou dispositivo', { valoresAlterados: alterados }, atual || undefined);
-    if (alteraImagem(alterados)) await propagarImagensPorCodigo(id, data.codigo ?? atual?.codigo, alterados, false);
+    // `atual` traz a imagem anterior: quem a seguia na linha acompanha a troca.
+    if (alteraImagem(alterados)) await propagarEAvisar(id, data.codigo ?? atual?.codigo, alterados, false, atual || {});
     tocarDispositivos();
     if (!silent) announce('Dispositivo atualizado com sucesso');
   };
@@ -934,7 +952,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         'importacao-lote',
         'Importação em lote',
         `Importação em lote: ${inseridos} inserido(s), ${atualizados} atualizado(s), ${result.erros} erro(s) de ${novosDispositivos.length} enviado(s)`,
-        { enviados: novosDispositivos.length, sucesso: result.sucesso, inseridos, atualizados, erros: result.erros, ignoradosSemAlteracao: result.ignoradosSemAlteracao ?? 0, interrompido: result.interrompido ?? null }
+        { enviados: novosDispositivos.length, sucesso: result.sucesso, inseridos, atualizados, erros: result.erros, ignoradosSemAlteracao: result.ignoradosSemAlteracao ?? 0, imagensHerdadas: result.imagensHerdadas ?? 0, interrompido: result.interrompido ?? null }
       );
       // Cada lote já atualizou o catálogo. Ele só é refeito (a partir do que
       // a importação acabou de ler do banco inteiro: sem leitura extra, ~1

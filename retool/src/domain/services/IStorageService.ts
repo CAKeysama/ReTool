@@ -10,5 +10,6 @@ export interface IStorageService {
 
   deleteFile(storagePath: string): Promise<void>;
 
-  deleteFolder(folderPath: string): Promise<void>;
+  /** `manter(caminho)` = true preserva o arquivo (ex.: imagem ainda usada por outro dispositivo). */
+  deleteFolder(folderPath: string, manter?: (caminho: string) => Promise<boolean>): Promise<void>;
 }

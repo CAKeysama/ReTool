@@ -102,23 +102,6 @@ export async function obterDispositivosPorIds(ids: string[], onLidos?: (consulta
   return ids.map(id => porId.get(id)).filter((d): d is Dispositivo => !!d);
 }
 
-/**
- * Dispositivos da mesma linha (mesmo Número da Peça) sem varrer a coleção:
- * igualdade no servidor com as variações de caixa/espaço do código.
- */
-export async function obterDispositivosPorCodigo(codigo: string): Promise<Dispositivo[]> {
-  const bruto = codigo || '';
-  const variantes = Array.from(new Set([bruto, bruto.trim(), bruto.trim().toUpperCase(), bruto.trim().toLowerCase()]))
-    .filter(v => v !== '');
-  if (variantes.length === 0) return [];
-  const snap = await medirConsulta(
-    'dispositivos:por-codigo',
-    () => getDocs(query(col(), where('codigo', 'in', variantes), limit(500))),
-    s => s.size
-  );
-  return snap.docs.map(paraDispositivo);
-}
-
 export interface ProgressoVarredura { lidos: number; total: number | null }
 
 /**
