@@ -36,6 +36,8 @@ export function useDispositivosController() {
   // Filtros e tamanho da página ficam na URL: voltar dos detalhes restaura a lista.
   const [filterCategoria, setFilterCategoria] = useState(searchParams.get('cat') || '');
   const [filterProcesso, setFilterProcesso] = useState(searchParams.get('proc') || '');
+  const [filterFamilia, setFilterFamilia] = useState(searchParams.get('fam') || '');
+  const [filterProduto, setFilterProduto] = useState(searchParams.get('prod') || '');
   const [showFilters, setShowFilters] = useState(false);
   const [buscaFocada, setBuscaFocada] = useState(false);
   const textoBusca = useDebouncedValue(filterQuery, ATRASO_BUSCA_MS);
@@ -53,14 +55,16 @@ export function useDispositivosController() {
     if (textoBusca) novo.q = textoBusca;
     if (filterCategoria) novo.cat = filterCategoria;
     if (filterProcesso) novo.proc = filterProcesso;
+    if (filterFamilia) novo.fam = filterFamilia;
+    if (filterProduto) novo.prod = filterProduto;
     if (itemsPerPage !== 25) novo.n = String(itemsPerPage);
     const atual = new URLSearchParams(searchParams);
-    const igual = ['q', 'cat', 'proc', 'n'].every(k => (atual.get(k) || '') === (novo[k] || ''));
+    const igual = ['q', 'cat', 'proc', 'fam', 'prod', 'n'].every(k => (atual.get(k) || '') === (novo[k] || ''));
     if (!igual) setSearchParams(novo, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [textoBusca, filterCategoria, filterProcesso, itemsPerPage]);
+  }, [textoBusca, filterCategoria, filterProcesso, filterFamilia, filterProduto, itemsPerPage]);
   const lista = useListaDispositivos(
-    { texto: textoBusca, categoriaId: filterCategoria, processo: filterProcesso },
+    { texto: textoBusca, categoriaId: filterCategoria, familiaId: filterFamilia, produtoId: filterProduto, processo: filterProcesso },
     itemsPerPage,
     buscaFocada || showFilters
   );
@@ -197,6 +201,8 @@ export function useDispositivosController() {
 
   return {
     categorias,
+    familias,
+    produtos,
     nomesCategoria,
     nomesFamilia,
     nomesProduto,
@@ -209,13 +215,17 @@ export function useDispositivosController() {
     // Filtros
     filterQuery,
     handleSearchChange,
-    limparBusca: () => { setFilterQuery(''); setFilterCategoria(''); setFilterProcesso(''); },
+    limparBusca: () => { setFilterQuery(''); setFilterCategoria(''); setFilterProcesso(''); setFilterFamilia(''); setFilterProduto(''); },
     setBuscaFocada,
     buscaPendente,
     filterCategoria,
     setFilterCategoria,
     filterProcesso,
     setFilterProcesso,
+    filterFamilia,
+    setFilterFamilia,
+    filterProduto,
+    setFilterProduto,
     showFilters,
     setShowFilters,
 

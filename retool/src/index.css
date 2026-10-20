@@ -179,6 +179,12 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(228, 13, 44, 0.1);
 }
+/* Campo preenchido pelo sistema e não editável. */
+.input-field[readonly] {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  cursor: not-allowed;
+}
 .input-label {
   display: block; font-size: 0.85rem; font-weight: 600;
   margin-bottom: 4px; color: var(--color-text-dark);
@@ -378,8 +384,30 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   }
 }
 
+/* Versão do sistema: discreta, fixa em todas as telas (sobre o rodapé da sidebar no desktop). */
+.versao-sistema {
+  position: fixed;
+  left: 12px;
+  bottom: 6px;
+  z-index: 60;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #6b7280;
+  /* Fundo claro para continuar legível sobre áreas escuras. */
+  background-color: rgba(255, 255, 255, 0.85);
+  padding: 1px 6px;
+  border-radius: 999px;
+  pointer-events: none;
+  user-select: none;
+}
+
 /* MOBILE */
 @media (max-width: 768px) {
+  /* Acima da navegação inferior quando ela existe. */
+  body:has(.bottom-nav) .versao-sistema {
+    bottom: calc(68px + env(safe-area-inset-bottom));
+  }
+
   .app-container {
     flex-direction: column;
   }
@@ -872,8 +900,22 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   min-width: 640px;
 }
 
+/* A Home ocupa exatamente a tela: sem rolagem quando o conteúdo cabe. */
+.home-raiz,
+.app-container-tela-cheia {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* Início no celular: cartões quebram em linhas, "Sobre o Projeto" sai do canto ocupado pelo perfil. */
 @media (max-width: 768px) {
+  /* Telas cheias (Home, Sobre) reservam o espaço da navegação inferior fixa. */
+  .app-container-tela-cheia {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+  .home-raiz {
+    min-height: calc(100dvh - 64px - env(safe-area-inset-bottom));
+  }
   .home-cartoes-faixa {
     overflow-x: visible !important;
     padding: 0 16px !important;

@@ -1,6 +1,6 @@
 import {
   serializarEntrada, desserializarEntrada, prepararEntradas, filtrarEntradas,
-  normalizarBusca, parteDoId, partesParaTotal, EntradaIndice, NomesClassificacao
+  normalizarBusca, parteDoId, partesParaTotal, contarNumerosDispositivoUnicos, EntradaIndice, NomesClassificacao
 } from '../../../domain/services/buscaDispositivos';
 
 /** Filtro original (useDispositivosController antes da paginação), copiado para comparar. */
@@ -96,6 +96,26 @@ describe('buscaDispositivos', () => {
     }
   });
 
+  it('filtra por família e produto (sozinhos e combinados com categoria e texto)', () => {
+    const lista = gerar(2000);
+    const prep = prepararEntradas(lista, nomes);
+    for (const fam of ['', 'f1', 'f2']) {
+      for (const prod of ['', 'p1', 'p2']) {
+        for (const cat of ['', 'c2']) {
+          for (const q of ['', 'barra']) {
+            const esperado = filtroOriginal(lista, nomes, q, cat, '')
+              .filter(e => (!fam || e.familiaId === fam) && (!prod || e.produtoId === prod))
+              .map(e => e.id);
+            const obtido = filtrarEntradas(prep, { texto: q, categoriaId: cat, familiaId: fam, produtoId: prod }).map(e => e.id);
+            expect(obtido).toEqual(esperado);
+          }
+        }
+      }
+    }
+    // Sanidade: o filtro realmente restringe.
+    expect(filtrarEntradas(prep, { familiaId: 'f1' }).length).toBeLessThan(lista.length);
+  });
+
   it('para no limite pedido', () => {
     const prep = prepararEntradas(gerar(500), nomes);
     expect(filtrarEntradas(prep, { texto: 'daf' }, 8)).toHaveLength(8);
@@ -117,5 +137,11 @@ describe('buscaDispositivos', () => {
     expect(partesParaTotal(100000)).toBe(134);
     expect(partesParaTotal(10_000_000)).toBe(200);
     // Medido: ~200 bytes por entrada × 750 ≈ 150 KB por parte.
+  });
+  it('conta Nº dispositivo distintos sem diferenciar caixa nem espaços e ignora vazios', () => {
+    const nomes = ['D01', 'd01 ', ' D01', 'D02', '', '   ', 'D03'];
+    const entradas = nomes.map((nome, i) => desserializarEntrada(String(i), serializarEntrada({ codigo: 'ABC', nome })));
+    expect(contarNumerosDispositivoUnicos(entradas)).toBe(3);
+    expect(contarNumerosDispositivoUnicos([])).toBe(0);
   });
 });

@@ -23,6 +23,8 @@ export function Dispositivos() {
   const [isDuplicadosOpen, setIsDuplicadosOpen] = React.useState(false);
   const {
     categorias,
+    familias,
+    produtos,
     nomesCategoria,
     nomesFamilia,
     nomesProduto,
@@ -39,6 +41,10 @@ export function Dispositivos() {
     setFilterCategoria,
     filterProcesso,
     setFilterProcesso,
+    filterFamilia,
+    setFilterFamilia,
+    filterProduto,
+    setFilterProduto,
     showFilters,
     setShowFilters,
 
@@ -124,7 +130,7 @@ export function Dispositivos() {
   }, []);
 
   const botaoFiltrosRef = React.useRef<HTMLButtonElement>(null);
-  const filtrando = !!(filterQuery.trim() || filterCategoria || filterProcesso);
+  const filtrando = !!(filterQuery.trim() || filterCategoria || filterProcesso || filterFamilia || filterProduto);
   const carregandoPrimeira = lista.estado === 'carregando' || lista.estado === 'preparando-busca';
   const subtitulo = buscaPendente ? 'Buscando…' : lista.total === null
     ? (carregandoPrimeira ? 'Carregando dispositivos…' : '')
@@ -266,6 +272,32 @@ export function Dispositivos() {
                       .map(c => (
                         <option key={c.id} value={c.id}>
                           {c.nome}{c.ativo === false ? ' (Inativo)' : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="filtro-familia" className="input-label">Família</label>
+                  <select id="filtro-familia" className="input-field" value={filterFamilia} onChange={(e) => setFilterFamilia(e.target.value)}>
+                    <option value="">Todas</option>
+                    {familias
+                      .filter(f => f.ativo !== false || f.id === filterFamilia)
+                      .map(f => (
+                        <option key={f.id} value={f.id}>
+                          {f.nome}{f.ativo === false ? ' (Inativo)' : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="filtro-produto" className="input-label">Produto</label>
+                  <select id="filtro-produto" className="input-field" value={filterProduto} onChange={(e) => setFilterProduto(e.target.value)}>
+                    <option value="">Todos</option>
+                    {produtos
+                      .filter(p => p.ativo !== false || p.id === filterProduto)
+                      .map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.nome}{p.ativo === false ? ' (Inativo)' : ''}
                         </option>
                       ))}
                   </select>

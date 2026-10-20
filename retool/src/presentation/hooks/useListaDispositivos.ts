@@ -28,14 +28,18 @@ const VALIDADE_CONTAGEM_MS = 60_000;
  *   com cursor (startAfter) e `limit(tamanho + 1)`; filtro de categoria no
  *   servidor; total via count(). A página atual é acompanhada em tempo real
  *   (só os documentos dela).
- * - Com texto/processo: busca por trecho no catálogo compacto (ver
+ * - Com texto/processo/família/produto: busca no catálogo compacto (ver
  *   useIndiceBusca); a página é fatiada dos resultados, sem ler dispositivos.
+ *   Família e produto ficam no catálogo para não exigir índices compostos
+ *   no Firestore (combinação de igualdades + ordem por id).
  *
  * Respostas antigas nunca sobrescrevem a consulta atual (id de requisição).
  */
 export interface FiltroLista {
   texto: string;
   categoriaId: string;
+  familiaId: string;
+  produtoId: string;
   processo: string;
 }
 
@@ -77,14 +81,14 @@ const entradaParaDispositivo = (e: EntradaIndice): Dispositivo => ({
  */
 export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number, prepararBusca = false): ListaDispositivos {
   const tamanho = Math.min(Math.max(1, tamanhoPagina), TAMANHO_PAGINA_MAX);
-  const usarIndice = !!(filtro.texto.trim() || filtro.processo.trim());
+  const usarIndice = !!(filtro.texto.trim() || filtro.processo.trim() || filtro.familiaId || filtro.produtoId);
   // O catálogo só é acompanhado enquanto há busca (ou o campo está em foco):
   // navegar pela lista não paga leituras pelas gravações de outras pessoas.
   const indice = useIndiceBusca(usarIndice || prepararBusca);
   const { revisaoDispositivos } = useReTool();
 
   // Filtros/tamanho mudaram: volta à primeira página.
-  const chaveFiltro = `${usarIndice ? 'i' : 's'}|${filtro.texto}|${filtro.categoriaId}|${filtro.processo}|${tamanho}`;
+  const chaveFiltro = `${usarIndice ? 'i' : 's'}|${filtro.texto}|${filtro.categoriaId}|${filtro.familiaId}|${filtro.produtoId}|${filtro.processo}|${tamanho}`;
   // Página e cursores guardados por filtro: voltar dos detalhes reabre a mesma página.
   const guardado = paginasGuardadas.get(chaveFiltro);
   const [pagina, setPaginaBruta] = useState(guardado?.pagina ?? 1);
@@ -249,8 +253,11 @@ export function useListaDispositivos(filtro: FiltroLista, tamanhoPagina: number,
   // ---------- Modo índice: busca por trecho no catálogo ----------
   const resultadoIndice = useMemo(() => {
     if (!usarIndice || !indice.pronto) return null;
-    return indice.buscar({ texto: filtro.texto, categoriaId: filtro.categoriaId, processo: filtro.processo }) || [];
-  }, [usarIndice, indice.pronto, indice.buscar, filtro.texto, filtro.categoriaId, filtro.processo]);
+    return indice.buscar({
+      texto: filtro.texto, categoriaId: filtro.categoriaId, familiaId: filtro.familiaId,
+      produtoId: filtro.produtoId, processo: filtro.processo,
+    }) || [];
+  }, [usarIndice, indice.pronto, indice.buscar, filtro.texto, filtro.categoriaId, filtro.familiaId, filtro.produtoId, filtro.processo]);
 
   const itensIndice = useMemo(() => {
     if (!resultadoIndice) return null;
