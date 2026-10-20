@@ -1,6 +1,6 @@
 import {
   serializarEntrada, desserializarEntrada, prepararEntradas, filtrarEntradas,
-  normalizarBusca, parteDoId, partesParaTotal, EntradaIndice, NomesClassificacao
+  normalizarBusca, parteDoId, partesParaTotal, contarNumerosDispositivoUnicos, EntradaIndice, NomesClassificacao
 } from '../../../domain/services/buscaDispositivos';
 
 /** Filtro original (useDispositivosController antes da paginação), copiado para comparar. */
@@ -117,5 +117,11 @@ describe('buscaDispositivos', () => {
     expect(partesParaTotal(100000)).toBe(134);
     expect(partesParaTotal(10_000_000)).toBe(200);
     // Medido: ~200 bytes por entrada × 750 ≈ 150 KB por parte.
+  });
+  it('conta Nº dispositivo distintos sem diferenciar caixa nem espaços e ignora vazios', () => {
+    const nomes = ['D01', 'd01 ', ' D01', 'D02', '', '   ', 'D03'];
+    const entradas = nomes.map((nome, i) => desserializarEntrada(String(i), serializarEntrada({ codigo: 'ABC', nome })));
+    expect(contarNumerosDispositivoUnicos(entradas)).toBe(3);
+    expect(contarNumerosDispositivoUnicos([])).toBe(0);
   });
 });

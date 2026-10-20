@@ -81,6 +81,19 @@ export function normalizarBusca(str: string | undefined | null): string {
   return res;
 }
 
+/**
+ * Quantidade de "Nº dispositivo" (campo `nome`) distintos no catálogo.
+ * Não diferencia caixa nem espaços nas pontas; Nº vazio não conta.
+ */
+export function contarNumerosDispositivoUnicos(entradas: EntradaIndice[]): number {
+  const vistos = new Set<string>();
+  for (const e of entradas) {
+    const n = e.nome.trim().toLowerCase();
+    if (n) vistos.add(n);
+  }
+  return vistos.size;
+}
+
 /** Busca da partição/linha de imagens: mesmo critério de normalizarNumeroPeca(). */
 export const normalizarCodigoLinha = (codigo?: string) => (codigo || '').trim().toLowerCase();
 

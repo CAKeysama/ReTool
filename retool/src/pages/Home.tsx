@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useReTool } from '../context/ReToolContext';
 import { useIndiceBusca } from '../presentation/hooks/useIndiceBusca';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { contarDispositivos } from '../data/repositories/FirestoreDispositivosConsultas';
 import { FirestoreReutilizacoesRepository } from '../data/repositories/FirestoreReutilizacoesRepository';
 import { SkeletonLinha } from '../components/feedback';
 import { Search, Box, Wrench, Tag, Info, Plus, Bug, X } from 'lucide-react';
@@ -30,16 +29,15 @@ const reutilizacoesRepo = new FirestoreReutilizacoesRepository();
 /** Sugestões exibidas no autocomplete (a lista completa fica na tela de Dispositivos). */
 const MAX_SUGESTOES = 8;
 
-/** Totais dos cartões via count() no servidor (não baixa documentos). */
+/** Total de reutilizações via count() no servidor (não baixa documentos). */
 type Total = number | null | 'erro';
 function useTotaisHome(revisao: number) {
-  const [totais, setTotais] = useState<{ dispositivos: Total; reutilizacoes: Total }>({ dispositivos: null, reutilizacoes: null });
+  const [totais, setTotais] = useState<{ reutilizacoes: Total }>({ reutilizacoes: null });
   const [tentativa, setTentativa] = useState(0);
   useEffect(() => {
     let vivo = true;
-    setTotais(t => ({ dispositivos: t.dispositivos === 'erro' ? null : t.dispositivos, reutilizacoes: t.reutilizacoes === 'erro' ? null : t.reutilizacoes }));
-    contarDispositivos().then(n => vivo && setTotais(t => ({ ...t, dispositivos: n }))).catch(() => vivo && setTotais(t => ({ ...t, dispositivos: 'erro' })));
-    reutilizacoesRepo.contar().then(n => vivo && setTotais(t => ({ ...t, reutilizacoes: n }))).catch(() => vivo && setTotais(t => ({ ...t, reutilizacoes: 'erro' })));
+    setTotais(t => ({ reutilizacoes: t.reutilizacoes === 'erro' ? null : t.reutilizacoes }));
+    reutilizacoesRepo.contar().then(n => vivo && setTotais({ reutilizacoes: n })).catch(() => vivo && setTotais({ reutilizacoes: 'erro' }));
 
     const aoReconectar = () => setTentativa(n => n + 1);
     window.addEventListener('online', aoReconectar);
@@ -59,9 +57,11 @@ export function Home() {
   const [activeIndex, setActiveIndex] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const totais = useTotaisHome(revisaoDispositivos);
-  // O catálogo de busca só é aberto quando a pessoa começa a usar a busca.
-  const [buscaUsada, setBuscaUsada] = useState(false);
-  const indice = useIndiceBusca(buscaUsada);
+  // O catálogo de busca abre junto com a Home: o cartão de Dispositivos conta
+  // os Nº dispositivo distintos, o que o count() do servidor não faz. Só a
+  // primeira visita baixa as partes; depois vem do cache local.
+  const indice = useIndiceBusca();
+  const totalDispositivos: Total = indice.numerosUnicos ?? (indice.estado === 'ausente' || indice.estado === 'erro' ? 'erro' : null);
   const consulta = useDebouncedValue(query, 120);
   const [isHovered, setIsHovered] = useState(false);
   const [buttonState, setButtonState] = useState<'visible' | 'exploding' | 'hidden' | 'reassembling'>('visible');
@@ -203,8 +203,6 @@ export function Home() {
               e.target.style.boxShadow = '0 6px 12px rgba(228, 13, 44, 0.08)';
               e.target.style.borderColor = 'var(--color-primary)';
               setShowSuggestions(true);
-              // O catálogo só é aberto ao digitar: o campo recebe foco sozinho
-              // ao abrir a Home e isso não deve custar leituras.
             }}
             onBlur={(e) => {
               e.target.style.boxShadow = '0 4px 6px rgba(0,0,0,0.02)';
@@ -214,7 +212,7 @@ export function Home() {
             placeholder="Buscar dispositivos por nome, código, descrição..."
             aria-label="Buscar dispositivos"
             value={query}
-            onChange={(e) => { setQuery(e.target.value); setBuscaUsada(true); }}
+            onChange={(e) => setQuery(e.target.value)}
             aria-autocomplete="list"
             aria-expanded={showSuggestions && suggestions.length > 0}
             onKeyDown={handleKeyDown}
@@ -313,7 +311,7 @@ export function Home() {
         WebkitOverflowScrolling: 'touch' /* Suavidade no iOS */
       }}>
         <div className="home-cartoes" style={{ display: 'flex', gap: 'var(--spacing-md)', margin: '0 auto' }}>
-          <HomeCard count={totais.dispositivos} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
+          <HomeCard count={totalDispositivos} label="Dispositivos" colorType="pink" icon={<Box size={20} />} onClick={() => navigate('/dispositivos')} shortcut="D" />
           <HomeCard count={totais.reutilizacoes} label="Reutilizações" colorType="teal" icon={<Wrench size={20} />} onClick={() => navigate('/reutilizacoes')} shortcut="U" />
           {(canCadastrar || canEditar) && (
             <HomeCard count={referenciasProntas ? categorias.length : null} label="Categorias" colorType="yellow" icon={<Tag size={20} />} onClick={() => navigate('/categorias')} shortcut="C" />

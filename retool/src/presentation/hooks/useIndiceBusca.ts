@@ -3,7 +3,7 @@ import { useReTool } from '../../context/ReToolContext';
 import { indiceBusca, SnapshotIndice } from '../../data/repositories/IndiceBuscaStore';
 import {
   EntradaIndice, EntradaPreparada, FiltroBusca, NomesClassificacao,
-  filtrarEntradas, prepararEntradas
+  filtrarEntradas, prepararEntradas, contarNumerosDispositivoUnicos
 } from '../../domain/services/buscaDispositivos';
 import { medirTrabalho, registrarConsulta } from '../../data/observabilidade/metricas';
 
@@ -54,6 +54,8 @@ export interface IndiceBuscaApi {
   progresso: SnapshotIndice['progresso'];
   erro: string | null;
   totalNoIndice: number;
+  /** Nº dispositivo distintos no catálogo (null enquanto não estiver carregado). */
+  numerosUnicos: number | null;
   metaTotal: number | null;
   metaPartes: number | null;
   /** Tamanho estimado da maior parte carregada (0 se não carregou). */
@@ -103,6 +105,11 @@ export function useIndiceBusca(ativo = true): IndiceBuscaApi {
     return medirTrabalho('busca', () => filtrarEntradas(preparadas, filtro, limite), preparadas.length);
   }, [preparadas]);
 
+  const numerosUnicos = useMemo(
+    () => (snap.estado === 'pronto' ? contarNumerosDispositivoUnicos(snap.entradas) : null),
+    [snap]
+  );
+
   const porId = useCallback((id: string) => porIdMapa?.get(id), [porIdMapa]);
   const reiniciar = useCallback(() => indiceBusca.reiniciar(), []);
 
@@ -112,6 +119,7 @@ export function useIndiceBusca(ativo = true): IndiceBuscaApi {
     progresso: snap.progresso,
     erro: snap.erro,
     totalNoIndice: snap.entradas.length,
+    numerosUnicos,
     metaTotal: snap.meta?.total ?? null,
     metaPartes: snap.meta?.partes ?? null,
     maiorParteBytes: snap.maiorParteBytes,
