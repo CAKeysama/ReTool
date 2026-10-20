@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ReToolProvider } from './context/ReToolContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
+import { VersaoSistema } from './components/VersaoSistema';
 import { AguardandoAprovacao } from './pages/AguardandoAprovacao';
 import { TrocaSenhaObrigatoria } from './pages/TrocaSenhaObrigatoria';
 import { telaDaSessao } from './domain/entities/user';
@@ -158,6 +159,7 @@ function App() {
             </Route>
             <Route path="*" element={<Navigate to="/dispositivos" replace />} />
           </Routes>
+          <VersaoSistema />
         </BrowserRouter>
       </ReToolProvider>
     </AuthProvider>
