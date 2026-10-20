@@ -73,7 +73,7 @@ export function Layout() {
 
   if (isFullScreenMode) {
     return (
-      <div className="app-container" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)', paddingBottom: '90px', position: 'relative' }}>
+      <div className="app-container app-container-tela-cheia" style={{ justifyContent: 'center', backgroundColor: 'var(--color-surface)', position: 'relative' }}>
         <div aria-live="polite" className="sr-only">{announcement}</div>
 
         {/* TOP RIGHT PROFILE BADGE EM TELAS FULLSCREEN */}

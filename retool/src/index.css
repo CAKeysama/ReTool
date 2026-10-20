@@ -894,8 +894,22 @@ h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-xs); }
   min-width: 640px;
 }
 
+/* A Home ocupa exatamente a tela: sem rolagem quando o conteúdo cabe. */
+.home-raiz,
+.app-container-tela-cheia {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* Início no celular: cartões quebram em linhas, "Sobre o Projeto" sai do canto ocupado pelo perfil. */
 @media (max-width: 768px) {
+  /* Telas cheias (Home, Sobre) reservam o espaço da navegação inferior fixa. */
+  .app-container-tela-cheia {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+  .home-raiz {
+    min-height: calc(100dvh - 64px - env(safe-area-inset-bottom));
+  }
   .home-cartoes-faixa {
     overflow-x: visible !important;
     padding: 0 16px !important;

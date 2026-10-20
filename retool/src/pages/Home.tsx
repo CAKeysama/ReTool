@@ -136,7 +136,7 @@ export function Home() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100%', position: 'relative', overflow: 'hidden', zIndex: 1 }}>
+    <div className="home-raiz" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', position: 'relative', overflow: 'hidden', zIndex: 1 }}>
 
       {/* Marca d'água Baldan */}
       <img
