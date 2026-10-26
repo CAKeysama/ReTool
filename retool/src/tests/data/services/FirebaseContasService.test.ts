@@ -1,24 +1,20 @@
 import '../../mocks/firebaseMock';
-import { describe, test, expect } from '@jest/globals';
-import { traduzirErroFuncao } from '../../../data/services/FirebaseContasService';
+import { jest, describe, test, expect } from '@jest/globals';
 
-describe('Mensagens das Cloud Functions', () => {
-  test('erros de negócio chegam com a mensagem do servidor', () => {
-    expect(traduzirErroFuncao({ code: 'functions/permission-denied', message: 'Acesso negado: operação exclusiva da Administração.' }))
-      .toBe('Acesso negado: operação exclusiva da Administração.');
-    expect(traduzirErroFuncao({ code: 'functions/not-found', message: 'Usuário não encontrado.' })).toBe('Usuário não encontrado.');
+const sendPasswordResetEmail = jest.fn(async (..._args: unknown[]) => undefined);
+jest.mock('firebase/auth', () => ({ sendPasswordResetEmail: (...args: unknown[]) => sendPasswordResetEmail(...args) }));
+
+import { FirebaseContasService } from '../../../data/services/FirebaseContasService';
+
+describe('E-mail de redefinição de senha', () => {
+  test('usa o Firebase Auth com o e-mail normalizado', async () => {
+    await new FirebaseContasService().enviarEmailRedefinicaoSenha('  Pessoa@Empresa.COM ');
+    expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1);
+    expect(sendPasswordResetEmail.mock.calls[0][1]).toBe('pessoa@empresa.com');
   });
 
-  test.each([
-    [{ code: 'functions/internal', message: 'internal' }],
-    [{ code: 'functions/not-found', message: 'NOT_FOUND' }],
-    [{ code: 'functions/unavailable', message: 'qualquer' }],
-  ])('função não publicada/indisponível orienta o deploy (%o)', (erro) => {
-    expect(traduzirErroFuncao(erro)).toMatch(/Cloud Functions/);
-  });
-
-  test('erros que não vêm das Cloud Functions seguem para o tradutor de autenticação', () => {
-    expect(traduzirErroFuncao({ code: 'auth/invalid-credential' })).toBeNull();
-    expect(traduzirErroFuncao(new Error('x'))).toBeNull();
+  test('erros do Firebase chegam a quem chamou', async () => {
+    sendPasswordResetEmail.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'auth/invalid-email' }));
+    await expect(new FirebaseContasService().enviarEmailRedefinicaoSenha('x')).rejects.toMatchObject({ code: 'auth/invalid-email' });
   });
 });

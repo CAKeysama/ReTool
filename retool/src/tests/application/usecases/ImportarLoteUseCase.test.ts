@@ -11,7 +11,6 @@ describe('ImportarLoteUseCase', () => {
     // Arrange
     const mockResult = { sucesso: 5, erros: 0 };
     const mockRepo: jest.Mocked<IDispositivosRepository> = {
-      subscribeAll: jest.fn(),
       add: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -47,8 +46,24 @@ describe('ImportarLoteUseCase', () => {
       newProdutosNomes,
       categoriasExistentes,
       familiasExistentes,
-      produtosExistentes
+      produtosExistentes,
+      undefined
     );
     expect(result).toEqual(mockResult);
+  });
+
+  test('repassa as opções (progresso, cancelamento, total estimado) ao repositório', async () => {
+    const mockResult = { sucesso: 0, erros: 0, interrompido: 'cancelado' as const, naoGravados: 3 };
+    const importarLote = jest.fn(async (..._args: unknown[]) => mockResult);
+    const useCase = new ImportarLoteUseCase({ importarLote } as unknown as IDispositivosRepository);
+    const controle = new AbortController();
+    const onProgresso = jest.fn();
+    const opcoes = { onProgresso, sinal: controle.signal };
+
+    const result = await useCase.execute([{ codigo: 'A', nome: '1' }], [], [], [], [], [], [], opcoes);
+
+    expect(importarLote).toHaveBeenCalledTimes(1);
+    expect(importarLote.mock.calls[0][7]).toBe(opcoes);
+    expect(result).toBe(mockResult);
   });
 });

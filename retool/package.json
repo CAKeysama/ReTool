@@ -1,7 +1,7 @@
 {
   "name": "retool",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,12 +9,13 @@
     "emuladores": "node scripts/emuladores.mjs iniciar",
     "build": "vite build",
     "lint": "eslint .",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.e2e.json",
     "preview": "vite preview",
     "deploy": "npm run build && npx firebase-tools deploy",
     "test": "jest",
     "test:coverage": "jest --coverage",
     "test:rules": "node scripts/emuladores.mjs regras",
-    "test:funcoes": "node scripts/emuladores.mjs funcoes"
+    "test:e2e": "node scripts/emuladores.mjs e2e"
   },
   "dependencies": {
     "firebase": "^12.12.1",
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "1.56.1",
     "@types/jest": "^30.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

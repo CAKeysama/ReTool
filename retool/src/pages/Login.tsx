@@ -6,11 +6,12 @@ import {
   User, 
   ArrowRight,
   AlertCircle,
+  CheckCircle2,
   Info
 } from 'lucide-react';
 
 export function Login() {
-  const { login, register } = useAuth();
+  const { login, register, solicitarRedefinicaoSenha } = useAuth();
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
@@ -19,11 +20,33 @@ export function Login() {
   const [nome, setNome] = useState('');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const [sucesso, setSucesso] = useState('');
+  const [enviandoRedefinicao, setEnviandoRedefinicao] = useState(false);
+
+  const handleEsqueciSenha = async () => {
+    setErro('');
+    setSucesso('');
+    if (!email.trim()) {
+      setErro('Informe seu e-mail acima para receber o link de redefinição de senha.');
+      return;
+    }
+    setEnviandoRedefinicao(true);
+    try {
+      await solicitarRedefinicaoSenha(email);
+      // Mesma mensagem exista ou não a conta (não revela e-mails cadastrados).
+      setSucesso(`Se houver uma conta com ${email.trim().toLowerCase()}, você receberá um e-mail com o link para definir uma nova senha. Confira também a caixa de spam.`);
+    } catch (err: unknown) {
+      setErro(traduzirErroAuth(err));
+    } finally {
+      setEnviandoRedefinicao(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErro('');
+    setSucesso('');
 
     try {
       if (isRegistering) {
@@ -55,11 +78,10 @@ export function Login() {
       padding: '24px',
       fontFamily: 'Inter, system-ui, sans-serif'
     }}>
-      <div style={{
+      <div className="login-cartao" style={{
         maxWidth: '1020px',
         width: '100%',
         display: 'grid',
-        gridTemplateColumns: '1.25fr 1fr',
         backgroundColor: 'white',
         borderRadius: 'var(--radius-lg)',
         boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.15)',
@@ -67,7 +89,7 @@ export function Login() {
         border: '1px solid #e2e8f0'
       }}>
         {/* LADO ESQUERDO: APRESENTAÇÃO DOS PERFIS INSTITUCIONAIS */}
-        <div style={{
+        <div className="login-apresentacao" style={{
           backgroundColor: '#0f172a',
           color: '#ffffff',
           padding: '44px 40px',
@@ -156,7 +178,7 @@ export function Login() {
         </div>
 
         {/* LADO DIREITO: FORMULÁRIO DE AUTENTICAÇÃO REAL */}
-        <div style={{ padding: '44px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div className="login-formulario" style={{ padding: '44px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
           <div style={{ marginBottom: '20px' }}>
             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
               {isRegistering ? 'Criar Nova Conta' : 'Acesse o Sistema'}
@@ -187,7 +209,7 @@ export function Login() {
           </div>
 
           {erro && (
-            <div style={{
+            <div role="alert" style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
@@ -200,6 +222,23 @@ export function Login() {
             }}>
               <AlertCircle size={16} />
               <span>{erro}</span>
+            </div>
+          )}
+
+          {sucesso && (
+            <div role="status" style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '8px',
+              padding: '10px 14px',
+              backgroundColor: '#dcfce7',
+              color: '#15803d',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.82rem',
+              marginBottom: '18px'
+            }}>
+              <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>{sucesso}</span>
             </div>
           )}
 
@@ -274,6 +313,18 @@ export function Login() {
                   }}
                 />
               </div>
+              {!isRegistering && (
+                <div style={{ textAlign: 'right', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    onClick={handleEsqueciSenha}
+                    disabled={enviandoRedefinicao}
+                    style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-primary)', fontSize: '0.78rem', fontWeight: 600, cursor: enviandoRedefinicao ? 'not-allowed' : 'pointer', textDecoration: 'underline' }}
+                  >
+                    {enviandoRedefinicao ? 'Enviando...' : 'Esqueci minha senha'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {isRegistering && (
@@ -315,6 +366,7 @@ export function Login() {
               onClick={() => {
                 setIsRegistering(!isRegistering);
                 setErro('');
+                setSucesso('');
               }}
               style={{
                 marginLeft: '6px',

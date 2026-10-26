@@ -7,12 +7,17 @@ const auditRepo = new FirestoreAuditLogRepository();
 export type EstadoConsulta = 'carregando' | 'pronto' | 'erro';
 
 function mensagemErroConsulta(e: unknown): string {
-  const code = (e as { code?: string })?.code;
+  const { code, message = '' } = (e as { code?: string; message?: string }) || {};
   if (code === 'permission-denied') {
     return 'Acesso negado: somente a Administração consulta o histórico de ações.';
   }
   if (code === 'failed-precondition') {
-    return 'Esta combinação de filtros precisa de um índice no Firestore. Publique os índices do projeto (npx firebase-tools deploy --only firestore:indexes) ou simplifique os filtros.';
+    const projeto = auditRepo.projetoId ? ` no projeto ${auditRepo.projetoId}` : '';
+    // O Firestore responde com o mesmo código enquanto o índice ainda é construído.
+    if (/building|being built/i.test(message)) {
+      return `Os índices do histórico ainda estão sendo construídos${projeto}. Aguarde alguns minutos e tente novamente.`;
+    }
+    return `Os índices do histórico não estão publicados${projeto}. Publique-os com: npx firebase-tools deploy --only firestore:indexes${auditRepo.projetoId ? ` --project ${auditRepo.projetoId}` : ''}`;
   }
   return 'Não foi possível carregar o histórico. Verifique sua conexão e tente novamente.';
 }
@@ -31,6 +36,7 @@ export function useHistoricoAuditoriaController(habilitado: boolean) {
   const [estado, setEstado] = useState<EstadoConsulta>('carregando');
   const [erro, setErro] = useState('');
   const [total, setTotal] = useState<number | null>(null);
+  const [totalIndisponivel, setTotalIndisponivel] = useState(false);
   const [haNovos, setHaNovos] = useState(false);
   const [versao, setVersao] = useState(0);
 
@@ -65,7 +71,11 @@ export function useHistoricoAuditoriaController(habilitado: boolean) {
     setHaNovos(false);
     carregarPagina(0);
     setTotal(null);
-    auditRepo.contar(filtros).then(setTotal).catch(() => setTotal(null));
+    setTotalIndisponivel(false);
+    auditRepo.contar(filtros).then(setTotal).catch((e) => {
+      console.warn('Falha ao contar o histórico de ações:', e);
+      setTotalIndisponivel(true);
+    });
   }, [habilitado, filtros, carregarPagina, versao]);
 
   // Aviso de novos registros sem recarregar a página em exibição.
@@ -93,6 +103,7 @@ export function useHistoricoAuditoriaController(habilitado: boolean) {
     estado,
     erro,
     total,
+    totalIndisponivel,
     haNovos,
     proximaPagina: () => { if (temMais) carregarPagina(paginaAtual + 1); },
     paginaAnterior: () => { if (paginaAtual > 0) carregarPagina(paginaAtual - 1); },

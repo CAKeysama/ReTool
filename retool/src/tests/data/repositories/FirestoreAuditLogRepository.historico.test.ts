@@ -24,10 +24,10 @@ beforeEach(() => {
   resetMockDb();
   mockDbState.audit_logs.push(
     log('l1', 1, { acao: 'login', tipoEntidade: 'sessao' }),
-    log('l2', 2),
+    log('l2', 2, { categoria: 'dados' }),
     log('l3', 3, { usuarioUid: 'admin', acao: 'aprovacao_usuario', tipoEntidade: 'usuario', resultado: 'sucesso', categoria: 'usuarios' }),
-    log('l4', 4, { acao: 'login', tipoEntidade: 'sessao', resultado: 'negado' }),
-    log('l5', 5, { usuarioUid: 'admin', acao: 'criacao_usuario', tipoEntidade: 'usuario', resultado: 'falha' }),
+    log('l4', 4, { acao: 'login', tipoEntidade: 'sessao', resultado: 'negado', categoria: 'autenticacao' }),
+    log('l5', 5, { usuarioUid: 'admin', acao: 'criacao_usuario', tipoEntidade: 'usuario', resultado: 'falha', categoria: 'usuarios' }),
   );
 });
 
@@ -78,6 +78,8 @@ describe('Histórico de ações: consulta paginada (tela da Administração)', (
   test.each([
     [{ acao: 'login' as const }, ['l4', 'l1']],
     [{ categoria: 'usuarios' as const }, ['l5', 'l3']],
+    // Registro legado (l1, sem o campo categoria) não entra no filtro de categoria…
+    [{ categoria: 'autenticacao' as const }, ['l4']],
     [{ usuarioUid: 'admin' }, ['l5', 'l3']],
     [{ tipoEntidade: 'dispositivo' as const }, ['l2']],
     [{ somenteFalhas: true }, ['l5', 'l4']],

@@ -1,21 +1,21 @@
 // Emuladores oficiais do Firebase para desenvolvimento e testes locais
 // (projeto "demo-retool": nenhum dado ou conta real é tocado).
 //
-//   npm run emuladores    -> sobe auth, firestore, functions e storage (dev)
+//   npm run emuladores    -> sobe auth, firestore e storage (dev)
 //   npm run test:rules    -> testes das regras do Firestore
-//   npm run test:funcoes  -> testes das Cloud Functions
+//   npm run test:e2e      -> testes de navegador (Playwright) contra o app
 //
 // No Windows, o processo Java do emulador do Firestore pode sobreviver ao
 // encerramento (a porta fica ocupada para a próxima execução). Ao final,
 // este runner encerra somente o emulador que ele mesmo iniciou,
 // identificado pelo jar do Firestore e pela porta do firebase.json.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 
 const MODOS = {
-  iniciar: { emuladores: 'auth,firestore,functions,storage' },
-  regras: { emuladores: 'firestore', testes: 'src/tests/rules' },
-  funcoes: { emuladores: 'auth,firestore,functions', testes: 'src/tests/funcoes' },
+  iniciar: { emuladores: 'auth,firestore,storage' },
+  regras: { emuladores: 'firestore', testes: 'jest --config jest.rules.config.cjs src/tests/rules' },
+  e2e: { emuladores: 'auth,firestore,storage', testes: 'playwright test' },
 };
 
 const modo = MODOS[process.argv[2]];
@@ -24,22 +24,12 @@ if (!modo) {
   process.exit(1);
 }
 
-// A descoberta das funções concorre com a subida dos demais emuladores (e com
-// pastas sincronizadas, como OneDrive); o limite padrão de 10 s é curto.
-const env = { ...process.env, FUNCTIONS_DISCOVERY_TIMEOUT: process.env.FUNCTIONS_DISCOVERY_TIMEOUT || '60' };
-const executar = (comando) => spawnSync(comando, { stdio: 'inherit', shell: true, env });
-
-if (modo.emuladores.includes('functions')) {
-  if (!existsSync(new URL('../functions/node_modules', import.meta.url))) {
-    if (executar('npm --prefix functions install').status !== 0) process.exit(1);
-  }
-  if (executar('npm --prefix functions run build').status !== 0) process.exit(1);
-}
+const executar = (comando) => spawnSync(comando, { stdio: 'inherit', shell: true });
 
 const porta = JSON.parse(readFileSync(new URL('../firebase.json', import.meta.url), 'utf8')).emulators.firestore.port;
 
 const resultado = modo.testes
-  ? executar(`npx firebase emulators:exec --only ${modo.emuladores} --project demo-retool "jest --config jest.rules.config.cjs ${modo.testes}"`)
+  ? executar(`npx firebase emulators:exec --only ${modo.emuladores} --project demo-retool "${modo.testes}"`)
   : executar(`npx firebase emulators:start --only ${modo.emuladores} --project demo-retool`);
 
 if (process.platform === 'win32') {

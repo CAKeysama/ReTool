@@ -31,6 +31,10 @@ jest.mock('../../data/datasources/firebase', () => ({
   storage: {},
 }));
 
+jest.mock('../../data/datasources/storage', () => ({
+  storage: {},
+}));
+
 jest.mock('../../config/firebase', () => ({
   db: {},
   storage: {},
@@ -49,8 +53,11 @@ function comparar(a: any, b: any): number {
   return a < b ? -1 : 1;
 }
 
+/** documentId() vira '__name__' no mock: compara pelo id do documento. */
+const valorDoCampo = (item: any, campo: string) => (campo === '__name__' ? item.id : item[campo]);
+
 function atende(item: any, r: Extract<Restricao, { tipo: 'where' }>): boolean {
-  const v = item[r.campo];
+  const v = valorDoCampo(item, r.campo);
   switch (r.op) {
     case '==': return v === r.valor;
     case 'in': return Array.isArray(r.valor) && r.valor.includes(v);
@@ -74,7 +81,7 @@ function executarConsulta(ref: { name: string; restricoes?: Restricao[] }): any[
   if (ordem.length > 0) {
     itens.sort((a, b) => {
       for (const o of ordem) {
-        const c = comparar(a[o.campo], b[o.campo]);
+        const c = comparar(valorDoCampo(a, o.campo), valorDoCampo(b, o.campo));
         if (c !== 0) return o.direcao === 'desc' ? -c : c;
       }
       return 0;
@@ -82,8 +89,18 @@ function executarConsulta(ref: { name: string; restricoes?: Restricao[] }): any[
   }
   const apos = restricoes.find((r): r is Extract<Restricao, { tipo: 'startAfter' }> => r.tipo === 'startAfter');
   if (apos) {
-    const idx = itens.findIndex(item => item.id === apos.cursor?.id);
-    itens = idx >= 0 ? itens.slice(idx + 1) : itens;
+    if (apos.cursor && typeof apos.cursor === 'object') {
+      // Cursor = documento (paginação do histórico).
+      const idx = itens.findIndex(item => item.id === apos.cursor.id);
+      itens = idx >= 0 ? itens.slice(idx + 1) : itens;
+    } else if (ordem[0]) {
+      // Cursor = valor do primeiro campo ordenado (ex.: orderBy(documentId())).
+      const o = ordem[0];
+      itens = itens.filter(item => {
+        const c = comparar(valorDoCampo(item, o.campo), apos.cursor);
+        return o.direcao === 'desc' ? c < 0 : c > 0;
+      });
+    }
   }
   const limite = restricoes.find((r): r is Extract<Restricao, { tipo: 'limit' }> => r.tipo === 'limit');
   if (limite) itens = itens.slice(0, limite.n);
@@ -91,7 +108,10 @@ function executarConsulta(ref: { name: string; restricoes?: Restricao[] }): any[
 }
 
 const snapshotDeDocs = (itens: any[]) => ({
-  docs: itens.map(item => ({ id: item.id, data: () => item }))
+  docs: itens.map(item => ({ id: item.id, data: () => item })),
+  size: itens.length,
+  empty: itens.length === 0,
+  metadata: { fromCache: false, hasPendingWrites: false }
 });
 
 function snapshotDeDoc(docRef: { colName: string; id: string }) {
@@ -120,6 +140,7 @@ function atualizar(docRef: any, data: any) {
   // Como no Firestore real, atualizar documento inexistente falha.
   if (!item) throw Object.assign(new Error(`No document to update: ${col}/${docRef.id}`), { code: 'not-found' });
   Object.assign(item, data);
+  for (const [k, v] of Object.entries(data)) if ((v as any)?.__deleteField) delete item[k];
 }
 
 function remover(docRef: any) {
@@ -133,7 +154,10 @@ jest.mock('firebase/firestore', () => {
   return {
     getFirestore: jest.fn(() => ({})),
     collection: jest.fn((db: any, name: string) => ({ name })),
+    // As restrições ficam anotadas na consulta (`restricoes`) e são
+    // aplicadas por executarConsulta em getDocs/onSnapshot/count.
     query: jest.fn((colRef: any, ...restricoes: any[]) => ({
+      ...colRef,
       name: colRef.name,
       restricoes: [...(colRef.restricoes || []), ...restricoes]
     })),
@@ -141,6 +165,8 @@ jest.mock('firebase/firestore', () => {
     orderBy: jest.fn((campo: string, direcao: 'asc' | 'desc' = 'asc') => ({ tipo: 'orderBy', campo, direcao })),
     limit: jest.fn((n: number) => ({ tipo: 'limit', n })),
     startAfter: jest.fn((cursor: any) => ({ tipo: 'startAfter', cursor })),
+    documentId: jest.fn(() => '__name__'),
+    deleteField: jest.fn(() => ({ __deleteField: true })),
     serverTimestamp: jest.fn(() => ({
       __serverTimestampMock: true,
       toDate: () => new Date('2026-01-02T03:04:05.000Z')
@@ -169,6 +195,11 @@ jest.mock('firebase/firestore', () => {
       return () => {}; // return unsubscribe function
     }),
     getDocs: jest.fn(async (ref: any) => snapshotDeDocs(executarConsulta(ref))),
+    // Delega a getDocs: testes que simulam falha em getDocs valem para os dois.
+    getDocsFromServer: jest.fn(async (ref: any) => {
+      const fs = jest.requireMock('firebase/firestore') as any;
+      return fs.getDocs(ref);
+    }),
     getCountFromServer: jest.fn(async (ref: any) => {
       const semLimite = { ...ref, restricoes: (ref.restricoes || []).filter((r: any) => r.tipo === 'where') };
       const count = executarConsulta(semLimite).length;

@@ -12,8 +12,9 @@ module.exports = {
     '^uuid$': require.resolve('uuid'),
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  // Regras e Cloud Functions exigem os emuladores: `npm run test:rules` / `npm run test:funcoes`.
-  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/src/tests/rules/', '<rootDir>/src/tests/funcoes/', '<rootDir>/functions/'],
+  // As regras exigem o emulador do Firestore: `npm run test:rules`.
+  // Os testes de navegador rodam no Playwright: `npm run test:e2e`.
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/src/tests/rules/', '<rootDir>/e2e/'],
   collectCoverage: true,
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],

@@ -4,7 +4,7 @@ import { useAuth, traduzirErroAuth } from '../../context/AuthContext';
 import { ROLES_CONFIG, configDoPerfil } from '../../domain/entities/user';
 import { SolicitacaoCargo, SolicitacaoCargoStatus } from '../../domain/entities/solicitacaoCargo';
 import { EmptyState } from '../Tabs';
-import { Aviso, EstadoCarregando, EstadoErro } from '../Feedback';
+import { Aviso, EstadoCarregando, EstadoErro } from '../FeedbackAdmin';
 import { RoleBadge, SolicitacaoStatusBadge, formatarDataHora } from '../Badges';
 import { cartaoAdmin, estiloBotaoAcao, tabelaAdmin } from './estilos';
 
