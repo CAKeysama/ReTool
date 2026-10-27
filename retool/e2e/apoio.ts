@@ -21,7 +21,7 @@ export async function entrar(page: Page, email: string, senha: string) {
 
 export async function entrarComoAdmin(page: Page) {
   await entrar(page, ADMIN, SENHA_DEMO);
-  await expect(page.getByRole('heading', { name: 'Dispositivos', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dispositivos', level: 2, exact: true })).toBeVisible();
 }
 
 /** Abre uma sessão separada (outro navegador), como um segundo usuário. */
@@ -52,5 +52,5 @@ export async function trocarSenhaTemporaria(page: Page, temporaria: string, nova
   await page.getByLabel('Nova senha', { exact: true }).fill(nova);
   await page.getByLabel('Confirmar nova senha').fill(nova);
   await page.getByRole('button', { name: 'Salvar nova senha e continuar' }).click();
-  await expect(page.getByRole('heading', { name: 'Dispositivos', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dispositivos', level: 2, exact: true })).toBeVisible();
 }
