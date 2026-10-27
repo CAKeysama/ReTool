@@ -41,14 +41,31 @@ async function abrirDetalhes(page: Page, codigo: string) {
   await expect(page.getByText(codigo).first()).toBeVisible();
 }
 
-/** Links das imagens exibidas nos detalhes (null = sem imagem). */
-async function imagens(page: Page, codigo: string): Promise<{ peca: string | null; dispositivo: string | null }> {
-  await abrirDetalhes(page, codigo);
+type Imagens = { peca: string | null; dispositivo: string | null };
+
+/** Links das imagens exibidas nos detalhes já abertos (null = sem imagem). */
+async function lerImagens(page: Page): Promise<Imagens> {
   const src = async (alt: string) => {
     const img = page.getByRole('img', { name: alt, exact: true });
     return (await img.count()) ? img.getAttribute('src') : null;
   };
   return { peca: await src('Imagem da peça'), dispositivo: await src('Imagem do dispositivo') };
+}
+
+/**
+ * Abre os detalhes e espera as imagens chegarem: elas podem aparecer depois
+ * do cabeçalho (no CI, mais lento, ler uma vez só pegava a tela incompleta).
+ */
+async function esperarImagens(page: Page, codigo: string, condicao: (i: Imagens) => boolean): Promise<Imagens> {
+  await abrirDetalhes(page, codigo);
+  await expect.poll(async () => condicao(await lerImagens(page)), { timeout: 15_000 }).toBe(true);
+  return lerImagens(page);
+}
+
+/** Abre os detalhes e espera exatamente estas imagens. */
+async function conferirImagens(page: Page, codigo: string, esperado: Imagens) {
+  await abrirDetalhes(page, codigo);
+  await expect.poll(() => lerImagens(page), { timeout: 15_000 }).toEqual(esperado);
 }
 
 test('imagem do dispositivo se propaga pelo Nº dispositivo, acompanha a troca e sobrevive à exclusão da origem', async ({ page }) => {
@@ -66,17 +83,15 @@ test('imagem do dispositivo se propaga pelo Nº dispositivo, acompanha a troca e
   //    a do dispositivo chega ao irmão; a da peça, não.
   await cadastrar(page, ` ${numero.toLowerCase()} `, origem, { peca: 'peca.png', dispositivo: 'primeira.png' });
   await expect(page.getByText(/Imagem do dispositivo copiada para 1 outro\(s\) dispositivo/)).toBeVisible();
-  const daOrigem = await imagens(page, origem);
+  const daOrigem = await esperarImagens(page, origem, i => !!i.peca?.includes('peca.png') && !!i.dispositivo?.includes('primeira.png'));
   const primeira = daOrigem.dispositivo;
-  expect(primeira).toContain('primeira.png');
-  expect(daOrigem.peca).toContain('peca.png');
-  expect(await imagens(page, irmao)).toEqual({ peca: null, dispositivo: primeira });
-  expect(await imagens(page, outroNumero)).toEqual({ peca: null, dispositivo: null });
+  await conferirImagens(page, irmao, { peca: null, dispositivo: primeira });
+  await conferirImagens(page, outroNumero, { peca: null, dispositivo: null });
 
   // 3. Um dispositivo novo com o mesmo Nº herda a imagem do dispositivo.
   await cadastrar(page, numero, novo);
   await expect(page.getByText(/O dispositivo recebeu a imagem já usada pelo Nº dispositivo/)).toBeVisible();
-  expect(await imagens(page, novo)).toEqual({ peca: null, dispositivo: primeira });
+  await conferirImagens(page, novo, { peca: null, dispositivo: primeira });
 
   // 4. A origem troca a foto do dispositivo: quem seguia a anterior acompanha.
   await abrirDetalhes(page, origem);
@@ -88,10 +103,9 @@ test('imagem do dispositivo se propaga pelo Nº dispositivo, acompanha a troca e
   await edicao.getByRole('button', { name: 'Salvar registro do dispositivo' }).click();
   await expect(edicao).toBeHidden();
   await expect(page.getByText(/Imagem do dispositivo copiada para 2 outro\(s\) dispositivo/)).toBeVisible();
-  const segunda = (await imagens(page, origem)).dispositivo;
-  expect(segunda).toContain('segunda.png');
-  expect((await imagens(page, irmao)).dispositivo).toBe(segunda);
-  expect((await imagens(page, novo)).dispositivo).toBe(segunda);
+  const segunda = (await esperarImagens(page, origem, i => !!i.dispositivo?.includes('segunda.png'))).dispositivo;
+  await conferirImagens(page, irmao, { peca: null, dispositivo: segunda });
+  await conferirImagens(page, novo, { peca: null, dispositivo: segunda });
 
   // 5. Excluir a origem não quebra a imagem dos outros; a foto que ninguém usa mais sai do Storage.
   await page.goto('/dispositivos');
@@ -105,5 +119,5 @@ test('imagem do dispositivo se propaga pelo Nº dispositivo, acompanha a troca e
 
   expect((await page.request.get(segunda!)).status()).toBe(200);
   await expect.poll(async () => (await page.request.get(primeira!)).status()).not.toBe(200);
-  expect((await imagens(page, irmao)).dispositivo).toBe(segunda);
+  await conferirImagens(page, irmao, { peca: null, dispositivo: segunda });
 });
