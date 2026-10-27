@@ -61,7 +61,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
             <Chip status="Em análise (Projetista)" />
           </div>
           <p style={textoEtapa}>
-            A Engenharia cria a solicitação no formulário &quot;Nova Solicitação&quot; (peça, descrição da alteração, hard saving).
+            A Engenharia cria a solicitação no formulário &quot;Nova Solicitação&quot; (peça e descrição da alteração).
             Ao enviar, ela vai direto para a <strong>Fila do Projetista</strong>, e o Projetista e o Admin são notificados.
           </p>
         </div>
@@ -160,7 +160,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
         <h3 style={tituloSecao}>Permissões por perfil</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: '8px', fontSize: '0.8rem', color: '#4b5563' }}>
           <div style={cartao}><strong>Engenharia:</strong> solicita (vai direto ao 1º filtro) e solicita dispositivo novo.</div>
-          <div style={cartao}><strong>Projetista:</strong> aprova/reprova no 1º filtro e decide similar/liberação no 2º filtro.</div>
+          <div style={cartao}><strong>Projetista:</strong> aprova/reprova no 1º filtro, decide similar/liberação no 2º filtro e define o Hard Saving.</div>
           <div style={cartao}><strong>Admin:</strong> todas as transições do fluxo.</div>
           <div style={cartao}><strong>Gerência:</strong> somente leitura (consulta o histórico).</div>
         </div>

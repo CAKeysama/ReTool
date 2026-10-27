@@ -6,194 +6,159 @@ import {
   ehCaminhoDeImagem,
   herdarImagensDaLinha,
   imagemDaLinha,
-  normalizarNumeroPeca,
+  normalizarNumeroDispositivo,
   patchAindaAplicavel,
   planejarLimpezaDuplicados,
-  prefixoChaveDaLinha,
   urlSemToken
 } from '../../../domain/entities/dispositivo';
 
-const disp = (id: string, codigo: string | undefined, imagens: Partial<Dispositivo> = {}): Dispositivo => ({
+/** Dispositivo com o Nº dispositivo (`nome`) informado; o código varia para provar que não é a chave. */
+const disp = (id: string, nome: string | undefined, imagens: Partial<Dispositivo> = {}): Dispositivo => ({
   id,
-  nome: `Disp ${id}`,
-  codigo,
+  nome,
+  codigo: `PECA-${id}`,
   ...imagens
 });
 
-describe('Propagação de imagens por Número da Peça', () => {
+describe('Propagação da imagem do dispositivo por Nº dispositivo', () => {
   it('normaliza a chave da linha (caixa e espaços)', () => {
-    expect(normalizarNumeroPeca('  51500101580 ')).toBe('51500101580');
-    expect(normalizarNumeroPeca('ABC-123')).toBe('abc-123');
-    expect(normalizarNumeroPeca(undefined)).toBe('');
+    expect(normalizarNumeroDispositivo('  MAT04670 ')).toBe('mat04670');
+    expect(normalizarNumeroDispositivo('MAT-04670')).toBe('mat-04670');
+    expect(normalizarNumeroDispositivo(undefined)).toBe('');
   });
 
-  it('upload bem-sucedido preenche apenas células vazias da mesma linha', () => {
-    const url = 'https://storage/img-peca.png';
+  it('upload preenche a imagem do dispositivo de quem tem o mesmo Nº, mesmo com Número da Peça diferente', () => {
+    const url = 'https://storage/img-disp.png';
     const linha = [
-      disp('a', '51500101580'),
-      disp('b', '51500101580', { imagemPeca: 'https://storage/existente.png' }), // já tem imagem
-      disp('c', '51500101580'),
-      disp('d', '99999999999') // outra linha
+      disp('a', 'MAT04670'),
+      disp('b', 'MAT04670', { imagemDispositivo: 'https://storage/existente.png' }), // já tem imagem
+      disp('c', 'MAT04670'),
+      disp('d', 'MAT99999') // outro Nº
     ];
 
-    const patches = calcularPropagacaoImagens(linha, 'a', '51500101580', { imagemPeca: url }, false);
+    const patches = calcularPropagacaoImagens(linha, 'a', 'MAT04670', { imagemDispositivo: url }, false);
 
-    expect(patches).toHaveLength(1);
-    expect(patches[0]).toEqual({ id: 'c', patch: { imagemPeca: url }, origem: 'propagacao' });
-    // Nunca sobrescreve imagem existente (b) nem toca outra linha (d).
+    // Nunca sobrescreve imagem existente (b) nem toca outro Nº (d).
+    expect(patches).toEqual([{ id: 'c', patch: { imagemDispositivo: url }, origem: 'propagacao' }]);
   });
 
-  it('propaga os dois campos de imagem de forma independente', () => {
-    const urlPeca = 'https://storage/peca.png';
-    const urlDisp = 'https://storage/disp.png';
-    const linha = [
-      disp('a', 'ABC-1'),
-      disp('b', 'abc-1', { imagemPeca: 'https://storage/ja-tem.png' })
-    ];
-
+  it('a imagem da peça não é propagada (é alimentada um a um)', () => {
+    const linha = [disp('a', 'MAT04670'), disp('b', 'MAT04670')];
+    expect(calcularPropagacaoImagens(linha, 'a', 'MAT04670', { imagemPeca: 'https://storage/peca.png' }, false)).toEqual([]);
     const patches = calcularPropagacaoImagens(
-      linha,
-      'a',
-      'ABC-1',
-      { imagemPeca: urlPeca, imagemDispositivo: urlDisp },
-      false
+      linha, 'a', 'MAT04670', { imagemPeca: 'https://storage/peca.png', imagemDispositivo: 'https://storage/disp.png' }, false
     );
-
-    // imagemPeca de 'b' permanece; imagemDispositivo de 'b' é preenchida.
-    expect(patches).toHaveLength(1);
-    expect(patches[0].id).toBe('b');
-    expect(patches[0].patch).toEqual({ imagemDispositivo: urlDisp });
+    expect(patches).toEqual([{ id: 'b', patch: { imagemDispositivo: 'https://storage/disp.png' }, origem: 'propagacao' }]);
   });
 
-  it('não dispara propagação sem número de peça', () => {
+  it('não dispara propagação sem Nº dispositivo', () => {
     const linha = [disp('a', undefined), disp('b', '  ')];
-    const patches = calcularPropagacaoImagens(
-      linha,
-      'a',
-      undefined,
-      { imagemPeca: 'https://storage/x.png' },
-      false
-    );
+    const patches = calcularPropagacaoImagens(linha, 'a', undefined, { imagemDispositivo: 'https://storage/x.png' }, false);
     expect(patches).toHaveLength(0);
   });
 
   it('edição que limpa a imagem NÃO re-preenche nem propaga', () => {
-    const linha = [disp('a', 'ABC-1'), disp('b', 'ABC-1')];
-    const patches = calcularPropagacaoImagens(linha, 'a', 'ABC-1', { imagemPeca: '' }, false);
+    const linha = [disp('a', 'MAT04670'), disp('b', 'MAT04670')];
+    const patches = calcularPropagacaoImagens(linha, 'a', 'MAT04670', { imagemDispositivo: '' }, false);
     expect(patches).toHaveLength(0);
   });
 
-  it('na criação, células vazias da origem herdam a imagem existente na linha', () => {
+  it('na criação, a imagem do dispositivo vazia herda a imagem existente do mesmo Nº (a da peça, não)', () => {
     const existente = 'https://storage/linha.png';
-    const linha = [disp('b', 'ABC-1', { imagemDispositivo: existente })];
+    const linha = [disp('b', 'MAT04670', { imagemDispositivo: existente, imagemPeca: 'https://storage/peca-b.png' })];
 
-    const patches = calcularPropagacaoImagens(linha, 'a-novo', 'ABC-1', { imagemPeca: '' }, true);
+    const patches = calcularPropagacaoImagens(linha, 'a-novo', 'MAT04670', { imagemDispositivo: '' }, true);
 
-    expect(patches).toHaveLength(1);
-    expect(patches[0]).toEqual({
-      id: 'a-novo',
-      patch: { imagemDispositivo: existente },
-      origem: 'heranca'
-    });
+    expect(patches).toEqual([{ id: 'a-novo', patch: { imagemDispositivo: existente }, origem: 'heranca' }]);
   });
 
   it('na edição (isNew=false) não há herança inversa', () => {
-    const linha = [disp('b', 'ABC-1', { imagemDispositivo: 'https://storage/x.png' })];
-    const patches = calcularPropagacaoImagens(linha, 'a', 'ABC-1', {}, false);
+    const linha = [disp('b', 'MAT04670', { imagemDispositivo: 'https://storage/x.png' })];
+    const patches = calcularPropagacaoImagens(linha, 'a', 'MAT04670', {}, false);
     expect(patches).toHaveLength(0);
   });
 
   it('linha usa a mesma normalização da chave Código + Dispositivo (espaços internos, invisíveis, caixa)', () => {
-    expect(normalizarNumeroPeca('ABC  123')).toBe('abc 123');
+    expect(normalizarNumeroDispositivo('MAT  04670')).toBe('mat 04670');
     const espacoZero = String.fromCharCode(0x200b);
     const bom = String.fromCharCode(0xfeff);
-    expect(normalizarNumeroPeca(`${espacoZero}ABC 123${bom}`)).toBe('abc 123');
-    const linha = [disp('a', 'ABC 123'), disp('b', 'abc  123'), disp('c', `${espacoZero}Abc 123`), disp('d', 'ABC 1234')];
-    const patches = calcularPropagacaoImagens(linha, 'a', 'ABC 123', { imagemPeca: 'u.png' }, false);
+    expect(normalizarNumeroDispositivo(`${espacoZero}MAT 04670${bom}`)).toBe('mat 04670');
+    const linha = [disp('a', 'MAT 04670'), disp('b', 'mat  04670'), disp('c', `${espacoZero}Mat 04670`), disp('d', 'MAT 046701')];
+    const patches = calcularPropagacaoImagens(linha, 'a', 'MAT 04670', { imagemDispositivo: 'u.png' }, false);
     expect(patches.map(p => p.id).sort()).toEqual(['b', 'c']);
-  });
-
-  it('prefixoChaveDaLinha é o início exato da chaveCD da linha, sem pegar outro código', () => {
-    const prefixo = prefixoChaveDaLinha(normalizarNumeroPeca('ABC 123'));
-    expect(chaveCodigoDispositivo('abc 123', 'Disp 9').startsWith(prefixo)).toBe(true);
-    expect(chaveCodigoDispositivo('ABC 1234', 'Disp 9').startsWith(prefixo)).toBe(false);
-    // Aspas no código são escapadas pelo JSON: não colidem com o fim do prefixo.
-    expect(chaveCodigoDispositivo('abc 123"', 'x').startsWith(prefixo)).toBe(false);
   });
 
   it('troca da imagem da origem atualiza quem seguia a imagem antiga e preserva imagens próprias', () => {
     const antiga = 'https://storage/antiga.png';
     const nova = 'https://storage/nova.png';
     const linha = [
-      disp('a', 'ABC-1', { imagemPeca: nova }),
-      disp('b', 'ABC-1', { imagemPeca: antiga }),                  // seguia a da origem
-      disp('c', 'ABC-1', { imagemPeca: 'https://storage/propria.png' }), // escolhida para ele
-      disp('d', 'ABC-1'),                                          // vazio
+      disp('a', 'MAT04670', { imagemDispositivo: nova }),
+      disp('b', 'MAT04670', { imagemDispositivo: antiga }),                       // seguia a da origem
+      disp('c', 'MAT04670', { imagemDispositivo: 'https://storage/propria.png' }), // escolhida para ele
+      disp('d', 'MAT04670'),                                                       // vazio
     ];
-    const patches = calcularPropagacaoImagens(linha, 'a', 'ABC-1', { imagemPeca: nova }, false, { imagemPeca: antiga });
+    const patches = calcularPropagacaoImagens(linha, 'a', 'MAT04670', { imagemDispositivo: nova }, false, { imagemDispositivo: antiga });
     expect(patches).toEqual([
-      { id: 'b', patch: { imagemPeca: nova }, origem: 'propagacao', substitui: { imagemPeca: antiga } },
-      { id: 'd', patch: { imagemPeca: nova }, origem: 'propagacao' },
+      { id: 'b', patch: { imagemDispositivo: nova }, origem: 'propagacao', substitui: { imagemDispositivo: antiga } },
+      { id: 'd', patch: { imagemDispositivo: nova }, origem: 'propagacao' },
     ]);
-  });
-
-  it('junta os dois campos num único patch por dispositivo', () => {
-    const linha = [disp('a', 'ABC-1'), disp('b', 'ABC-1')];
-    const patches = calcularPropagacaoImagens(linha, 'a', 'ABC-1', { imagemPeca: 'p.png', imagemDispositivo: 'd.png' }, false);
-    expect(patches).toEqual([{ id: 'b', patch: { imagemPeca: 'p.png', imagemDispositivo: 'd.png' }, origem: 'propagacao' }]);
   });
 
   it('herança escolhe a imagem mais usada na linha (empate: menor id), independente da ordem', () => {
     const linha = [
-      disp('z', 'ABC-1', { imagemPeca: 'rara.png' }),
-      disp('m', 'ABC-1', { imagemPeca: 'comum.png' }),
-      disp('n', 'ABC-1', { imagemPeca: 'comum.png' }),
+      disp('z', 'MAT04670', { imagemDispositivo: 'rara.png' }),
+      disp('m', 'MAT04670', { imagemDispositivo: 'comum.png' }),
+      disp('n', 'MAT04670', { imagemDispositivo: 'comum.png' }),
     ];
-    expect(imagemDaLinha(linha, 'imagemPeca')).toBe('comum.png');
-    expect(imagemDaLinha([...linha].reverse(), 'imagemPeca')).toBe('comum.png');
-    expect(imagemDaLinha([disp('b', 'X', { imagemPeca: 'b.png' }), disp('a', 'X', { imagemPeca: 'a.png' })], 'imagemPeca')).toBe('a.png');
-    const patches = calcularPropagacaoImagens(linha, 'novo', 'ABC-1', {}, true);
-    expect(patches).toEqual([{ id: 'novo', patch: { imagemPeca: 'comum.png' }, origem: 'heranca' }]);
+    expect(imagemDaLinha(linha, 'imagemDispositivo')).toBe('comum.png');
+    expect(imagemDaLinha([...linha].reverse(), 'imagemDispositivo')).toBe('comum.png');
+    expect(imagemDaLinha([disp('b', 'X', { imagemDispositivo: 'b.png' }), disp('a', 'X', { imagemDispositivo: 'a.png' })], 'imagemDispositivo')).toBe('a.png');
+    const patches = calcularPropagacaoImagens(linha, 'novo', 'MAT04670', {}, true);
+    expect(patches).toEqual([{ id: 'novo', patch: { imagemDispositivo: 'comum.png' }, origem: 'heranca' }]);
   });
 });
 
 describe('patchAindaAplicavel (conferência na transação)', () => {
-  const chave = normalizarNumeroPeca('ABC-1');
-  const p = { id: 'b', patch: { imagemPeca: 'nova.png', imagemDispositivo: 'd.png' }, origem: 'propagacao' as const, substitui: { imagemPeca: 'antiga.png' } };
+  const chave = normalizarNumeroDispositivo('MAT04670');
+  const p = { id: 'b', patch: { imagemDispositivo: 'nova.png' }, origem: 'propagacao' as const, substitui: { imagemDispositivo: 'antiga.png' } };
 
-  it('aplica só os campos que continuam vazios ou com a imagem substituída', () => {
-    expect(patchAindaAplicavel(disp('b', 'ABC-1'), p, chave)).toEqual({ imagemPeca: 'nova.png', imagemDispositivo: 'd.png' });
-    expect(patchAindaAplicavel(disp('b', 'ABC-1', { imagemPeca: 'antiga.png' }), p, chave)).toEqual({ imagemPeca: 'nova.png', imagemDispositivo: 'd.png' });
+  it('aplica só se a imagem do dispositivo continua vazia ou com a imagem substituída', () => {
+    expect(patchAindaAplicavel(disp('b', 'MAT04670'), p, chave)).toEqual({ imagemDispositivo: 'nova.png' });
+    expect(patchAindaAplicavel(disp('b', 'MAT04670', { imagemDispositivo: 'antiga.png' }), p, chave)).toEqual({ imagemDispositivo: 'nova.png' });
     // Alguém gravou outra imagem entre a leitura e a gravação: não sobrescreve.
-    expect(patchAindaAplicavel(disp('b', 'ABC-1', { imagemPeca: 'outra.png', imagemDispositivo: 'outra-d.png' }), p, chave)).toBeNull();
-    expect(patchAindaAplicavel(disp('b', 'ABC-1', { imagemPeca: 'outra.png' }), p, chave)).toEqual({ imagemDispositivo: 'd.png' });
+    expect(patchAindaAplicavel(disp('b', 'MAT04670', { imagemDispositivo: 'outra.png' }), p, chave)).toBeNull();
   });
 
-  it('não grava se o documento sumiu, mudou de linha ou já tem a imagem', () => {
+  it('nunca grava a imagem da peça, mesmo se vier no patch', () => {
+    const comPeca = { id: 'b', patch: { imagemPeca: 'peca.png', imagemDispositivo: 'd.png' }, origem: 'propagacao' as const };
+    expect(patchAindaAplicavel(disp('b', 'MAT04670'), comPeca, chave)).toEqual({ imagemDispositivo: 'd.png' });
+  });
+
+  it('não grava se o documento sumiu, mudou de Nº ou já tem a imagem', () => {
     expect(patchAindaAplicavel(null, p, chave)).toBeNull();
-    expect(patchAindaAplicavel(disp('b', 'OUTRA'), p, chave)).toBeNull();
-    expect(patchAindaAplicavel(disp('b', 'ABC-1', { imagemPeca: 'nova.png', imagemDispositivo: 'd.png' }), p, chave)).toBeNull();
+    expect(patchAindaAplicavel(disp('b', 'OUTRO'), p, chave)).toBeNull();
+    expect(patchAindaAplicavel(disp('b', 'MAT04670', { imagemDispositivo: 'nova.png' }), p, chave)).toBeNull();
   });
 });
 
 describe('herdarImagensDaLinha (importação)', () => {
-  it('novos sem imagem herdam a imagem da linha; imagem própria e outras linhas ficam como estão', () => {
+  it('novos herdam só a imagem do dispositivo do mesmo Nº; imagem própria e outros Nº ficam como estão', () => {
     const fontes = [
-      disp('e1', 'ABC-1', { imagemPeca: 'linha.png', imagemDispositivo: 'linha-d.png' }),
-      disp('e2', 'abc-1 ', { imagemPeca: 'linha.png' }),
+      disp('e1', 'MAT04670', { imagemPeca: 'peca.png', imagemDispositivo: 'linha-d.png' }),
+      disp('e2', 'mat04670 ', { imagemPeca: 'peca.png' }),
       disp('e3', 'XYZ'),
     ];
     const novos: Partial<Dispositivo>[] = [
-      { codigo: 'ABC-1', nome: 'N1', imagemPeca: '', imagemDispositivo: '' },
-      { codigo: 'ABC-1', nome: 'N2', imagemPeca: 'propria.png', imagemDispositivo: '' },
-      { codigo: 'XYZ', nome: 'N3', imagemPeca: '' },
-      { codigo: 'SEM-LINHA', nome: 'N4', imagemPeca: '' },
+      { codigo: 'C1', nome: 'MAT04670', imagemPeca: '', imagemDispositivo: '' },
+      { codigo: 'C2', nome: 'Mat04670', imagemDispositivo: 'propria-d.png' },
+      { codigo: 'C3', nome: 'XYZ', imagemDispositivo: '' },
+      { codigo: 'C4', nome: 'SEM-LINHA', imagemDispositivo: '' },
     ];
-    expect(herdarImagensDaLinha(novos, fontes)).toBe(2);
-    expect(novos[0]).toMatchObject({ imagemPeca: 'linha.png', imagemDispositivo: 'linha-d.png' });
-    expect(novos[1]).toMatchObject({ imagemPeca: 'propria.png', imagemDispositivo: 'linha-d.png' });
-    expect(novos[2].imagemPeca).toBe('');
-    expect(novos[3].imagemPeca).toBe('');
+    expect(herdarImagensDaLinha(novos, fontes)).toBe(1);
+    expect(novos[0]).toMatchObject({ imagemPeca: '', imagemDispositivo: 'linha-d.png' });
+    expect(novos[1].imagemDispositivo).toBe('propria-d.png');
+    expect(novos[2].imagemDispositivo).toBe('');
+    expect(novos[3].imagemDispositivo).toBe('');
   });
 });
 

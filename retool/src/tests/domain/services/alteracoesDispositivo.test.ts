@@ -64,9 +64,10 @@ describe('camposAlterados', () => {
 });
 
 describe('alteraImagem', () => {
-  it('só quando a alteração inclui um campo de imagem', () => {
+  it('só quando a alteração inclui a imagem do dispositivo (a da peça não é propagada)', () => {
     expect(alteraImagem({ nome: 'x' })).toBe(false);
-    expect(alteraImagem({ imagemPeca: 'https://img' })).toBe(true);
+    expect(alteraImagem({ imagemPeca: 'https://img' })).toBe(false);
     expect(alteraImagem({ imagemDispositivo: '' })).toBe(true);
+    expect(alteraImagem({ imagemPeca: 'https://img', imagemDispositivo: 'https://d' })).toBe(true);
   });
 });

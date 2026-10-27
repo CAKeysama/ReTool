@@ -29,21 +29,19 @@ export type CampoImagemDispositivo = 'imagemPeca' | 'imagemDispositivo';
 export const CAMPOS_IMAGEM_DISPOSITIVO: CampoImagemDispositivo[] = ['imagemPeca', 'imagemDispositivo'];
 
 /**
- * Normaliza o Número da Peça usado como chave da linha de imagens. É o mesmo
- * critério do Código na chave Código + Dispositivo (`normalizarValorChave`):
- * a linha da propagação é a mesma que a importação e os Duplicados enxergam.
+ * Só a imagem do dispositivo é compartilhada pela linha (mesmo Nº
+ * dispositivo). A imagem da peça é alimentada manualmente, um a um.
  */
-export function normalizarNumeroPeca(codigo?: string): string {
-  return normalizarValorChave(codigo);
-}
+export const CAMPOS_IMAGEM_PROPAGADOS: CampoImagemDispositivo[] = ['imagemDispositivo'];
 
 /**
- * Início comum da `chaveCD` de todos os documentos com este Número da Peça
- * (já normalizado): `["<codigo>",`. Uma consulta por intervalo nesse prefixo
- * acha a linha inteira no servidor, qualquer que seja a grafia gravada.
+ * Normaliza o Nº dispositivo (campo `nome`) usado como chave da linha de
+ * imagens. É o mesmo critério do Dispositivo na chave Código + Dispositivo
+ * (`normalizarValorChave`): "MAT04670", " mat04670 " e "MAT04670" com
+ * caractere invisível de planilha são a mesma linha.
  */
-export function prefixoChaveDaLinha(numeroPecaNormalizado: string): string {
-  return JSON.stringify([numeroPecaNormalizado]).slice(0, -1) + ',';
+export function normalizarNumeroDispositivo(nome?: string): string {
+  return normalizarValorChave(nome);
 }
 
 // Caracteres invisíveis comuns em planilhas: zero-width (U+200B–U+200D),
@@ -56,7 +54,7 @@ export const INVISIVEIS = /[​-‍﻿­⁠\u0000-\u0008\u000B\u000C\u000E-\u001
  *
  * Equivalentes (mesma chave): espaços nas pontas, espaços repetidos/NBSP/tab,
  * caracteres invisíveis, forma Unicode (NFC) e maiúsculas/minúsculas — mesmo
- * critério do "Remover Duplicatas" do Excel (e da linha de imagens, `normalizarNumeroPeca()`).
+ * critério do "Remover Duplicatas" do Excel (e da linha de imagens, `normalizarNumeroDispositivo()`).
  *
  * Distintos (chaves diferentes): zeros à esquerda ("0041" ≠ "41"), casas
  * decimais ("1.10" ≠ "1.1"), acentuação ("PEÇA" ≠ "PECA") e qualquer outro
@@ -123,7 +121,8 @@ export function imagemDaLinha(dispositivos: Partial<Dispositivo>[], campo: Campo
 }
 
 /**
- * Propagação automática de imagens por Número da Peça (Part Number).
+ * Propagação automática da imagem do dispositivo por Nº dispositivo (`nome`).
+ * A imagem da peça não é propagada (`CAMPOS_IMAGEM_PROPAGADOS`).
  *
  * - Gatilho: imagem nova gravada na origem (`payload` com o campo preenchido).
  *   A edição passa só os campos que mudaram (`camposAlterados`), então salvar
@@ -142,16 +141,16 @@ export function imagemDaLinha(dispositivos: Partial<Dispositivo>[], campo: Campo
 export function calcularPropagacaoImagens(
   linha: Dispositivo[],
   origemId: string,
-  codigoOrigem: string | undefined,
+  numeroOrigem: string | undefined,
   payload: Partial<Dispositivo>,
   isNew: boolean,
   anteriores: Partial<Dispositivo> = {}
 ): PatchPropagacaoImagem[] {
-  // Sem Número da Peça não existe linha a propagar; isola apenas os
+  // Sem Nº dispositivo não existe linha a propagar; isola apenas os
   // dispositivos cuja chave é idêntica à da origem (nunca cruza linhas).
-  const chave = normalizarNumeroPeca(codigoOrigem);
+  const chave = normalizarNumeroDispositivo(numeroOrigem);
   if (!chave) return [];
-  const outros = linha.filter(d => d.id !== origemId && normalizarNumeroPeca(d.codigo) === chave);
+  const outros = linha.filter(d => d.id !== origemId && normalizarNumeroDispositivo(d.nome) === chave);
 
   const porAlvo = new Map<string, PatchPropagacaoImagem>();
   const incluir = (
@@ -167,7 +166,7 @@ export function calcularPropagacaoImagens(
     porAlvo.set(id, p);
   };
 
-  for (const campo of CAMPOS_IMAGEM_DISPOSITIVO) {
+  for (const campo of CAMPOS_IMAGEM_PROPAGADOS) {
     const novaImagem = payload[campo];
 
     if (novaImagem) {
@@ -196,11 +195,11 @@ export function calcularPropagacaoImagens(
 export function patchAindaAplicavel(
   atual: Partial<Dispositivo> | null,
   p: PatchPropagacaoImagem,
-  numeroPecaNormalizado: string
+  numeroNormalizado: string
 ): Partial<Dispositivo> | null {
-  if (!atual || normalizarNumeroPeca(atual.codigo) !== numeroPecaNormalizado) return null;
+  if (!atual || normalizarNumeroDispositivo(atual.nome) !== numeroNormalizado) return null;
   const aplicavel: Partial<Dispositivo> = {};
-  for (const campo of CAMPOS_IMAGEM_DISPOSITIVO) {
+  for (const campo of CAMPOS_IMAGEM_PROPAGADOS) {
     const nova = p.patch[campo];
     if (!nova) continue;
     const valor = atual[campo];
@@ -219,18 +218,18 @@ export function patchAindaAplicavel(
 export function herdarImagensDaLinha(novos: Partial<Dispositivo>[], fontes: Iterable<Partial<Dispositivo>>): number {
   const porLinha = new Map<string, Partial<Dispositivo>[]>();
   for (const f of fontes) {
-    if (!f.imagemPeca && !f.imagemDispositivo) continue;
-    const chave = normalizarNumeroPeca(f.codigo);
+    if (!CAMPOS_IMAGEM_PROPAGADOS.some(c => f[c])) continue;
+    const chave = normalizarNumeroDispositivo(f.nome);
     if (!chave) continue;
     const lista = porLinha.get(chave);
     if (lista) lista.push(f); else porLinha.set(chave, [f]);
   }
   let herdaram = 0;
   for (const novo of novos) {
-    const linha = porLinha.get(normalizarNumeroPeca(novo.codigo));
+    const linha = porLinha.get(normalizarNumeroDispositivo(novo.nome));
     if (!linha) continue;
     let mudou = false;
-    for (const campo of CAMPOS_IMAGEM_DISPOSITIVO) {
+    for (const campo of CAMPOS_IMAGEM_PROPAGADOS) {
       if (novo[campo]) continue;
       const url = imagemDaLinha(linha, campo);
       if (url) {

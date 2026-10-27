@@ -5,7 +5,7 @@ import { db } from '../data/datasources/firebase';
 import { Categoria, Tipo } from '../domain/entities/categoria';
 import { Familia } from '../domain/entities/familia';
 import { Produto } from '../domain/entities/produto';
-import { Dispositivo, calcularPropagacaoImagens, normalizarNumeroPeca, planejarLimpezaDuplicados } from '../domain/entities/dispositivo';
+import { CAMPOS_IMAGEM_PROPAGADOS, Dispositivo, calcularPropagacaoImagens, normalizarNumeroDispositivo, planejarLimpezaDuplicados } from '../domain/entities/dispositivo';
 import { Reutilizacao, ReutilizacaoStatus, transicaoReutilizacaoPermitida } from '../domain/entities/reutilizacao';
 import { AuditLog } from '../domain/entities/auditLog';
 
@@ -18,7 +18,7 @@ import { FirestoreAuditLogRepository } from '../data/repositories/FirestoreAudit
 import {
   obterDispositivo, obterDispositivosPorIds, varrerDispositivos, varrerColecao, ProgressoVarredura, contarDispositivos
 } from '../data/repositories/FirestoreDispositivosConsultas';
-import { aplicarPatchesDeImagem, obterLinhaPorCodigo } from '../data/repositories/FirestoreImagensLinha';
+import { aplicarPatchesDeImagem, obterLinhaPorNumero } from '../data/repositories/FirestoreImagensLinha';
 import { ITENS_POR_PARTE } from '../domain/services/buscaDispositivos';
 import { alteraImagem, camposAlterados } from '../domain/services/alteracoesDispositivo';
 import { contarComChave, prepararChavesImportacao, ResultadoPreparoChaves } from '../data/repositories/importacaoDispositivosFirestore';
@@ -87,6 +87,7 @@ interface ReToolContextType {
   solicitarReutilizacao: (data: Omit<Reutilizacao, 'id' | 'dataCriacao' | 'status'>, solicitanteNome: string, solicitanteId?: string) => Promise<void>;
   transicionarReutilizacao: (id: string, para: ReutilizacaoStatus, opts?: { motivo?: string; numeroOs?: string }) => Promise<void>;
   updateReutilizacao: (id: string, data: Partial<Reutilizacao>) => Promise<void>;
+  definirHardSaving: (id: string, valor: number) => Promise<void>;
   deleteReutilizacao: (id: string, silent?: boolean) => Promise<void>;
   importarDispositivosEmLote: (novosDispositivos: Partial<Dispositivo>[], newCategoriasNomes: string[], newFamiliasNomes: string[], newProdutosNomes: string[], opcoes?: OpcoesImportacaoLote) => Promise<ResultadoImportacaoLote>;
   deleteAllData: (onProgresso?: (p: { etapa: string; feitos: number; total: number | null }) => void) => Promise<void>;
@@ -391,42 +392,42 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  // Propagação automática de imagens por Número da Peça (regra em
-  // domain/entities/dispositivo.ts): a imagem nova chega aos dispositivos da
-  // mesma linha que estão vazios ou que seguiam a imagem anterior da origem;
-  // imagens próprias e outras linhas nunca são tocadas. A linha é lida no
-  // servidor e a gravação confere cada dispositivo de novo, em transação.
+  // Propagação automática da imagem do dispositivo por Nº dispositivo (regra
+  // em domain/entities/dispositivo.ts): a imagem nova chega aos dispositivos
+  // com o mesmo Nº que estão vazios ou que seguiam a imagem anterior da
+  // origem; imagens próprias e outros números nunca são tocados. A imagem da
+  // peça não é propagada. A linha é lida no servidor e a gravação confere
+  // cada dispositivo de novo, em transação.
   // Devolve os ids que receberam imagem (a própria origem, quando herdou).
-  const propagarImagensPorCodigo = async (
+  const propagarImagensPorNumero = async (
     origemId: string,
-    codigo: string | undefined,
+    numero: string | undefined,
     payload: Partial<Dispositivo>,
     isNew: boolean,
     anteriores: Partial<Dispositivo> = {}
   ): Promise<string[]> => {
-    const chave = normalizarNumeroPeca(codigo);
+    const chave = normalizarNumeroDispositivo(numero);
     if (!chave) return [];
-    const temImagem = !!(payload.imagemPeca || payload.imagemDispositivo);
+    const temImagem = CAMPOS_IMAGEM_PROPAGADOS.some(c => payload[c]);
     if (!temImagem && !isNew) return []; // nada a propagar (evita a consulta)
-    const linha = await obterLinhaPorCodigo(codigo);
-    // Documentos antigos, ainda sem chaveCD e com grafia mista ("Abc"), só
-    // aparecem pelo catálogo de busca quando ele já está carregado nesta
-    // sessão; os que faltarem são lidos por id.
+    const linha = await obterLinhaPorNumero(numero);
+    // Grafias mistas do Nº ("Mat04670") só aparecem pelo catálogo de busca
+    // quando ele já está carregado nesta sessão; os que faltarem são lidos por id.
     const snapIndice = indiceBusca.obter();
     if (indiceBusca.acompanhando() && snapIndice.estado === 'pronto') {
       const conhecidos = new Set(linha.map(d => d.id));
       const faltantes = snapIndice.entradas
-        .filter(e => !conhecidos.has(e.id) && normalizarNumeroPeca(e.codigo) === chave)
+        .filter(e => !conhecidos.has(e.id) && normalizarNumeroDispositivo(e.nome) === chave)
         .map(e => e.id);
       if (faltantes.length) {
         const extras = await obterDispositivosPorIds(faltantes);
-        linha.push(...extras.filter(d => normalizarNumeroPeca(d.codigo) === chave));
+        linha.push(...extras.filter(d => normalizarNumeroDispositivo(d.nome) === chave));
       }
     }
-    const patches = calcularPropagacaoImagens(linha, origemId, codigo, payload, isNew, anteriores);
+    const patches = calcularPropagacaoImagens(linha, origemId, numero, payload, isNew, anteriores);
     if (patches.length === 0) return [];
 
-    const { aplicados } = await aplicarPatchesDeImagem(patches, codigo, (tx, p, aplicado, atual) => {
+    const { aplicados } = await aplicarPatchesDeImagem(patches, numero, (tx, p, aplicado, atual) => {
       const campos = Object.keys(aplicado) as (keyof Dispositivo)[];
       auditRepo.adicionarAoBatch(tx, dadosAuditoria(
         'edicao',
@@ -434,9 +435,9 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
         p.id,
         atual.nome || atual.codigo || p.id,
         p.origem === 'heranca'
-          ? 'Imagem herdada automaticamente da linha (mesmo número de peça)'
-          : 'Imagem propagada automaticamente (mesmo número de peça)',
-        { origemId, numeroPeca: codigo, campos, valoresAlterados: aplicado },
+          ? 'Imagem do dispositivo herdada automaticamente (mesmo Nº dispositivo)'
+          : 'Imagem do dispositivo propagada automaticamente (mesmo Nº dispositivo)',
+        { origemId, numeroDispositivo: numero, campos, valoresAlterados: aplicado },
         Object.fromEntries(campos.map(c => [c, atual[c] || '']))
       ));
     });
@@ -445,16 +446,16 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
 
   // O dispositivo já foi salvo: uma falha na propagação não pode parecer
   // falha ao salvar (o formulário mostraria erro e a pessoa salvaria de novo).
-  const propagarEAvisar = async (...args: Parameters<typeof propagarImagensPorCodigo>) => {
-    const [origemId, codigo] = args;
+  const propagarEAvisar = async (...args: Parameters<typeof propagarImagensPorNumero>) => {
+    const [origemId, numero] = args;
     try {
-      const receberam = await propagarImagensPorCodigo(...args);
+      const receberam = await propagarImagensPorNumero(...args);
       const outros = receberam.filter(id => id !== origemId).length;
-      if (receberam.includes(origemId)) announce(`O dispositivo recebeu a imagem já usada na linha ${codigo}.`);
-      if (outros > 0) announce(`Imagem copiada para ${outros} outro(s) dispositivo(s) da linha ${codigo}.`);
+      if (receberam.includes(origemId)) announce(`O dispositivo recebeu a imagem já usada pelo Nº dispositivo ${numero}.`);
+      if (outros > 0) announce(`Imagem do dispositivo copiada para ${outros} outro(s) dispositivo(s) com o Nº ${numero}.`);
     } catch (e) {
       console.error('Falha ao propagar imagens:', e);
-      announce(`Dispositivo salvo, mas a imagem não foi copiada para os outros dispositivos da linha ${codigo}. Envie a imagem de novo para tentar outra vez.`);
+      announce(`Dispositivo salvo, mas a imagem não foi copiada para os outros dispositivos com o Nº ${numero}. Envie a imagem de novo para tentar outra vez.`);
     }
   };
 
@@ -465,7 +466,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     }
     const novoId = await dispositivosRepo.add(data, await metaParaEscrita());
     await registrarAuditoria('criacao', 'dispositivo', novoId, data.nome, 'Cadastrou dispositivo', { ...data });
-    await propagarEAvisar(novoId, data.codigo, data, true);
+    await propagarEAvisar(novoId, data.nome, data, true);
     tocarDispositivos();
     announce('Dispositivo adicionado com sucesso');
   };
@@ -481,7 +482,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     await dispositivosRepo.update(id, data, atual, await metaParaEscrita());
     await registrarAuditoria('edicao', 'dispositivo', id, atual?.nome || id, 'Editou dispositivo', { valoresAlterados: alterados }, atual || undefined);
     // `atual` traz a imagem anterior: quem a seguia na linha acompanha a troca.
-    if (alteraImagem(alterados)) await propagarEAvisar(id, data.codigo ?? atual?.codigo, alterados, false, atual || {});
+    if (alteraImagem(alterados)) await propagarEAvisar(id, data.nome ?? atual?.nome, alterados, false, atual || {});
     tocarDispositivos();
     if (!silent) announce('Dispositivo atualizado com sucesso');
   };
@@ -907,6 +908,23 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     announce('Reutilização atualizada com sucesso');
   };
 
+  // A Engenharia não informa o Hard Saving na solicitação: Projetista e
+  // Administração o definem depois (as regras só deixam o Projetista mudar
+  // este campo fora das transições do fluxo).
+  const definirHardSaving = async (id: string, valor: number) => {
+    if (currentRole !== 'admin' && currentRole !== 'projetista') {
+      announce('Acesso negado: apenas Projetista e Administração definem o Hard Saving.');
+      return;
+    }
+    if (!Number.isFinite(valor) || valor < 0) throw new Error('Informe um Hard Saving válido (zero ou maior).');
+    const atual = await reutilizacoesRepo.obter(id);
+    if (!atual) throw new Error('Reutilização não encontrada.');
+    await reutilizacoesRepo.update(id, { hardSaving: valor });
+    const nomeDisp = (await nomeDoDispositivo(atual.dispositivoId)) || atual.descricaoAlteracao || id;
+    await registrarAuditoria('edicao', 'reutilizacao', id, nomeDisp, 'Definiu Hard Saving', { hardSavingAnterior: atual.hardSaving ?? 0, hardSaving: valor }, { hardSaving: atual.hardSaving ?? 0 });
+    announce(`Hard Saving atualizado: R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  };
+
   const deleteReutilizacao = async (id: string, silent = false) => {
     if (currentRole !== 'admin') {
       announce('Apenas Administradoras têm permissão para excluir reutilizações.');
@@ -1171,7 +1189,7 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
     addTipo, updateTipo, deleteTipo,
     addFamilia, updateFamilia, deleteFamilia,
     addProduto, updateProduto, deleteProduto,
-    addReutilizacao, updateReutilizacao, deleteReutilizacao,
+    addReutilizacao, updateReutilizacao, definirHardSaving, deleteReutilizacao,
     solicitarReutilizacao, transicionarReutilizacao,
     importarDispositivosEmLote, deleteAllData, limparDispositivosDuplicados, reconstruirIndiceBusca,
     estadoImportacaoRapida, prepararImportacaoRapida,

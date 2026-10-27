@@ -1,4 +1,4 @@
-import { CAMPOS_IMAGEM_DISPOSITIVO, Dispositivo } from '../entities/dispositivo';
+import { CAMPOS_IMAGEM_PROPAGADOS, Dispositivo } from '../entities/dispositivo';
 
 /** Campos que a edição nunca grava (identidade, criação e chave derivada). */
 const CAMPOS_IGNORADOS = new Set<string>(['id', 'dataCriacao', 'chaveCD']);
@@ -41,7 +41,7 @@ export function camposAlterados(original: Partial<Dispositivo> | null | undefine
   return resultado as Partial<Dispositivo>;
 }
 
-/** A alteração mexe em alguma imagem (a única coisa que a propagação por número de peça copia)? */
+/** A alteração mexe na imagem do dispositivo (a única coisa que a propagação por Nº dispositivo copia)? */
 export function alteraImagem(alteracoes: Partial<Dispositivo>): boolean {
-  return CAMPOS_IMAGEM_DISPOSITIVO.some(c => c in alteracoes);
+  return CAMPOS_IMAGEM_PROPAGADOS.some(c => c in alteracoes);
 }

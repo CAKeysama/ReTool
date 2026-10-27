@@ -131,12 +131,12 @@ o app volta a ler as coleções e quem pode editar o recria.
   linhas visíveis.
 - Notificações: as 50 mais recentes da pessoa (índice composto
   `destinatarioUid` + `dataHora`).
-- Propagação de imagens por Número da Peça: só quando uma imagem muda (a
-  edição grava só os campos alterados). A linha é lida no servidor por
-  intervalo no prefixo da `chaveCD` (qualquer grafia do código) e pelas
-  grafias exatas do código (documentos antigos sem `chaveCD`), paginada, sem
+- Propagação da imagem do dispositivo por Nº dispositivo: só quando essa
+  imagem muda (a edição grava só os campos alterados; a imagem da peça não é
+  propagada). A linha é lida no servidor pelas grafias exatas do Nº
+  (original, sem espaços nas pontas, MAIÚSCULA, minúscula), paginada, sem
   limite silencioso; o catálogo, se já estiver carregado, ainda aponta
-  documentos antigos com grafia mista. A gravação é em transações de até 100
+  documentos com grafia mista. A gravação é em transações de até 100
   dispositivos (1 leitura + 2 escritas cada: documento e auditoria), sem
   tocar o catálogo (ele não guarda imagens).
 - Importação: dispositivos novos herdam a imagem da linha no próprio lote
@@ -284,7 +284,7 @@ Nada de autorização foi movido para o cliente. As regras novas
 | Reconstruir o catálogo ("Atualizar índice") | lê todos os dispositivos: 1 leitura por dispositivo | no plano gratuito (~50 mil leituras/dia) só cabe até cerca de 40 mil dispositivos, num dia sem importação. Acima disso, Cloud Functions no plano Blaze |
 | Tamanho das partes | 1 MiB por documento; partes só são redivididas na reconstrução | a tela sugere "Atualizar índice" a partir de ~600 KB numa parte ou 1.500 itens por parte; toda importação refaz o catálogo |
 | Download do catálogo na primeira busca | cresce com o total (≈ 1 leitura a cada 750 dispositivos; 18 partes hoje) | aceitável até dezenas de milhares; acima disso, busca no servidor (próximos passos) |
-| Custo de uma edição | 1 escrita do dispositivo + 1 da parte + 1 da meta + 1 da auditoria; até 2 leituras (meta e, com imagem, a linha do mesmo Número da Peça) | antes eram 2 escritas, mas abrir o app lia a coleção inteira |
+| Custo de uma edição | 1 escrita do dispositivo + 1 da parte + 1 da meta + 1 da auditoria; até 2 leituras (meta e, com imagem, a linha do mesmo Nº dispositivo) | antes eram 2 escritas, mas abrir o app lia a coleção inteira |
 | Reutilizações | modo legado lê a coleção inteira até a normalização | uma Administradora clica em "Normalizar" uma vez (1 leitura e no máximo 1 escrita por registro) |
 | Gravação de importações grandes | o SDK do Firestore processa cada lote de ~480 documentos de uma vez: com CPU 4x mais lenta, tarefas de até ~1,3 s durante a gravação (processar a planilha não trava) | lotes menores reduziriam as pausas, mas cada lote também grava as partes do catálogo (+~19 escritas por lote), o que pesa na cota; mantido |
 | Cota diária | ~17 mil operações | importação grande pode precisar de dois dias; criar o índice custa ~13.400 leituras e reimportar um arquivo grande também, então não faça os dois no mesmo dia. Arquivos pequenos custam leituras na ordem do número de linhas depois de "Preparar importação rápida" (uma vez: ~1 leitura e 1 gravação por dispositivo; com 13.400 dispositivos, ~26.800 operações, então rode em dois dias ou num dia sem outra carga: ele continua de onde parou) |

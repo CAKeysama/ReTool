@@ -240,26 +240,27 @@ describe('FirestoreDispositivosRepository', () => {
     });
   });
 
-  describe('importarLote — herança de imagens da linha', () => {
+  describe('importarLote — herança da imagem do dispositivo (mesmo Nº dispositivo)', () => {
     const comImagem = () => ({
-      id: 'origem', codigo: 'PN-9', nome: 'D01', imagemPeca: 'peca.png', imagemDispositivo: 'disp.png',
-      chaveCD: chaveCodigoDispositivo('PN-9', 'D01'),
+      id: 'origem', codigo: 'PN-9', nome: 'MAT01', imagemPeca: 'peca.png', imagemDispositivo: 'disp.png',
+      chaveCD: chaveCodigoDispositivo('PN-9', 'MAT01'),
     });
-    const semImagem = () => ({ id: 'irmao', codigo: 'pn-9', nome: 'D02', chaveCD: chaveCodigoDispositivo('pn-9', 'D02') });
+    const semImagem = () => ({ id: 'irmao', codigo: 'PN-2', nome: 'mat01', chaveCD: chaveCodigoDispositivo('PN-2', 'mat01') });
     const arquivo = () => [
-      { codigo: ' PN-9 ', nome: 'D03', imagemPeca: '', imagemDispositivo: '' }, // novo na linha
-      { codigo: 'OUTRA', nome: 'D04', imagemPeca: '', imagemDispositivo: '' },  // novo em outra linha
-      { codigo: 'PN-9', nome: 'D02', descricao: 'nova', imagemPeca: '', imagemDispositivo: '' }, // existente
+      { codigo: 'PN-NOVO', nome: ' MAT01 ', imagemPeca: '', imagemDispositivo: '' }, // novo com o mesmo Nº
+      { codigo: 'PN-9', nome: 'OUTRO', imagemPeca: '', imagemDispositivo: '' },      // mesma peça, outro Nº
+      { codigo: 'PN-2', nome: 'mat01', descricao: 'nova', imagemPeca: '', imagemDispositivo: '' }, // existente
     ];
-    const novo = (nome: string) => mockDbState.dispositivos.find((d: any) => d.nome === nome);
+    const doc = (codigo: string) => mockDbState.dispositivos.find((d: any) => d.codigo === codigo && d.id !== 'origem');
 
     const conferir = (r: any) => {
       expect(r).toMatchObject({ inseridos: 2, atualizados: 1, imagensHerdadas: 1, erros: 0 });
-      expect(novo('D03')).toMatchObject({ imagemPeca: 'peca.png', imagemDispositivo: 'disp.png' });
-      expect(novo('D04')).toMatchObject({ imagemPeca: '', imagemDispositivo: '' });
+      // Só a imagem do dispositivo é herdada; a da peça é alimentada um a um.
+      expect(doc('PN-NOVO')).toMatchObject({ imagemPeca: '', imagemDispositivo: 'disp.png' });
+      expect(doc('PN-9')).toMatchObject({ imagemPeca: '', imagemDispositivo: '' });
       // Existente sem imagem não é preenchido pela importação (a propagação é do upload).
-      expect(novo('D02').imagemPeca).toBeUndefined();
-      expect(novo('D02').descricao).toBe('nova');
+      expect(doc('PN-2').imagemDispositivo).toBeUndefined();
+      expect(doc('PN-2').descricao).toBe('nova');
     };
 
     test('leitura completa: as imagens da linha já vêm do banco lido', async () => {

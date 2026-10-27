@@ -5,7 +5,7 @@ import {
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 import { Dispositivo, chaveCodigoDispositivo, herdarImagensDaLinha } from '../../domain/entities/dispositivo';
-import { obterLinhasPorCodigos } from './FirestoreImagensLinha';
+import { obterLinhasPorNumeros } from './FirestoreImagensLinha';
 import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
 import { Produto } from '../../domain/entities/produto';
@@ -31,20 +31,20 @@ const mensagemDe = (erro: unknown) => (erro instanceof Error ? erro.message : St
  * Herança de imagens dos dispositivos novos da importação (altera `dados`
  * das operações). Com a leitura completa, as imagens das linhas já estão em
  * `existentes` (0 leituras a mais); com a parcial, lê só as linhas dos
- * códigos dos novos. Devolve os ids que receberam imagem.
+ * Nº dispositivo dos novos. Só a imagem do dispositivo é herdada.
+ * Devolve os ids que receberam imagem.
  */
 async function herdarImagensNosNovos(
   operacoes: { id: string; novo: boolean; dados: Partial<Dispositivo> }[],
   existentes: Map<string, Dispositivo>,
   leituraParcial: boolean
 ): Promise<Set<string>> {
-  const candidatas = operacoes.filter(op => op.novo && (!op.dados.imagemPeca || !op.dados.imagemDispositivo));
+  const candidatas = operacoes.filter(op => op.novo && !op.dados.imagemDispositivo);
   if (candidatas.length === 0) return new Set();
-  const imagens = (d: Partial<Dispositivo>) => `${d.imagemPeca || ''}\n${d.imagemDispositivo || ''}`;
-  const antes = candidatas.map(op => imagens(op.dados));
-  const fontes = leituraParcial ? await obterLinhasPorCodigos(candidatas.map(op => op.dados.codigo)) : existentes.values();
+  const antes = candidatas.map(op => op.dados.imagemDispositivo);
+  const fontes = leituraParcial ? await obterLinhasPorNumeros(candidatas.map(op => op.dados.nome)) : existentes.values();
   herdarImagensDaLinha(candidatas.map(op => op.dados), fontes);
-  return new Set(candidatas.filter((op, i) => imagens(op.dados) !== antes[i]).map(op => op.id));
+  return new Set(candidatas.filter((op, i) => op.dados.imagemDispositivo !== antes[i]).map(op => op.id));
 }
 const chaveNome = (v: string) => v.toLowerCase().trim();
 

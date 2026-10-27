@@ -4,13 +4,13 @@ import {
   QueryConstraint, QueryDocumentSnapshot, DocumentData, Transaction
 } from 'firebase/firestore';
 import {
-  Dispositivo, PatchPropagacaoImagem, normalizarNumeroPeca, patchAindaAplicavel, prefixoChaveDaLinha
+  Dispositivo, PatchPropagacaoImagem, normalizarNumeroDispositivo, patchAindaAplicavel
 } from '../../domain/entities/dispositivo';
 import { medirConsulta } from '../observabilidade/metricas';
 
 /**
- * Leitura e gravação da "linha" de imagens (dispositivos com o mesmo Número
- * da Peça) para a propagação automática. Regra em domain/entities/dispositivo.ts.
+ * Leitura e gravação da "linha" de imagens (dispositivos com o mesmo Nº
+ * dispositivo) para a propagação automática. Regra em domain/entities/dispositivo.ts.
  */
 
 const PAGINA = 500;
@@ -34,40 +34,37 @@ async function lerTodas(filtros: QueryConstraint[], ordem: QueryConstraint, rotu
 }
 
 /**
- * Todos os dispositivos da linha do `codigo`, lidos no servidor:
- * - pela `chaveCD` (intervalo no prefixo do código normalizado): acha
- *   qualquer grafia ("ABC 1", "abc  1", com caractere invisível...);
- * - pelas grafias exatas do código (original, sem espaços, MAIÚSCULA,
- *   minúscula): cobre documentos antigos ainda sem `chaveCD`.
- * O resultado é filtrado pela mesma normalização da regra de domínio.
+ * Todos os dispositivos da linha do Nº dispositivo (`nome`), lidos no
+ * servidor pelas grafias exatas (original, sem espaços nas pontas,
+ * MAIÚSCULA, minúscula). Grafias mistas ("Mat04670") são completadas pelo
+ * catálogo de busca por quem chama. O resultado é filtrado pela mesma
+ * normalização da regra de domínio.
  */
-export async function obterLinhaPorCodigo(codigo: string | undefined): Promise<Dispositivo[]> {
-  const chave = normalizarNumeroPeca(codigo);
+export async function obterLinhaPorNumero(nome: string | undefined): Promise<Dispositivo[]> {
+  const chave = normalizarNumeroDispositivo(nome);
   if (!chave) return [];
-  const prefixo = prefixoChaveDaLinha(chave);
-  const bruto = codigo || '';
+  const bruto = nome || '';
   const grafias = Array.from(new Set([bruto, bruto.trim(), bruto.trim().toUpperCase(), bruto.trim().toLowerCase()]))
     .filter(v => v !== '');
-  const resultados = await Promise.all([
-    lerTodas([where('chaveCD', '>=', prefixo), where('chaveCD', '<', prefixo + '')], orderBy('chaveCD'), 'dispositivos:linha-chave'),
-    ...grafias.map(g => lerTodas([where('codigo', '==', g)], orderBy(documentId()), 'dispositivos:linha-codigo')),
-  ]);
+  const resultados = await Promise.all(
+    grafias.map(g => lerTodas([where('nome', '==', g)], orderBy(documentId()), 'dispositivos:linha-numero'))
+  );
   const porId = new Map<string, Dispositivo>();
   for (const lista of resultados) for (const d of lista) porId.set(d.id, d);
-  return Array.from(porId.values()).filter(d => normalizarNumeroPeca(d.codigo) === chave);
+  return Array.from(porId.values()).filter(d => normalizarNumeroDispositivo(d.nome) === chave);
 }
 
-/** Linhas de vários códigos (importação), 3 consultas por vez; códigos repetidos são lidos uma vez. */
-export async function obterLinhasPorCodigos(codigos: (string | undefined)[]): Promise<Dispositivo[]> {
+/** Linhas de vários Nº dispositivo (importação), 3 consultas por vez; números repetidos são lidos uma vez. */
+export async function obterLinhasPorNumeros(nomes: (string | undefined)[]): Promise<Dispositivo[]> {
   const porChave = new Map<string, string>();
-  for (const c of codigos) {
-    const chave = normalizarNumeroPeca(c);
-    if (chave && !porChave.has(chave)) porChave.set(chave, c as string);
+  for (const n of nomes) {
+    const chave = normalizarNumeroDispositivo(n);
+    if (chave && !porChave.has(chave)) porChave.set(chave, n as string);
   }
   const unicos = Array.from(porChave.values());
   const out: Dispositivo[] = [];
   for (let i = 0; i < unicos.length; i += 3) {
-    const lotes = await Promise.all(unicos.slice(i, i + 3).map(obterLinhaPorCodigo));
+    const lotes = await Promise.all(unicos.slice(i, i + 3).map(obterLinhaPorNumero));
     for (const l of lotes) out.push(...l);
   }
   return out;
@@ -91,10 +88,10 @@ export interface ResultadoAplicacaoImagens {
  */
 export async function aplicarPatchesDeImagem(
   patches: PatchPropagacaoImagem[],
-  codigoDaLinha: string | undefined,
+  numeroDaLinha: string | undefined,
   auditar: (tx: Transaction, p: PatchPropagacaoImagem, aplicado: Partial<Dispositivo>, atual: Dispositivo) => void
 ): Promise<ResultadoAplicacaoImagens> {
-  const chave = normalizarNumeroPeca(codigoDaLinha);
+  const chave = normalizarNumeroDispositivo(numeroDaLinha);
   const total: ResultadoAplicacaoImagens = { aplicados: [], ignorados: 0 };
   if (!chave) return { aplicados: [], ignorados: patches.length };
   for (let i = 0; i < patches.length; i += ALVOS_POR_TRANSACAO) {

@@ -94,7 +94,7 @@ export function contarNumerosDispositivoUnicos(entradas: EntradaIndice[]): numbe
   return vistos.size;
 }
 
-/** Busca da partição/linha de imagens: mesmo critério de normalizarNumeroPeca(). */
+/** Código normalizado para busca por linha (caixa e espaços nas pontas). */
 export const normalizarCodigoLinha = (codigo?: string) => (codigo || '').trim().toLowerCase();
 
 export interface NomesClassificacao {

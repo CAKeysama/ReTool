@@ -4,6 +4,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { Tabs, EmptyState } from '../components/Tabs';
 import type { BulkItem } from '../components/BulkActionModal';
 import { FluxoReutilizacaoModal } from '../components/FluxoReutilizacaoModal';
+import { HardSavingModal } from '../components/HardSavingModal';
 import { SeletorDispositivo } from '../components/SeletorDispositivo';
 import { LimiteDeErro, CarregandoModal } from '../components/LimiteDeErro';
 import { EstadoDados, SkeletonLista, SkeletonTabela, classificarErro, mensagemDeErro } from '../components/feedback';
@@ -14,7 +15,7 @@ import {
 } from '../presentation/hooks/useReutilizacoes';
 import { NormalizarReutilizacoes } from '../components/NormalizarReutilizacoes';
 import { documentosLegados } from '../domain/services/consultaReutilizacoes';
-import { ListChecks, ChevronDown, Check, X, Clock, Factory, Send, Wrench, ExternalLink, Info } from 'lucide-react';
+import { ListChecks, ChevronDown, Check, X, Clock, Factory, Send, Wrench, ExternalLink, Info, Coins } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
 import { useAvisoAoSair } from '../hooks/useAvisoAoSair';
@@ -75,6 +76,8 @@ export function Reutilizacoes() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isFluxoOpen, setIsFluxoOpen] = useState(false);
+  // Hard Saving: a Engenharia não informa; Projetista e Administração definem.
+  const [hardSavingDe, setHardSavingDe] = useState<Reutilizacao | null>(null);
 
   // Filtros vinculados estritamente à tabela de histórico
   const [filterDispId, setFilterDispId] = useState('');
@@ -118,6 +121,7 @@ export function Reutilizacoes() {
     [legado, reutilizacoes]
   );
   const veFilaP = isProjetista || isAdmin;
+  const podeHardSaving = isProjetista || isAdmin;
   const veFilaE = isEngenharia || isAdmin;
   // A aba ativa sai do estado (o hook de cada fila precisa dela antes das abas existirem).
   const abaPadrao = veFilaP ? 'filaProjetista' : veFilaE ? 'filaEngenharia' : 'historico';
@@ -345,6 +349,7 @@ export function Reutilizacoes() {
       icon?: React.ReactNode
     ) => (
       <button
+        key={label}
         type="button"
         className="btn"
         disabled={transicionando.has(u.id)}
@@ -379,6 +384,7 @@ export function Reutilizacoes() {
       if (pode('Em análise (Projetista)')) acoes.push(btn('Similar Encontrado', () => transicionar(u.id, 'Em análise (Projetista)'), 'primary', <Wrench size={14} />));
       if (pode('Liberado para fabricação (novo dispositivo)')) acoes.push(btn('Liberar Fabricação', () => transicionar(u.id, 'Liberado para fabricação (novo dispositivo)'), 'success', <Factory size={14} />));
     }
+    if (podeHardSaving) acoes.push(btn('Hard Saving', () => setHardSavingDe(u), 'neutro', <Coins size={14} />));
 
     return acoes;
   };
@@ -433,7 +439,7 @@ export function Reutilizacoes() {
             <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{u.descricaoAlteracao || 'Descrição não informada'}</h4>
           </div>
           <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-            <strong>Dispositivo:</strong> {rotuloDisp(u.dispositivoId)} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} | <strong>Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'}
+            <strong>Dispositivo:</strong> {rotuloDisp(u.dispositivoId)} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} | <strong>Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'} | <strong>Hard Saving:</strong> R$ {(u.hardSaving || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
@@ -682,7 +688,7 @@ export function Reutilizacoes() {
                               {u.aprovadorNome && (
                                 <div><strong>Análise:</strong> {u.aprovadorNome}{u.dataAprovacao ? ` em ${new Date(u.dataAprovacao).toLocaleString('pt-BR')}` : ''}</div>
                               )}
-                              <div>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 <button
                                   type="button"
                                   className="btn"
@@ -691,6 +697,16 @@ export function Reutilizacoes() {
                                 >
                                   <ExternalLink size={13} /> Ver Dispositivo
                                 </button>
+                                {podeHardSaving && (
+                                  <button
+                                    type="button"
+                                    className="btn"
+                                    onClick={() => setHardSavingDe(u)}
+                                    style={{ padding: '4px 12px', minHeight: 28, fontSize: '0.75rem' }}
+                                  >
+                                    <Coins size={13} /> Editar Hard Saving
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -771,6 +787,12 @@ export function Reutilizacoes() {
 
       {/* Modal explicativo do fluxo de aceite */}
       <FluxoReutilizacaoModal isOpen={isFluxoOpen} onClose={() => setIsFluxoOpen(false)} />
+
+      <HardSavingModal
+        reutilizacao={hardSavingDe}
+        nomeDispositivo={hardSavingDe ? rotuloDisp(hardSavingDe.dispositivoId) : undefined}
+        onClose={() => setHardSavingDe(null)}
+      />
     </div>
   );
 }

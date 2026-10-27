@@ -22,7 +22,6 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
   const [produtoId, setProdutoId] = useState(produtos[0]?.id || '');
   const [numeroOs, setNumeroOs] = useState('');
   const [pesoPeca, setPesoPeca] = useState<number | ''>('');
-  const [hardSaving, setHardSaving] = useState<number | ''>('');
   const [descricaoAlteracao, setDescricaoAlteracao] = useState('');
   const [erro, setErro] = useState('');
   const tituloId = useId();
@@ -39,7 +38,8 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
         descricaoPeca: descricaoPeca.trim(),
         produtoId: produtoId || produtos[0]?.id || 'padrao',
         pesoPeca: Number(pesoPeca) || 0,
-        hardSaving: Number(hardSaving) || 0,
+        // A Engenharia não informa o Hard Saving.
+        hardSaving: 0,
         responsavel: solicitante,
         numeroOs: numeroOs.trim(),
         descricaoAlteracao: descricaoAlteracao.trim()
@@ -244,20 +244,6 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
                   step="0.01"
                   value={pesoPeca}
                   onChange={e => setPesoPeca(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="0.00"
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
-                  Hard Saving Estimado (R$)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={hardSaving}
-                  onChange={e => setHardSaving(e.target.value === '' ? '' : Number(e.target.value))}
                   placeholder="0.00"
                   style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
                 />
