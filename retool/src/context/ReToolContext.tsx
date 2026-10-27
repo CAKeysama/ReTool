@@ -768,15 +768,18 @@ export const ReToolProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
     const solicitanteUid = solicitanteId || userProfile?.uid || 'eng';
-    const novoId = await reutilizacoesRepo.add({
+    // A solicitação já nasce na Fila do Projetista (1º filtro), sem rascunho na Engenharia.
+    const novo: Omit<Reutilizacao, 'id' | 'dataCriacao'> = {
       ...data,
-      status: 'Em análise (Engenharia)',
+      status: 'Em análise (Projetista)',
       solicitanteNome,
       solicitanteId: solicitanteUid
-    });
+    };
+    const novoId = await reutilizacoesRepo.add(novo);
     const dispNome = (await nomeDoDispositivo(data.dispositivoId)) || data.dispositivoId;
-    await registrarAuditoria('criacao', 'reutilizacao', novoId, dispNome, 'Solicitou reutilização', { dispositivoId: data.dispositivoId, codigoPeca: data.codigoPeca, descricaoAlteracao: data.descricaoAlteracao, hardSaving: data.hardSaving });
-    announce('Solicitação registrada. Envie para a análise do Projetista na Fila da Engenharia.');
+    await registrarAuditoria('criacao', 'reutilizacao', novoId, dispNome, 'Solicitou reutilização (enviada ao 1º filtro)', { dispositivoId: data.dispositivoId, codigoPeca: data.codigoPeca, descricaoAlteracao: data.descricaoAlteracao, hardSaving: data.hardSaving });
+    await notificarFilaProjetista({ ...novo, id: novoId }, `${solicitanteNome} solicitou análise de reutilização de ${dispNome} (1º filtro).`);
+    announce('Solicitação enviada para a análise do Projetista.');
   };
 
   const notificarFilaProjetista = async (reu: Reutilizacao, descricao: string) => {

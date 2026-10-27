@@ -169,7 +169,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
             )}
 
             <div style={{ padding: '10px 14px', backgroundColor: '#fef3c7', borderRadius: '6px', fontSize: '0.78rem', color: '#92400e', lineHeight: 1.4 }}>
-              <strong>Fluxo de Aprovação:</strong> A Engenharia formula a solicitação de reutilização. Ela entrará com status <strong>Pendente</strong> e será analisada e aprovada pelo <strong>Projetista</strong> da Ferramentaria.
+              <strong>Fluxo de Aprovação:</strong> A Engenharia formula a solicitação de reutilização. Ao enviar, ela vai direto para a <strong>Fila do Projetista</strong> da Ferramentaria, que analisa e aprova.
             </div>
 
             <div className="form-row-grid" style={{ gap: '12px' }}>

@@ -409,10 +409,10 @@ service cloud.firestore {
       allow create: if isActiveUser(request.auth.uid)
         && request.resource.data.solicitanteId == request.auth.uid
         && (
-          // Engenharia inicia o processo (rascunho do 1º filtro).
+          // Engenharia inicia o processo já no 1º filtro (Fila do Projetista).
           (
             meuPerfil() == 'engenharia'
-            && request.resource.data.status == 'Em análise (Engenharia)'
+            && request.resource.data.status == 'Em análise (Projetista)'
           )
           // Administração/Ferramentaria registram histórico diretamente.
           || meuPerfil() in ['admin', 'projetista']
