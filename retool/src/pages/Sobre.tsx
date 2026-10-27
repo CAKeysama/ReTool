@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Info } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 import baldanLogo from '../assets/logotipo - preferencial_horizontal (aplicação positiva).png';
 import fatecLogo from '../assets/fatec-matao-luiz-marchesan.svg';
@@ -29,16 +29,10 @@ export function Sobre() {
 
       {/* Título Principal estilo Home */}
       <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-2xl)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '12px' }}>
-          <Info size={28} color="var(--color-primary)" />
-        </div>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-1px', marginBottom: '4px' }}>
           <span style={{ color: 'var(--color-gray-steel)' }}>Sobre o</span>
           <span style={{ color: 'var(--color-primary)' }}> Projeto</span>
         </h1>
-        <p style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 500 }}>
-          Identificação, Contexto e Objetivos do ReTool
-        </p>
       </div>
 
       {/* Conteúdo Textual Clean */}
@@ -129,14 +123,14 @@ export function Sobre() {
       {/* Logos no Rodapé */}
       <div style={{ marginTop: 'var(--spacing-xl)', paddingTop: 'var(--spacing-xl)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--spacing-2xl)', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-          <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Empresa Parceira</span>
+          <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Empresa parceira</span>
           <img src={baldanLogo} alt="Baldan Implementos Agrícolas" style={{ height: '50px', objectFit: 'contain', opacity: 0.8 }} />
         </div>
         
         <div style={{ height: '40px', width: '1px', backgroundColor: 'var(--color-border)' }}></div>
         
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-          <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Instituição de Ensino</span>
+          <span style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Instituição de ensino</span>
           <img src={fatecLogo} alt="Fatec Matão - Luiz Marchesan" style={{ height: '50px', objectFit: 'contain', opacity: 0.8 }} />
         </div>
       </div>

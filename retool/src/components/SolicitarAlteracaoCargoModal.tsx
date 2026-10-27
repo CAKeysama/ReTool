@@ -57,7 +57,7 @@ export function SolicitarAlteracaoCargoModal({ isOpen, onClose }: { isOpen: bool
 
       {aviso && <Aviso tipo={aviso.tipo} onClose={() => setAviso(null)}>{aviso.texto}</Aviso>}
 
-      {estadoSolicitacoesCargo === 'carregando' && <EstadoCarregando mensagem="Consultando suas solicitações..." />}
+      {estadoSolicitacoesCargo === 'carregando' && <EstadoCarregando mensagem="Consultando suas solicitações…" />}
       {estadoSolicitacoesCargo === 'erro' && <EstadoErro mensagem="Não foi possível consultar suas solicitações de cargo." />}
 
       {estadoSolicitacoesCargo === 'pronto' && (pendente ? (
@@ -80,7 +80,7 @@ export function SolicitarAlteracaoCargoModal({ isOpen, onClose }: { isOpen: bool
           <div>
             <label className="input-label" htmlFor="cargo-solicitado">Cargo solicitado</label>
             <select id="cargo-solicitado" className="input-field" required value={perfil} onChange={e => setPerfil(e.target.value as UserRole | '')}>
-              <option value="">Selecione...</option>
+              <option value="">Selecione…</option>
               {opcoes.map(r => <option key={r} value={r}>{ROLES_CONFIG[r].titulo}</option>)}
             </select>
             {perfil && <div className="input-helper">{ROLES_CONFIG[perfil].descricao}</div>}
@@ -101,7 +101,7 @@ export function SolicitarAlteracaoCargoModal({ isOpen, onClose }: { isOpen: bool
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button type="button" className="btn" onClick={fechar}>Fechar</button>
             <button type="submit" className="btn btn-primary" disabled={!perfil || enviando} style={{ opacity: !perfil || enviando ? 0.6 : 1 }}>
-              <Send size={14} /> {enviando ? 'Enviando...' : 'Enviar solicitação'}
+              <Send size={14} /> {enviando ? 'Enviando…' : 'Enviar solicitação'}
             </button>
           </div>
         </form>

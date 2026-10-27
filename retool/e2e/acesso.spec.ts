@@ -22,12 +22,12 @@ test('autocadastro aguarda aprovação e é liberado em tempo real com o cargo e
   const nome = `Convidado ${Date.now()}`;
 
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Cadastre-se aqui' }).click();
+  await page.getByRole('button', { name: 'Cadastre-se', exact: true }).click();
   await page.getByPlaceholder('Seu nome completo').fill(nome);
   await page.getByPlaceholder('usuario@empresa.com').fill(email);
   await page.getByPlaceholder('••••••••').fill('Convidado123');
   await page.getByPlaceholder('Repita a senha').fill('Convidado123');
-  await page.getByRole('button', { name: 'Cadastrar e Aguardar Aprovação' }).click();
+  await page.getByRole('button', { name: 'Criar conta', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Cadastro em análise' })).toBeVisible();
 
   const admin = await novaSessao(browser);

@@ -347,7 +347,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
   };
 
   return (
-    <AccessibleModal isOpen={isOpen} onClose={handleClose} title="Importação em Lote" maxWidth="800px">
+    <AccessibleModal isOpen={isOpen} onClose={handleClose} title="Importação em lote" maxWidth="800px">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
         {isAdmin && fase === 'selecao' && !file && <PreparoImportacaoRapida />}
@@ -372,7 +372,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
               As colunas devem seguir o padrão: Familia_do_Produto, PRODUTO, CATEGORIA, etc.
             </p>
             <label className="btn btn-primary seletor-arquivo" style={{ cursor: ocupado ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', opacity: ocupado ? 0.6 : 1 }}>
-              Buscar Arquivo
+              Buscar arquivo
               <input
                 type="file"
                 accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
@@ -412,7 +412,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                     </select>
 
                     <button className="btn" onClick={processFile} style={{ width: '100%' }}>
-                      Processar Planilha
+                      Processar planilha
                     </button>
                   </div>
                 )}
@@ -496,7 +496,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                       <td style={{ padding: '8px' }}>
                         {disp.categoriaId
                           ? (categorias.find(c => c.id === disp.categoriaId)?.nome || disp.categoriaId)
-                          : <span style={{ color: '#6b7280', fontStyle: 'italic' }}>Sem Categoria</span>
+                          : <span style={{ color: '#6b7280', fontStyle: 'italic' }}>Sem categoria</span>
                         }
                       </td>
                       <td style={{ padding: '8px' }}>{disp.peso}</td>
@@ -515,7 +515,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: 'var(--spacing-lg)' }}>
               <button className="btn" onClick={() => { setParsedData([]); setResumo(null); setErrorMsg(''); setFase('selecao'); }} disabled={ocupado}>
-                Voltar e Alterar
+                Voltar e alterar
               </button>
               <button
                 className="btn btn-primary"
@@ -524,7 +524,7 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                 aria-busy={fase === 'importando'}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
               >
-                {fase === 'importando' ? 'Importando...' : `Salvar Importação (${fmt(parsedData.length)})`}
+                {fase === 'importando' ? 'Importando…' : `Salvar importação (${fmt(parsedData.length)})`}
               </button>
             </div>
           </div>

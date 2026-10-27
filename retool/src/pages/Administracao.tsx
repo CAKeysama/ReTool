@@ -42,10 +42,7 @@ export function Administracao() {
   return (
     <div>
       <div style={{ marginBottom: 'var(--spacing-lg)' }}>
-        <h2>Administração</h2>
-        <p style={{ color: 'var(--color-text-body)' }}>
-          Aprovação de novos cadastros, solicitações de alteração de cargo, contas de acesso e histórico de ações do sistema.
-        </p>
+        <h2 style={{ margin: 0 }}>Administração</h2>
       </div>
 
       <Tabs tabs={tabs} active={abaAtiva} onChange={id => navigate(`/administracao/${id}`)} />

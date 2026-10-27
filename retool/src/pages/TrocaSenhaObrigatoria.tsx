@@ -84,7 +84,7 @@ export function TrocaSenhaObrigatoria() {
           disabled={salvando || requisitos.some(r => !r.ok) || !senhaAtual}
           style={{ width: '100%', fontWeight: 700, opacity: salvando || requisitos.some(r => !r.ok) || !senhaAtual ? 0.6 : 1 }}
         >
-          {salvando ? 'Salvando nova senha...' : 'Salvar nova senha e continuar'}
+          {salvando ? 'Salvando nova senha…' : 'Salvar nova senha e continuar'}
         </button>
       </form>
     </TelaAcessoRestrito>

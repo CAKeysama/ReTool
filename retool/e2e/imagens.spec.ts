@@ -10,15 +10,15 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 const arquivo = (nome: string) => ({ name: nome, mimeType: 'image/png', buffer: PNG });
 
 async function enviarImagemPeca(dialogo: Locator, nomeArquivo: string) {
-  // O primeiro seletor de arquivo do formulário é o da IMAGEM PEÇA.
+  // O primeiro seletor de arquivo do formulário é o da Imagem da peça.
   await dialogo.locator('input[type="file"]').nth(0).setInputFiles(arquivo(nomeArquivo));
-  await expect(dialogo.getByRole('img', { name: 'IMAGEM PEÇA' })).toBeVisible();
+  await expect(dialogo.getByRole('img', { name: 'Imagem da peça', exact: true })).toBeVisible();
 }
 
 async function enviarImagemDispositivo(dialogo: Locator, nomeArquivo: string) {
-  // O segundo seletor de arquivo do formulário é o da Imagem dispositivo.
+  // O segundo seletor de arquivo do formulário é o da Imagem do dispositivo.
   await dialogo.locator('input[type="file"]').nth(1).setInputFiles(arquivo(nomeArquivo));
-  await expect(dialogo.getByRole('img', { name: 'Imagem dispositivo' })).toBeVisible();
+  await expect(dialogo.getByRole('img', { name: 'Imagem do dispositivo', exact: true })).toBeVisible();
 }
 
 async function cadastrar(page: Page, numero: string, codigo: string, imagens: { peca?: string; dispositivo?: string } = {}) {
@@ -26,7 +26,7 @@ async function cadastrar(page: Page, numero: string, codigo: string, imagens: { 
   await page.getByRole('button', { name: /Cadastrar novo dispositivo/ }).click();
   const dialogo = page.getByRole('dialog', { name: 'Novo dispositivo' });
   await dialogo.getByLabel('Nº dispositivo *').fill(numero);
-  await dialogo.getByLabel('CÓDIGO PEÇA *').fill(codigo);
+  await dialogo.getByLabel('Código da peça *').fill(codigo);
   if (imagens.peca) await enviarImagemPeca(dialogo, imagens.peca);
   if (imagens.dispositivo) await enviarImagemDispositivo(dialogo, imagens.dispositivo);
   await dialogo.getByRole('button', { name: 'Salvar registro do dispositivo' }).click();
