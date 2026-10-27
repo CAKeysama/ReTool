@@ -68,6 +68,10 @@ async function conferirImagens(page: Page, codigo: string, esperado: Imagens) {
   await expect.poll(() => lerImagens(page), { timeout: 15_000 }).toEqual(esperado);
 }
 
+// Banco fallback (plano Spark) não tem Cloud Storage: scripts/emuladores.mjs
+// define RETOOL_SEM_STORAGE=1 e o upload de imagens não é testado.
+test.skip(process.env.RETOOL_SEM_STORAGE === '1', 'Banco fallback sem Cloud Storage (plano Spark): upload de imagens não é testado.');
+
 test('imagem do dispositivo se propaga pelo Nº dispositivo, acompanha a troca e sobrevive à exclusão da origem', async ({ page }) => {
   test.setTimeout(120_000);
   await entrarComoAdmin(page);

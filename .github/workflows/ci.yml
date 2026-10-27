@@ -1,6 +1,14 @@
 # CI do ReTool: roda em todo pull request e em todo push na main.
 # Só usa emuladores do Firebase (projeto demo-retool): nenhum segredo,
 # nenhum acesso ao banco real e nenhum deploy (o deploy continua manual).
+#
+# Banco fallback: a variável do repositório VITE_USE_FALLBACK_DB (Settings →
+# Secrets and variables → Actions → Variables) diz qual banco a produção usa.
+# Com "true", o projeto de fallback (plano Spark, sem Cloud Storage) está em
+# uso e scripts/emuladores.mjs pula os testes que dependem do Storage
+# (regras do Storage e E2E de imagens). Sem a variável, vale o padrão
+# "true" (a produção usa o fallback hoje); crie-a com "false" ao migrar
+# para o banco principal, e todos os testes voltam a rodar.
 name: CI
 
 on:
@@ -64,6 +72,8 @@ jobs:
       - run: npm ci
       - name: Regras do Firestore e do Storage (emulador)
         run: npm run test:rules
+        env:
+          VITE_USE_FALLBACK_DB: ${{ vars.VITE_USE_FALLBACK_DB || 'true' }}
 
   e2e:
     name: e2e
@@ -90,6 +100,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Testes de navegador (emuladores)
         run: npm run test:e2e
+        env:
+          VITE_USE_FALLBACK_DB: ${{ vars.VITE_USE_FALLBACK_DB || 'true' }}
       - name: Relatório do Playwright
         if: failure()
         uses: actions/upload-artifact@v4
