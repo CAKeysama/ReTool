@@ -36,11 +36,11 @@ function normalizar(texto: string | undefined): string {
 function SkeletonItensClassificacao({ linhas = 6 }: { linhas?: number }) {
   const larguras = ['58%', '42%', '66%', '50%', '38%', '61%'];
   return (
-    <ul aria-hidden="true" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+    <ul aria-hidden="true" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column' }}>
       {Array.from({ length: linhas }, (_, i) => (
         <li key={i} style={{
-          padding: 'var(--spacing-md) var(--spacing-lg)', border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius)', display: 'flex', alignItems: 'center', minHeight: '54px'
+          padding: '10px 8px', borderBottom: i < linhas - 1 ? '1px solid var(--color-border)' : 'none',
+          display: 'flex', alignItems: 'center', minHeight: '44px'
         }}>
           <SkeletonLinha largura={larguras[i % larguras.length]} altura={12} />
         </li>
@@ -134,6 +134,7 @@ function PainelClassificacao<T extends ItemClassificacao>({
           ariaLabel={`Lista de ${nomePlural}.`}
           onItemAction={onItemAction}
           renderItem={renderItem}
+          variante="linha"
         />
         {restantes > 0 && (
           <div className="lista-mostrar-mais">
@@ -187,7 +188,7 @@ function PainelClassificacao<T extends ItemClassificacao>({
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           {onBulk && (
-            <button className="btn btn-icon" onClick={onBulk} aria-label={`Ações em massa para ${titulo}`} title="Ações em Massa" disabled={itens.length === 0}>
+            <button className="btn btn-icon" onClick={onBulk} aria-label={`Ações em massa para ${titulo}`} title="Ações em massa" disabled={itens.length === 0}>
               <ListChecks size={16} />
             </button>
           )}
@@ -256,7 +257,7 @@ function LinhaClassificacao({ item, rotulo, isFocused, canEditar, canExcluir, re
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '8px', opacity: inativo ? 0.55 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-        <span style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.nome}>{item.nome || 'Sem Nome'}</span>
+        <span style={{ fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.nome}>{item.nome || 'Sem nome'}</span>
         {inativo && badgeInativo}
       </div>
       <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
@@ -379,7 +380,7 @@ function ModaisEntidade({ entidade: e, nome, artigo, campoId }: ModaisEntidadePr
               onClick={() => e.executarConfirm('excluir')}
             >
               {e.confirmEmAndamento && <LoaderCircle size={16} className="estado-dados-girando" aria-hidden="true" />}
-              {e.confirmEmAndamento ? 'Processando…' : 'Excluir Permanente'}
+              {e.confirmEmAndamento ? 'Processando…' : 'Excluir permanentemente'}
             </button>
           </div>
         </div>
@@ -561,9 +562,8 @@ export function Categorias() {
 
   return (
     <div>
-      <div style={{ marginBottom: 'var(--spacing-xl)' }}>
-        <h2 style={{ marginBottom: 'var(--spacing-xs)' }}>Gestão de Classificações</h2>
-        <p style={{ color: 'var(--color-text-body)' }}>Gerencie e visualize todas as estruturas de classificação usadas no sistema.</p>
+      <div style={{ marginBottom: 'var(--spacing-lg)' }}>
+        <h2 style={{ margin: 0 }}>Classificações</h2>
       </div>
 
       {erroReferencias && temAlgumDado && (
@@ -609,7 +609,7 @@ export function Categorias() {
 
         {/* Painel Famílias */}
         <PainelClassificacao
-          titulo="Famílias de Produto"
+          titulo="Famílias de produto"
           nomePlural="famílias"
           textoVazio="Nenhuma família cadastrada"
           itens={familias}

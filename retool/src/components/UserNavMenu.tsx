@@ -304,7 +304,7 @@ export function UserNavMenu() {
               onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
               <LogOut size={16} color="#ef4444" />
-              <span style={{ whiteSpace: 'nowrap' }}>Sair da Conta</span>
+              <span style={{ whiteSpace: 'nowrap' }}>Sair</span>
             </button>
           ) : (
             <button

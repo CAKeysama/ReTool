@@ -36,7 +36,7 @@ export function AprovacoesCadastroPanel({ destacarId }: { destacarId?: string })
     [users]
   );
 
-  if (estadoUsuarios === 'carregando') return <EstadoCarregando mensagem="Carregando cadastros..." />;
+  if (estadoUsuarios === 'carregando') return <EstadoCarregando mensagem="Carregando cadastros…" />;
   if (estadoUsuarios === 'erro') {
     return <EstadoErro mensagem="Não foi possível carregar os cadastros. Verifique sua conexão e se as regras do Firestore foram publicadas." />;
   }
@@ -104,7 +104,7 @@ export function AprovacoesCadastroPanel({ destacarId }: { destacarId?: string })
                     onChange={e => setCargoEscolhido(prev => ({ ...prev, [u.uid]: e.target.value as UserRole | '' }))}
                     style={{ width: 'auto', minWidth: '240px', flex: '1 1 240px', maxWidth: '360px' }}
                   >
-                    <option value="">Selecione o cargo...</option>
+                    <option value="">Selecione o cargo…</option>
                     {PERFIS_ATRIBUIVEIS.map(r => (
                       <option key={r} value={r}>{ROLES_CONFIG[r].titulo}</option>
                     ))}
@@ -146,7 +146,7 @@ export function AprovacoesCadastroPanel({ destacarId }: { destacarId?: string })
                         Cancelar
                       </button>
                       <button type="button" className="btn" onClick={() => decidir(u, false)} disabled={ocupado} style={estiloBotaoAcao('danger')}>
-                        {ocupado ? 'Rejeitando...' : 'Confirmar rejeição'}
+                        {ocupado ? 'Rejeitando…' : 'Confirmar rejeição'}
                       </button>
                     </div>
                   </div>

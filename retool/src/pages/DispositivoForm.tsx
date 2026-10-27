@@ -10,6 +10,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { obterDispositivo } from '../data/repositories/FirestoreDispositivosConsultas';
 import { EstadoDados, SkeletonLista, classificarErro, mensagemDeErro } from '../components/feedback';
 import { gravarComPrazo } from '../utils/tempo';
+import { camposAlterados } from '../domain/services/alteracoesDispositivo';
 
 /**
  * Verifica a permissão antes de montar o formulário (os hooks do formulário
@@ -144,6 +145,16 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
   const [mostrarErrosCampos, setMostrarErrosCampos] = useState(false);
   const codigoRef = useRef<HTMLInputElement>(null);
 
+  // Uma gravação que estourou o prazo pode terminar depois que este
+  // formulário foi fechado e outro aberto: fechar o formulário global nesse
+  // momento fecharia o outro. Só fecha se este formulário ainda está aberto.
+  const abertoRef = useRef(true);
+  useEffect(() => {
+    abertoRef.current = true;
+    return () => { abertoRef.current = false; };
+  }, []);
+  const fecharSeAindaAberto = () => { if (abertoRef.current) closeDispForm(); };
+
   // Fecha só depois que o banco confirmou; em erro, mantém o que foi digitado.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,18 +165,30 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
       announce(errosCampos.nome || errosCampos.codigo || '', true);
       return;
     }
+    // Na edição, grava só o que mudou em relação ao documento carregado (não
+    // apaga alterações feitas por outra pessoa enquanto o formulário estava aberto).
+    const alteracoes = isEditing ? camposAlterados(dispEdicao, formData) : null;
+    if (alteracoes && Object.keys(alteracoes).length === 0) {
+      announce('Nenhuma alteração para salvar.');
+      closeDispForm();
+      return;
+    }
     setSalvando(true);
     setErroSalvar(null);
     // Gravação que só termina depois do prazo: troca o aviso pela confirmação.
-    const concluiuDepois = () => { setErroSalvar(null); closeDispForm(); };
+    const concluiuDepois = () => {
+      if (!abertoRef.current) return;
+      setErroSalvar(null);
+      closeDispForm();
+    };
     try {
       if (isEditing && editingDispId) {
-        await gravarComPrazo(updateDispositivo(editingDispId, formData), concluiuDepois);
+        await gravarComPrazo(updateDispositivo(editingDispId, alteracoes || {}), concluiuDepois);
       } else {
         // Mesmo id em uma nova tentativa: não duplica se a primeira chegar depois.
         await gravarComPrazo(addDispositivo({ ...formData, id: deviceStorageId }), concluiuDepois);
       }
-      closeDispForm();
+      fecharSeAindaAberto();
     } catch (err) {
       console.error(err);
       setErroSalvar(mensagemDeErro(err, 'Não foi possível salvar o dispositivo. Tente novamente.'));
@@ -305,7 +328,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
             </div>
 
             <div>
-              <label htmlFor="inputCodigoPeca" className="input-label">CÓDIGO PEÇA{exigeCodigo ? ' *' : ''}</label>
+              <label htmlFor="inputCodigoPeca" className="input-label">Código da peça{exigeCodigo ? ' *' : ''}</label>
               <input 
                 ref={codigoRef}
                 id="inputCodigoPeca" name="codigo"
@@ -327,7 +350,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
           <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <label htmlFor="selectFamilia" className="input-label" style={{ margin: 0 }}>Família do Produto</label>
+                <label htmlFor="selectFamilia" className="input-label" style={{ margin: 0 }}>Família do produto</label>
                 <button 
                   type="button" 
                   onClick={() => setShowNewFamForm(!showNewFamForm)}
@@ -337,7 +360,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                     gap: '2px', cursor: 'pointer', padding: 0
                   }}
                 >
-                  <Plus size={12} /> Nova Família
+                  <Plus size={12} /> Nova família
                 </button>
               </div>
 
@@ -346,7 +369,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                   <input 
                     type="text" 
                     className="input-field" 
-                    placeholder="Nome da família..." 
+                    placeholder="Nome da família…" 
                     value={newFamName}
                     autoFocus
                     onChange={(e) => setNewFamName(e.target.value)}
@@ -378,7 +401,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                 value={formData.familiaId || ''}
                 onChange={handleChange}
               >
-                <option value="">Selecione a Família</option>
+                <option value="">Selecione a família</option>
                 {familias
                   .filter(f => f.ativo !== false || f.id === formData.familiaId)
                   .map(f => (
@@ -387,7 +410,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                     </option>
                   ))}
               </select>
-              <div className="input-helper">Grupo de manufatura da peça (Substitui "Grupo")</div>
+              <div className="input-helper">Grupo de manufatura da peça</div>
             </div>
 
             <div>
@@ -402,7 +425,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                     gap: '2px', cursor: 'pointer', padding: 0
                   }}
                 >
-                  <Plus size={12} /> Novo Produto
+                  <Plus size={12} /> Novo produto
                 </button>
               </div>
 
@@ -411,7 +434,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                   <input 
                     type="text" 
                     className="input-field" 
-                    placeholder="Nome do produto..." 
+                    placeholder="Nome do produto…" 
                     value={newProdName}
                     autoFocus
                     onChange={(e) => setNewProdName(e.target.value)}
@@ -443,7 +466,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                 value={formData.produtoId || ''} 
                 onChange={handleChange}
               >
-                <option value="">Selecione o Produto</option>
+                <option value="">Selecione o produto</option>
                 {produtos
                   .filter(p => p.ativo !== false || p.id === formData.produtoId)
                   .map(p => (
@@ -452,7 +475,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                     </option>
                   ))}
               </select>
-              <div className="input-helper">Nome comercial/modelo do produto associado</div>
+              <div className="input-helper">Modelo do produto</div>
             </div>
           </div>
 
@@ -460,7 +483,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
           <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <label htmlFor="selectCategoria" className="input-label" style={{ margin: 0 }}>CATEGORIA</label>
+                <label htmlFor="selectCategoria" className="input-label" style={{ margin: 0 }}>Categoria</label>
                 <button 
                   type="button" 
                   onClick={() => setShowNewCatForm(!showNewCatForm)}
@@ -470,7 +493,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                     gap: '2px', cursor: 'pointer', padding: 0
                   }}
                 >
-                  <Plus size={12} /> Nova Categoria
+                  <Plus size={12} /> Nova categoria
                 </button>
               </div>
 
@@ -479,7 +502,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                   <input 
                     type="text" 
                     className="input-field" 
-                    placeholder="Nome da categoria..." 
+                    placeholder="Nome da categoria…" 
                     value={newCatName}
                     autoFocus
                     onChange={(e) => setNewCatName(e.target.value)}
@@ -511,7 +534,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                 value={formData.categoriaId || ''} 
                 onChange={handleChange}
               >
-                <option value="">Selecione a Categoria</option>
+                <option value="">Selecione a categoria</option>
                 {categorias
                   .filter(c => c.ativo !== false || c.id === formData.categoriaId)
                   .map(c => (
@@ -524,7 +547,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
             </div>
 
             <div>
-              <label htmlFor="inputPesoDispositivo" className="input-label">PESO dispositivo</label>
+              <label htmlFor="inputPesoDispositivo" className="input-label">Peso (g)</label>
               <input 
                 id="inputPesoDispositivo" name="peso"
                 className="input-field" 
@@ -532,17 +555,17 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
                 value={formData.peso || ''} 
                 onChange={handleChange}
               />
-              <div className="input-helper">Peso em gramas (Ex: 1000)</div>
+              <div className="input-helper">Em gramas. Ex.: 1000</div>
             </div>
           </div>
 
           {/* Linha 4: Palavras-chave como Tags */}
           <div>
-            <label htmlFor="inputPalavrasChave" className="input-label">PALAVRAS CHAVE</label>
+            <label htmlFor="inputPalavrasChave" className="input-label">Palavras-chave</label>
             <input 
               id="inputPalavrasChave" 
               className="input-field" 
-              placeholder="Digite uma palavra-chave e aperte Enter ou vírgula..."
+              placeholder="Digite uma palavra-chave e aperte Enter ou vírgula…"
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={handleTagKeyDown}
@@ -574,11 +597,11 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
 
           {/* Linha 5: Descrição Peça (Textarea) */}
           <div>
-            <label htmlFor="inputDescricaoPeca" className="input-label">DESCRIÇÃO PEÇA</label>
+            <label htmlFor="inputDescricaoPeca" className="input-label">Descrição da peça</label>
             <textarea 
               id="inputDescricaoPeca" name="descricao"
               className="input-field" 
-              placeholder="Descreva fisicamente a peça, seu formato, dimensões ou finalidade..."
+              placeholder="Descreva fisicamente a peça, seu formato, dimensões ou finalidade…"
               style={{ minHeight: '80px', resize: 'vertical' }}
               value={formData.descricao || ''} 
               onChange={handleChange}
@@ -588,14 +611,14 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
           {/* Seção de Mídias e Arquivos (Firebase Storage) */}
           <div style={{ marginTop: '8px' }}>
             <h4 style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-primary)', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px', marginBottom: '12px' }}>
-              Arquivos Físicos e Fotos
+              Fotos e documentos
             </h4>
             
             <div className="grade-2-colunas" style={{ display: 'grid', gap: '16px' }}>
               {/* IMAGEM PEÇA Dropzone */}
               <FileUploadDropzone
                 categoria="imagem_peca"
-                label="IMAGEM PEÇA"
+                label="Imagem da peça"
                 currentValue={formData.imagemPeca}
                 deviceStorageId={deviceStorageId}
                 onUploadSuccess={(attachment) => {
@@ -617,7 +640,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
               {/* IMAGEM DISPOSITIVO Dropzone */}
               <FileUploadDropzone
                 categoria="imagem_dispositivo"
-                label="Imagem dispositivo"
+                label="Imagem do dispositivo"
                 currentValue={formData.imagemDispositivo}
                 deviceStorageId={deviceStorageId}
                 onUploadSuccess={(attachment) => {
@@ -641,7 +664,7 @@ function FormularioDispositivo({ dispEdicao }: { dispEdicao: Dispositivo | null 
             <div style={{ marginTop: '16px' }}>
               <FileUploadDropzone
                 categoria="documento_pdf"
-                label="Documentos Técnicos e Manuais (PDF)"
+                label="Documentos técnicos (PDF)"
                 helperText="Anexe ordens de serviço, manuais e desenhos técnicos"
                 currentAttachments={formData.anexos || []}
                 deviceStorageId={deviceStorageId}

@@ -4,6 +4,7 @@ import { usePermissions } from '../hooks/usePermissions';
 import { Tabs, EmptyState } from '../components/Tabs';
 import type { BulkItem } from '../components/BulkActionModal';
 import { FluxoReutilizacaoModal } from '../components/FluxoReutilizacaoModal';
+import { HardSavingModal } from '../components/HardSavingModal';
 import { SeletorDispositivo } from '../components/SeletorDispositivo';
 import { LimiteDeErro, CarregandoModal } from '../components/LimiteDeErro';
 import { EstadoDados, SkeletonLista, SkeletonTabela, classificarErro, mensagemDeErro } from '../components/feedback';
@@ -14,7 +15,7 @@ import {
 } from '../presentation/hooks/useReutilizacoes';
 import { NormalizarReutilizacoes } from '../components/NormalizarReutilizacoes';
 import { documentosLegados } from '../domain/services/consultaReutilizacoes';
-import { ListChecks, ChevronDown, Check, X, Clock, Factory, Send, Wrench, ExternalLink, Info } from 'lucide-react';
+import { ListChecks, ChevronDown, Check, X, Clock, Factory, Send, Wrench, ExternalLink, Info, Coins } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useBulkProgress } from '../hooks/useBulkProgress';
 import { useAvisoAoSair } from '../hooks/useAvisoAoSair';
@@ -75,6 +76,8 @@ export function Reutilizacoes() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isFluxoOpen, setIsFluxoOpen] = useState(false);
+  // Hard Saving: a Engenharia não informa; Projetista e Administração definem.
+  const [hardSavingDe, setHardSavingDe] = useState<Reutilizacao | null>(null);
 
   // Filtros vinculados estritamente à tabela de histórico
   const [filterDispId, setFilterDispId] = useState('');
@@ -118,6 +121,7 @@ export function Reutilizacoes() {
     [legado, reutilizacoes]
   );
   const veFilaP = isProjetista || isAdmin;
+  const podeHardSaving = isProjetista || isAdmin;
   const veFilaE = isEngenharia || isAdmin;
   // A aba ativa sai do estado (o hook de cada fila precisa dela antes das abas existirem).
   const abaPadrao = veFilaP ? 'filaProjetista' : veFilaE ? 'filaEngenharia' : 'historico';
@@ -156,7 +160,7 @@ export function Reutilizacoes() {
     const t: { id: string; label: string; count?: number }[] = [];
     if (veFilaP) t.push({ id: 'filaProjetista', label: 'Fila do Projetista', count: contaFilaP });
     if (veFilaE) t.push({ id: 'filaEngenharia', label: 'Fila da Engenharia', count: contaFilaE });
-    t.push({ id: 'historico', label: 'Histórico Geral', count: totalGeral });
+    t.push({ id: 'historico', label: 'Histórico geral', count: totalGeral });
     return t;
   }, [veFilaP, veFilaE, contaFilaP, contaFilaE, totalGeral]);
 
@@ -345,6 +349,7 @@ export function Reutilizacoes() {
       icon?: React.ReactNode
     ) => (
       <button
+        key={label}
         type="button"
         className="btn"
         disabled={transicionando.has(u.id)}
@@ -366,19 +371,20 @@ export function Reutilizacoes() {
     const acoes: React.ReactNode[] = [];
 
     if (st === 'Em análise (Engenharia)' && pode('Em análise (Projetista)')) {
-      acoes.push(btn('Solicitar Análise (1º Filtro)', () => transicionar(u.id, 'Em análise (Projetista)'), 'primary', <Send size={14} />));
+      acoes.push(btn('Solicitar análise', () => transicionar(u.id, 'Em análise (Projetista)'), 'primary', <Send size={14} />));
     }
     if (st === 'Em análise (Projetista)') {
       if (pode('Reutilização aprovada')) acoes.push(btn('Aprovar', () => transicionar(u.id, 'Reutilização aprovada'), 'success', <Check size={14} />));
-      if (pode('Reutilização não aprovada')) acoes.push(btn('Não Aprovar', () => naoAprovar(u), 'danger', <X size={14} />));
+      if (pode('Reutilização não aprovada')) acoes.push(btn('Não aprovar', () => naoAprovar(u), 'danger', <X size={14} />));
     }
     if (st === 'Reutilização não aprovada') {
-      if (pode('Aguardando novo filtro (Projetista)')) acoes.push(btn('Solicitar Dispositivo Novo', () => transicionar(u.id, 'Aguardando novo filtro (Projetista)'), 'primary', <Factory size={14} />));
+      if (pode('Aguardando novo filtro (Projetista)')) acoes.push(btn('Solicitar dispositivo novo', () => transicionar(u.id, 'Aguardando novo filtro (Projetista)'), 'primary', <Factory size={14} />));
     }
     if (st === 'Aguardando novo filtro (Projetista)') {
-      if (pode('Em análise (Projetista)')) acoes.push(btn('Similar Encontrado', () => transicionar(u.id, 'Em análise (Projetista)'), 'primary', <Wrench size={14} />));
-      if (pode('Liberado para fabricação (novo dispositivo)')) acoes.push(btn('Liberar Fabricação', () => transicionar(u.id, 'Liberado para fabricação (novo dispositivo)'), 'success', <Factory size={14} />));
+      if (pode('Em análise (Projetista)')) acoes.push(btn('Similar encontrado', () => transicionar(u.id, 'Em análise (Projetista)'), 'primary', <Wrench size={14} />));
+      if (pode('Liberado para fabricação (novo dispositivo)')) acoes.push(btn('Liberar fabricação', () => transicionar(u.id, 'Liberado para fabricação (novo dispositivo)'), 'success', <Factory size={14} />));
     }
+    if (podeHardSaving) acoes.push(btn('Hard Saving', () => setHardSavingDe(u), 'neutro', <Coins size={14} />));
 
     return acoes;
   };
@@ -433,7 +439,7 @@ export function Reutilizacoes() {
             <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#111827' }}>{u.descricaoAlteracao || 'Descrição não informada'}</h4>
           </div>
           <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-            <strong>Dispositivo:</strong> {rotuloDisp(u.dispositivoId)} | <strong>Peça:</strong> {u.codigoPeca || 'N/A'} | <strong>Solicitante:</strong> {u.solicitanteNome || u.responsavel || 'N/A'}
+            {rotuloDisp(u.dispositivoId)} · Peça {u.codigoPeca || '—'} · por {u.solicitanteNome || u.responsavel || '—'} · Hard Saving R$ {(u.hardSaving || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end', marginLeft: 'auto' }}>
@@ -447,11 +453,8 @@ export function Reutilizacoes() {
 
   return (
     <div>
-      <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--spacing-md)' }}>
-        <div>
-          <h2>Histórico & Solicitações de Reutilização</h2>
-          <p style={{ color: 'var(--color-text-body)' }}>Fluxo de solicitação da Engenharia, análise da Ferramentaria e histórico consolidado.</p>
-        </div>
+      <div style={{ marginBottom: 'var(--spacing-lg)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+        <h2 style={{ margin: 0 }}>Reutilizações</h2>
         <button
           className="btn"
           onClick={() => setIsFluxoOpen(true)}
@@ -543,7 +546,7 @@ export function Reutilizacoes() {
                 style={{ height: '36px', padding: '0 14px', fontSize: '0.82rem' }}
               >
                 <ListChecks size={16} />
-                Ações em Massa
+                Ações em massa
               </button>
             )}
           </div>
@@ -559,7 +562,7 @@ export function Reutilizacoes() {
             <input
               type="text"
               className="input-field"
-              placeholder="Buscar por descrição, peça, solicitante ou OS..."
+              placeholder="Buscar por descrição, peça, solicitante ou OS…"
               aria-label="Buscar no histórico"
               value={filterText}
               onChange={(e) => {
@@ -682,15 +685,25 @@ export function Reutilizacoes() {
                               {u.aprovadorNome && (
                                 <div><strong>Análise:</strong> {u.aprovadorNome}{u.dataAprovacao ? ` em ${new Date(u.dataAprovacao).toLocaleString('pt-BR')}` : ''}</div>
                               )}
-                              <div>
+                              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                 <button
                                   type="button"
                                   className="btn"
                                   onClick={() => navigate(`/dispositivos/${u.dispositivoId}`)}
                                   style={{ padding: '4px 12px', minHeight: 28, fontSize: '0.75rem' }}
                                 >
-                                  <ExternalLink size={13} /> Ver Dispositivo
+                                  <ExternalLink size={13} /> Ver dispositivo
                                 </button>
+                                {podeHardSaving && (
+                                  <button
+                                    type="button"
+                                    className="btn"
+                                    onClick={() => setHardSavingDe(u)}
+                                    style={{ padding: '4px 12px', minHeight: 28, fontSize: '0.75rem' }}
+                                  >
+                                    <Coins size={13} /> Editar Hard Saving
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -771,6 +784,12 @@ export function Reutilizacoes() {
 
       {/* Modal explicativo do fluxo de aceite */}
       <FluxoReutilizacaoModal isOpen={isFluxoOpen} onClose={() => setIsFluxoOpen(false)} />
+
+      <HardSavingModal
+        reutilizacao={hardSavingDe}
+        nomeDispositivo={hardSavingDe ? rotuloDisp(hardSavingDe.dispositivoId) : undefined}
+        onClose={() => setHardSavingDe(null)}
+      />
     </div>
   );
 }

@@ -240,6 +240,45 @@ describe('FirestoreDispositivosRepository', () => {
     });
   });
 
+  describe('importarLote — herança da imagem do dispositivo (mesmo Nº dispositivo)', () => {
+    const comImagem = () => ({
+      id: 'origem', codigo: 'PN-9', nome: 'MAT01', imagemPeca: 'peca.png', imagemDispositivo: 'disp.png',
+      chaveCD: chaveCodigoDispositivo('PN-9', 'MAT01'),
+    });
+    const semImagem = () => ({ id: 'irmao', codigo: 'PN-2', nome: 'mat01', chaveCD: chaveCodigoDispositivo('PN-2', 'mat01') });
+    const arquivo = () => [
+      { codigo: 'PN-NOVO', nome: ' MAT01 ', imagemPeca: '', imagemDispositivo: '' }, // novo com o mesmo Nº
+      { codigo: 'PN-9', nome: 'OUTRO', imagemPeca: '', imagemDispositivo: '' },      // mesma peça, outro Nº
+      { codigo: 'PN-2', nome: 'mat01', descricao: 'nova', imagemPeca: '', imagemDispositivo: '' }, // existente
+    ];
+    const doc = (codigo: string) => mockDbState.dispositivos.find((d: any) => d.codigo === codigo && d.id !== 'origem');
+
+    const conferir = (r: any) => {
+      expect(r).toMatchObject({ inseridos: 2, atualizados: 1, imagensHerdadas: 1, erros: 0 });
+      // Só a imagem do dispositivo é herdada; a da peça é alimentada um a um.
+      expect(doc('PN-NOVO')).toMatchObject({ imagemPeca: '', imagemDispositivo: 'disp.png' });
+      expect(doc('PN-9')).toMatchObject({ imagemPeca: '', imagemDispositivo: '' });
+      // Existente sem imagem não é preenchido pela importação (a propagação é do upload).
+      expect(doc('PN-2').imagemDispositivo).toBeUndefined();
+      expect(doc('PN-2').descricao).toBe('nova');
+    };
+
+    test('leitura completa: as imagens da linha já vêm do banco lido', async () => {
+      mockDbState.dispositivos.push(comImagem(), semImagem());
+      const r = await repository.importarLote(arquivo(), [], [], [], [], [], []);
+      expect(r.leituraParcial).toBeFalsy();
+      conferir(r);
+    });
+
+    test('leitura parcial: lê só as linhas dos novos e herda do mesmo jeito', async () => {
+      await repository.importarLote(Array.from({ length: 3000 }, (_, i) => ({ codigo: `C${i}`, nome: 'D' })), [], [], [], [], [], []);
+      mockDbState.dispositivos.push(comImagem(), semImagem());
+      const r = await repository.importarLote(arquivo(), [], [], [], [], [], []);
+      expect(r.leituraParcial).toBe(true);
+      conferir(r);
+    });
+  });
+
   describe('importarLote — desempenho, progresso, cancelamento e cota', () => {
     const firestore = () => jest.requireMock('firebase/firestore') as { writeBatch: jest.Mock; getDocs: jest.Mock };
     const lista = (n: number, peso = '1') => Array.from({ length: n }, (_, i) => ({ codigo: `C${String(i).padStart(5, '0')}`, nome: 'D', peso }));

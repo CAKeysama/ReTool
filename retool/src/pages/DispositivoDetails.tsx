@@ -170,30 +170,11 @@ export function DispositivoDetails() {
             <ArrowLeft size={20} color="#9ca3af" />
           </button>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.4rem' }}>{disp.nome || 'Sem Nome'}</h2>
-            <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{disp.codigo || 'S/C'}</div>
+            <h2 style={{ margin: 0, fontSize: '1.4rem' }}>{disp.nome || 'Sem nome'}</h2>
+            <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{disp.codigo || 'Sem código'}</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {canSolicitar && isEngenharia && (
-            <button 
-              className="btn" 
-              onClick={() => setIsSolicitarOpen(true)}
-              style={{ 
-                padding: '6px 16px', 
-                borderRadius: '20px', 
-                fontSize: '0.85rem',
-                backgroundColor: '#ea580c',
-                color: 'white',
-                border: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-            >
-              <Send size={14} /> Solicitar Reutilização
-            </button>
-          )}
 
           {canEditar && (
             <button 
@@ -213,62 +194,62 @@ export function DispositivoDetails() {
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--spacing-lg)' }}>
             <Box size={16} color="var(--color-primary)" />
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Dados da Peça e Dispositivo</h3>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>Dados do dispositivo</h3>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Nº dispositivo</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.nome || <span style={{color: 'var(--gray01)'}}>—</span>}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>CÓDIGO PEÇA</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.codigo || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Código da peça</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.codigo || <span style={{color: 'var(--gray01)'}}>—</span>}</div>
             </div>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>PESO dispositivo</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.peso ? `${disp.peso}` : <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Peso</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{disp.peso ? `${disp.peso} g` : <span style={{color: 'var(--gray01)'}}>—</span>}</div>
             </div>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>PALAVRAS CHAVE</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Palavras-chave</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 {(disp.palavrasChave || []).map(tag => (
                   <span key={tag} className="badge badge-pink">{tag}</span>
                 ))}
-                {(disp.palavrasChave || []).length === 0 && <span style={{color: '#d1d5db'}}>Não info.</span>}
+                {(disp.palavrasChave || []).length === 0 && <span style={{color: 'var(--gray01)'}}>—</span>}
               </div>
             </div>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Família do Produto</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{familia?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Família do produto</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{familia?.nome || <span style={{color: 'var(--gray01)'}}>—</span>}</div>
             </div>
             <div>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Produto</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{produto?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{produto?.nome || <span style={{color: 'var(--gray01)'}}>—</span>}</div>
             </div>
           </div>
 
           <div className="form-row-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
             <div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>CATEGORIA</div>
-              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{categoria?.nome || <span style={{color: '#d1d5db'}}>Não info.</span>}</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Categoria</div>
+              <div style={{ color: 'var(--color-text-dark)', fontWeight: 500 }}>{categoria?.nome || <span style={{color: 'var(--gray01)'}}>—</span>}</div>
             </div>
           </div>
 
           <div style={{ marginBottom: 'var(--spacing-md)' }}>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>DESCRIÇÃO PEÇA</div>
-            <div style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', lineHeight: 1.6 }}>{disp.descricao || <span style={{color: '#d1d5db'}}>Não informada.</span>}</div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Descrição da peça</div>
+            <div style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', lineHeight: 1.6 }}>{disp.descricao || <span style={{color: 'var(--gray01)'}}>—</span>}</div>
           </div>
 
           {disp.observacoes && (
             <div style={{ marginBottom: 'var(--spacing-md)' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Observações (Legado)</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '4px' }}>Observações (legado)</div>
               <div style={{ color: 'var(--color-text-dark)', fontSize: '0.9rem', lineHeight: 1.6 }}>{disp.observacoes}</div>
             </div>
           )}
@@ -277,7 +258,7 @@ export function DispositivoDetails() {
           {(disp.imagemPeca || disp.imagemDispositivo || (disp.anexos && disp.anexos.length > 0)) && (
             <div style={{ marginTop: 'var(--spacing-lg)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-md)' }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: 'var(--spacing-sm)' }}>
-                Arquivos e Mídias Anexadas
+                Anexos
               </div>
 
               {/* Fotos da Peça e Dispositivo */}
@@ -285,7 +266,7 @@ export function DispositivoDetails() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', marginBottom: (disp.anexos && disp.anexos.length > 0) ? 'var(--spacing-md)' : '0' }}>
                   {disp.imagemPeca && (
                     <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>IMAGEM PEÇA</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>Imagem da peça</span>
                       <a href={disp.imagemPeca} target="_blank" rel="noopener noreferrer" title="Abrir imagem original">
                         <img src={disp.imagemPeca} alt="Imagem da peça" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }} />
                       </a>
@@ -293,7 +274,7 @@ export function DispositivoDetails() {
                   )}
                   {disp.imagemDispositivo && (
                     <div style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', backgroundColor: '#f9fafb' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>Imagem dispositivo</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>Imagem do dispositivo</span>
                       <a href={disp.imagemDispositivo} target="_blank" rel="noopener noreferrer" title="Abrir imagem original">
                         <img src={disp.imagemDispositivo} alt="Imagem do dispositivo" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer' }} />
                       </a>
@@ -374,7 +355,7 @@ export function DispositivoDetails() {
 
         {/* CARTÃO: RESUMO */}
         <div className="card" style={{ height: 'fit-content' }}>
-          <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, marginBottom: 'var(--spacing-lg)' }}>Resumo do Dispositivo</h3>
+          <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, marginBottom: 'var(--spacing-lg)' }}>Resumo</h3>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Reutilizações</span>
@@ -382,34 +363,24 @@ export function DispositivoDetails() {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Hard Saving Total</span>
+            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Hard Saving total</span>
             <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>{resumoPronto ? `R$ ${totalHardSaving.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : resumoVazio}</span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Primeira Reutilização</span>
+            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Primeira reutilização</span>
             <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.85rem' }}>
               {!resumoPronto ? resumoVazio : primeiraReutilizacao ? formatDisplayDate(primeiraReutilizacao.data || primeiraReutilizacao.dataCriacao || '') : 'N/A'}
             </span>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Última Reutilização</span>
+            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Última reutilização</span>
             <span style={{ fontWeight: 600, color: 'var(--color-text-dark)', fontSize: '0.85rem' }}>
               {!resumoPronto ? resumoVazio : ultimaReutilizacao ? formatDisplayDate(ultimaReutilizacao.data || ultimaReutilizacao.dataCriacao || '') : 'N/A'}
             </span>
           </div>
           
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Categoria</span>
-            {categoria?.nome ? <span className={getBadgeColor(categoria.nome)}>{categoria.nome}</span> : <span style={{color: '#d1d5db', fontSize: '0.85rem'}}>N/A</span>}
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '12px', borderBottom: '1px solid var(--color-border)', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Família</span>
-            {familia?.nome ? <span className={getBadgeColor(familia.nome)}>{familia.nome}</span> : <span style={{color: '#d1d5db', fontSize: '0.85rem'}}>N/A</span>}
-          </div>
-
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>Cadastro</span>
             <span style={{ fontSize: '0.85rem', color: '#6b7280' }}>{new Date(disp.dataCriacao || '').toLocaleDateString('pt-BR')}</span>
@@ -421,40 +392,17 @@ export function DispositivoDetails() {
       {/* HISTÓRICO DE REUTILIZAÇÕES EM FORMATO DE TABELA */}
       <div className="card" style={{ padding: 0, marginTop: 'var(--spacing-lg)', overflow: 'hidden' }}>
         <div style={{ padding: 'var(--spacing-md) var(--spacing-lg)', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Histórico de Reutilizações</h3>
-            <p style={{ color: '#6b7280', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Todas as reutilizações registradas para este dispositivo.</p>
-          </div>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Reutilizações</h3>
           <div style={{ display: 'flex', gap: '8px' }}>
             {canCadastrar && (
-              <button 
-                className="btn btn-primary" 
-                onClick={openModal}
-                aria-label="Registrar Nova Reutilização"
-              >
-                <Plus size={16} /> Nova Reutilização
+              <button className="btn btn-primary" onClick={openModal}>
+                <Plus size={16} /> Nova reutilização
               </button>
             )}
 
             {canSolicitar && isEngenharia && (
-              <button 
-                className="btn" 
-                onClick={() => setIsSolicitarOpen(true)}
-                style={{ 
-                  backgroundColor: '#ea580c', 
-                  color: 'white', 
-                  border: 'none', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '6px', 
-                  padding: '8px 16px', 
-                  borderRadius: 'var(--radius-sm)', 
-                  fontWeight: 600,
-                  fontSize: '0.85rem'
-                }}
-                aria-label="Solicitar Reutilização"
-              >
-                <Send size={16} /> Solicitar Reutilização
+              <button className="btn btn-primary" onClick={() => setIsSolicitarOpen(true)}>
+                <Send size={16} /> Solicitar reutilização
               </button>
             )}
           </div>
@@ -625,26 +573,16 @@ export function DispositivoDetails() {
               </tbody>
             </table>
 
-            {/* Rodapé da Tabela */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', backgroundColor: '#f9fafb', borderTop: '1px solid var(--color-border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#4A4A4A', fontWeight: 500 }}>
-                <Edit size={16} />
-                <span>Total de reutilizações: <strong>{sortedReutilizacoes.length}</strong></span>
-              </div>
-              <div style={{ fontSize: '0.95rem', color: '#4A4A4A', fontWeight: 500 }}>
-                Hard Saving acumulado: <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>R$ {totalHardSaving.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </div>
-            </div>
           </div>
         )}
       </div>
 
-      <AccessibleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nova Reutilização" maxWidth="650px">
+      <AccessibleModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nova reutilização" maxWidth="650px">
         <form onSubmit={handleCreateReutilizacao} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', maxWidth: '100%', width: '100%' }}>
           
           <div className="form-row-grid">
             <div>
-              <label htmlFor="u_data" className="input-label">Data da Reutilização</label>
+              <label htmlFor="u_data" className="input-label">Data da reutilização</label>
               <input 
                 id="u_data" type="date" className="input-field" required
                 value={novaReutilizacao.data} 
@@ -663,7 +601,7 @@ export function DispositivoDetails() {
 
           <div className="form-row-grid">
             <div>
-              <label htmlFor="u_cod" className="input-label">Código da Peça</label>
+              <label htmlFor="u_cod" className="input-label">Código da peça</label>
               <input 
                 id="u_cod" type="text" className="input-field" placeholder="Ex: 51500101580" required
                 value={novaReutilizacao.codigoPeca} 
@@ -671,7 +609,7 @@ export function DispositivoDetails() {
               />
             </div>
             <div>
-              <label htmlFor="u_desc_peca" className="input-label">Descrição da Peça</label>
+              <label htmlFor="u_desc_peca" className="input-label">Descrição da peça</label>
               <input 
                 id="u_desc_peca" type="text" className="input-field" placeholder="Ex: SUP DIR LONGO DIANT" required
                 value={novaReutilizacao.descricaoPeca} 
@@ -692,7 +630,7 @@ export function DispositivoDetails() {
                 {produtos.map(p => (
                   <option key={p.id} value={p.id}>{p.nome}</option>
                 ))}
-                <option value="custom">Outro (cadastrar novo)...</option>
+                <option value="custom">Outro (cadastrar novo)…</option>
               </select>
             </div>
             <div>
@@ -707,7 +645,7 @@ export function DispositivoDetails() {
 
           {novaReutilizacao.produtoId === 'custom' && (
             <div style={{ border: '1px solid var(--color-border)', padding: '12px', borderRadius: '6px', backgroundColor: '#f9fafb' }}>
-              <label htmlFor="u_custom_prod" className="input-label">Nome do Novo Produto</label>
+              <label htmlFor="u_custom_prod" className="input-label">Nome do novo produto</label>
               <input 
                 id="u_custom_prod" type="text" className="input-field" placeholder="Ex: SPE5500" required
                 value={produtoCustomizado}
@@ -737,9 +675,9 @@ export function DispositivoDetails() {
           </div>
 
           <div>
-            <label htmlFor="u_desc_alt" className="input-label">Descrição da Alteração Realizada</label>
+            <label htmlFor="u_desc_alt" className="input-label">Descrição da alteração</label>
             <textarea 
-              id="u_desc_alt" className="input-field" style={{ minHeight: '80px' }} placeholder="Descreva as adaptações no dispositivo..." required
+              id="u_desc_alt" className="input-field" style={{ minHeight: '80px' }} placeholder="Descreva as adaptações no dispositivo…" required
               value={novaReutilizacao.descricaoAlteracao} 
               onChange={e => setNovaReutilizacao({...novaReutilizacao, descricaoAlteracao: e.target.value})} 
             />
@@ -747,7 +685,7 @@ export function DispositivoDetails() {
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)', marginTop: 'var(--spacing-sm)' }}>
             <button type="button" className="btn" onClick={() => setIsModalOpen(false)}>Cancelar</button>
-            <button type="submit" className="btn btn-primary" disabled={salvandoReutilizacao} aria-busy={salvandoReutilizacao} style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: 'white' }}>{salvandoReutilizacao ? 'Registrando…' : 'Registrar Reutilização'}</button>
+            <button type="submit" className="btn btn-primary" disabled={salvandoReutilizacao} aria-busy={salvandoReutilizacao} style={{ backgroundColor: 'var(--color-primary)', borderColor: 'var(--color-primary)', color: 'white' }}>{salvandoReutilizacao ? 'Registrando…' : 'Registrar reutilização'}</button>
           </div>
         </form>
       </AccessibleModal>

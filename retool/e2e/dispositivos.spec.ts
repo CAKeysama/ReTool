@@ -9,7 +9,7 @@ test('cadastra um dispositivo e o encontra na busca', async ({ page }) => {
   await page.getByRole('button', { name: /Cadastrar novo dispositivo/ }).click();
   const dialogo = page.getByRole('dialog', { name: 'Novo dispositivo' });
   await dialogo.getByLabel('Nº dispositivo *').fill('Dispositivo E2E');
-  await dialogo.getByLabel('CÓDIGO PEÇA *').fill(codigo);
+  await dialogo.getByLabel('Código da peça *').fill(codigo);
   await dialogo.getByRole('button', { name: 'Salvar registro do dispositivo' }).click();
   await expect(dialogo).toBeHidden();
 
@@ -27,8 +27,8 @@ test('importa planilha mantendo combinações Código + Dispositivo distintas', 
   await page.getByLabel('Buscar arquivo da planilha (.csv ou .xlsx)').setInputFiles({
     name: 'importacao-e2e.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8'),
   });
-  await page.getByRole('button', { name: 'Processar Planilha' }).click();
-  await page.getByRole('button', { name: /Salvar Importação \(2\)/ }).click();
+  await page.getByRole('button', { name: 'Processar planilha' }).click();
+  await page.getByRole('button', { name: /Salvar importação \(2\)/ }).click();
   await page.getByRole('button', { name: 'Fechar', exact: true }).click();
 
   await page.getByLabel('Filtro de busca por nome ou código').fill(codigo);

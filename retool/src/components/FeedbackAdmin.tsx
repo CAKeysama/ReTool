@@ -42,7 +42,7 @@ export function Aviso({ tipo, children, onClose }: {
   );
 }
 
-export function EstadoCarregando({ mensagem = 'Carregando...' }: { mensagem?: string }) {
+export function EstadoCarregando({ mensagem = 'Carregando…' }: { mensagem?: string }) {
   return (
     <div
       role="status"

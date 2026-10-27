@@ -23,7 +23,7 @@ Nenhum outro campo entra na chave. Linhas repetidas viram um registro só
 Considerados **iguais** (diferença só de representação): espaços nas pontas,
 espaços repetidos / tab / NBSP, caracteres invisíveis (zero-width, BOM),
 forma Unicode (NFC × NFD) e maiúsculas/minúsculas — mesmo critério de
-`normalizarNumeroPeca()` e do "Remover Duplicatas" do Excel. O número `123`
+`normalizarNumeroDispositivo()` e do "Remover Duplicatas" do Excel. O número `123`
 e o texto `"123"` também são iguais.
 
 Considerados **diferentes**: zeros à esquerda (`0041` ≠ `41`), casas decimais

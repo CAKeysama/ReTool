@@ -4,7 +4,8 @@ import {
   where, QueryConstraint,
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { Dispositivo, chaveCodigoDispositivo } from '../../domain/entities/dispositivo';
+import { Dispositivo, chaveCodigoDispositivo, herdarImagensDaLinha } from '../../domain/entities/dispositivo';
+import { obterLinhasPorNumeros } from './FirestoreImagensLinha';
 import { Categoria } from '../../domain/entities/categoria';
 import { Familia } from '../../domain/entities/familia';
 import { Produto } from '../../domain/entities/produto';
@@ -25,6 +26,26 @@ class InterrupcaoImportacao extends Error {
 }
 
 const mensagemDe = (erro: unknown) => (erro instanceof Error ? erro.message : String(erro));
+
+/**
+ * Herança de imagens dos dispositivos novos da importação (altera `dados`
+ * das operações). Com a leitura completa, as imagens das linhas já estão em
+ * `existentes` (0 leituras a mais); com a parcial, lê só as linhas dos
+ * Nº dispositivo dos novos. Só a imagem do dispositivo é herdada.
+ * Devolve os ids que receberam imagem.
+ */
+async function herdarImagensNosNovos(
+  operacoes: { id: string; novo: boolean; dados: Partial<Dispositivo> }[],
+  existentes: Map<string, Dispositivo>,
+  leituraParcial: boolean
+): Promise<Set<string>> {
+  const candidatas = operacoes.filter(op => op.novo && !op.dados.imagemDispositivo);
+  if (candidatas.length === 0) return new Set();
+  const antes = candidatas.map(op => op.dados.imagemDispositivo);
+  const fontes = leituraParcial ? await obterLinhasPorNumeros(candidatas.map(op => op.dados.nome)) : existentes.values();
+  herdarImagensDaLinha(candidatas.map(op => op.dados), fontes);
+  return new Set(candidatas.filter((op, i) => op.dados.imagemDispositivo !== antes[i]).map(op => op.id));
+}
 const chaveNome = (v: string) => v.toLowerCase().trim();
 
 const contarDispositivosNoServidor = async (): Promise<number> => {
@@ -329,6 +350,22 @@ export async function importarLoteFirestore(
   const plano = planejarGravacao(resolvidos, existentes.values(), uuidv4);
   resultado.ignoradosSemAlteracao = plano.ignoradosSemAlteracao;
 
+  // 3b. Dispositivos novos sem imagem herdam a imagem da sua linha, como no
+  // cadastro manual: já entram com ela, no mesmo lote (nenhuma gravação a mais).
+  // Contadas só quando o lote é gravado.
+  let comImagemHerdada = new Set<string>();
+  resultado.imagensHerdadas = 0;
+  try {
+    comImagemHerdada = await herdarImagensNosNovos(plano.operacoes, existentes, leituraParcial);
+  } catch (erro) {
+    if (ehErroDeCota(erro)) {
+      resultado.documentosFinais = leituraParcial ? undefined : Array.from(finais.values());
+      return interromper(new InterrupcaoImportacao('cota', erro), novosDispositivos.length);
+    }
+    // Sem a herança a importação continua correta: só não copia as imagens.
+    console.warn('Não foi possível herdar as imagens das linhas na importação:', erro);
+  }
+
   // 4. Gravação em lotes.
   // Com o catálogo, cada lote leva também até 1 operação por parte tocada + a
   // meta: o lote encolhe para caber no limite de 500 operações por commit.
@@ -361,6 +398,7 @@ export async function importarLoteFirestore(
       for (const op of lote) {
         if (op.novo) { resultado.inseridos!++; resultado.atualizados! += op.registros - 1; }
         else resultado.atualizados! += op.registros;
+        if (comImagemHerdada.has(op.id)) resultado.imagensHerdadas!++;
         finais.set(op.id, { ...finais.get(op.id), ...op.dados, id: op.id } as Dispositivo);
       }
     } catch (erro) {

@@ -54,7 +54,7 @@ export function UsuariosPanel() {
       .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
   }, [users, busca, filtroSituacao]);
 
-  if (estadoUsuarios === 'carregando') return <EstadoCarregando mensagem="Carregando usuários..." />;
+  if (estadoUsuarios === 'carregando') return <EstadoCarregando mensagem="Carregando usuários…" />;
   if (estadoUsuarios === 'erro') {
     return <EstadoErro mensagem="Não foi possível carregar os usuários. Verifique sua conexão e se as regras do Firestore foram publicadas." />;
   }
@@ -165,7 +165,7 @@ export function UsuariosPanel() {
               type="text"
               className="input-field"
               aria-label="Buscar usuário"
-              placeholder="Buscar por nome ou e-mail..."
+              placeholder="Buscar por nome ou e-mail…"
               value={busca}
               onChange={e => setBusca(e.target.value)}
               style={{ paddingLeft: '36px' }}
@@ -227,7 +227,7 @@ export function UsuariosPanel() {
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
               <button type="submit" disabled={loadingAdd} className="btn btn-primary" style={{ fontWeight: 600, cursor: loadingAdd ? 'not-allowed' : 'pointer' }}>
-                {loadingAdd ? 'Criando conta...' : 'Criar conta e gerar senha'}
+                {loadingAdd ? 'Criando conta…' : 'Criar conta e gerar senha'}
               </button>
             </div>
           </div>
@@ -386,7 +386,7 @@ export function UsuariosPanel() {
                 Cancelar
               </button>
               <button type="button" onClick={handleConfirmReset} disabled={processandoUid === userToReset.uid} className="btn btn-primary" style={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                {processandoUid === userToReset.uid ? 'Enviando...' : 'Enviar e-mail'}
+                {processandoUid === userToReset.uid ? 'Enviando…' : 'Enviar e-mail'}
               </button>
             </div>
           </div>
@@ -414,7 +414,7 @@ export function UsuariosPanel() {
                 Cancelar
               </button>
               <button type="button" onClick={handleConfirmDelete} disabled={processandoUid === userToDelete.uid} className="btn btn-primary" style={{ fontWeight: 600, fontSize: '0.82rem' }}>
-                {processandoUid === userToDelete.uid ? 'Excluindo...' : 'Excluir'}
+                {processandoUid === userToDelete.uid ? 'Excluindo…' : 'Excluir'}
               </button>
             </div>
           </div>

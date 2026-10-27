@@ -6,8 +6,7 @@ import {
   User, 
   ArrowRight,
   AlertCircle,
-  CheckCircle2,
-  Info
+  CheckCircle2
 } from 'lucide-react';
 
 export function Login() {
@@ -117,63 +116,35 @@ export function Login() {
               <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: '#ffffff' }}>
                 <span style={{ color: '#ffffff' }}>Re</span><span style={{ color: 'var(--color-primary)' }}>Tool</span>
               </h1>
-              <span style={{ 
-                fontSize: '0.72rem', 
-                fontWeight: 700,
-                color: '#f8fafc',
-                backgroundColor: 'rgba(255,255,255,0.15)', 
-                padding: '3px 10px', 
-                borderRadius: '6px', 
-                marginLeft: '6px',
-                letterSpacing: '0.05em'
-              }}>
-                GESTAO INDUSTRIAL
-              </span>
             </div>
 
             <h2 style={{ 
               fontSize: '1.45rem', 
               fontWeight: 800, 
               lineHeight: 1.35, 
-              marginBottom: '12px',
+              marginBottom: '24px',
               color: '#ffffff' 
             }}>
-              Gestão de Dispositivos e Reutilização Industrial
+              Gestão de dispositivos e reutilização industrial
             </h2>
-            <p style={{ 
-              color: '#cbd5e1', 
-              fontSize: '0.88rem', 
-              lineHeight: 1.55, 
-              marginBottom: '28px' 
-            }}>
-              O ReTool centraliza o cadastro de dispositivos, famílias, categorias e produtos da ferramentaria e o fluxo de reutilização de peças, com rastreabilidade das operações.
-            </p>
 
             {/* SOBRE O PROJETO */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {[
-                'Cadastro e consulta de dispositivos da ferramentaria',
-                'Solicitação e aprovação de reutilização de peças',
-                'Histórico e auditoria das operações'
+                'Cadastro e consulta de dispositivos',
+                'Solicitação e aprovação de reutilizações',
+                'Histórico e auditoria'
               ].map(item => (
-                <div key={item} style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '12px 14px',
-                  borderRadius: 'var(--radius)',
-                  backgroundColor: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.12)'
-                }}>
-                  <span style={{ color: 'var(--color-primary)', fontWeight: 900, fontSize: '0.9rem' }}>•</span>
-                  <span style={{ fontSize: '0.85rem', color: '#e2e8f0' }}>{item}</span>
-                </div>
+                <li key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#e2e8f0' }}>
+                  <span aria-hidden="true" style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--color-primary)', flexShrink: 0 }} />
+                  {item}
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
 
           <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '28px' }}>
-            ReTool Gestão Industrial · 2026
+            ReTool · 2026
           </div>
         </div>
 
@@ -181,31 +152,13 @@ export function Login() {
         <div className="login-formulario" style={{ padding: '44px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
           <div style={{ marginBottom: '20px' }}>
             <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
-              {isRegistering ? 'Criar Nova Conta' : 'Acesse o Sistema'}
+              {isRegistering ? 'Criar conta' : 'Entrar'}
             </h2>
-            <p style={{ color: '#64748b', fontSize: '0.86rem', marginTop: '6px' }}>
-              {isRegistering 
-                ? 'Cadastre seu usuário institucional. Você entra como Convidado e o cargo é definido pela Administração na aprovação.' 
-                : 'Informe seu e-mail institucional e senha para entrar.'}
-            </p>
-          </div>
-
-          {/* AVISO INSTITUCIONAL DE PROVISIONAMENTO */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '8px',
-            padding: '10px 14px',
-            backgroundColor: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: 'var(--radius-sm)',
-            marginBottom: '18px'
-          }}>
-            <Info size={16} color="#2563eb" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div style={{ fontSize: '0.74rem', color: '#475569', lineHeight: 1.5 }}>
-              Contas institucionais são provisionadas e aprovadas pela Administração do sistema.
-              Novos cadastros entram como Convidado, sem acesso aos dados, até a aprovação.
-            </div>
+            {isRegistering && (
+              <p style={{ color: '#64748b', fontSize: '0.86rem', marginTop: '6px' }}>
+                Sua conta fica sem acesso aos dados até a Administração aprovar e definir seu cargo.
+              </p>
+            )}
           </div>
 
           {erro && (
@@ -246,7 +199,7 @@ export function Login() {
             {isRegistering && (
               <div>
                 <label className="input-label">
-                  Nome Completo
+                  Nome completo
                 </label>
                 <div style={{ position: 'relative' }}>
                   <User size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -265,7 +218,7 @@ export function Login() {
 
             <div>
               <label className="input-label">
-                E-mail Institucional
+                E-mail institucional
               </label>
               <div style={{ position: 'relative' }}>
                 <Mail size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -321,7 +274,7 @@ export function Login() {
                     disabled={enviandoRedefinicao}
                     style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-primary)', fontSize: '0.78rem', fontWeight: 600, cursor: enviandoRedefinicao ? 'not-allowed' : 'pointer', textDecoration: 'underline' }}
                   >
-                    {enviandoRedefinicao ? 'Enviando...' : 'Esqueci minha senha'}
+                    {enviandoRedefinicao ? 'Enviando…' : 'Esqueci minha senha'}
                   </button>
                 </div>
               )}
@@ -330,7 +283,7 @@ export function Login() {
             {isRegistering && (
               <div>
                 <label className="input-label">
-                  Confirmar Senha
+                  Confirmar senha
                 </label>
                 <div style={{ position: 'relative' }}>
                   <Lock size={16} color="#64748b" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -353,14 +306,14 @@ export function Login() {
               className="btn btn-primary"
               style={{ width: '100%', marginTop: '6px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 700 }}
             >
-              <span>{loading ? 'Processando autenticação...' : (isRegistering ? 'Cadastrar e Aguardar Aprovação' : 'Entrar no ReTool')}</span>
+              <span>{loading ? (isRegistering ? 'Criando conta…' : 'Entrando…') : (isRegistering ? 'Criar conta' : 'Entrar')}</span>
               <ArrowRight size={18} />
             </button>
           </form>
 
           {/* ALTERNAR CADASTRO / LOGIN */}
           <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.84rem', color: '#64748b' }}>
-            {isRegistering ? 'Já possui uma conta institucional?' : 'Novo colaborador na indústria?'}
+            {isRegistering ? 'Já tem conta?' : 'Primeiro acesso?'}
             <button
               type="button"
               onClick={() => {
@@ -378,7 +331,7 @@ export function Login() {
                 textDecoration: 'underline'
               }}
             >
-              {isRegistering ? 'Faça login' : 'Cadastre-se aqui'}
+              {isRegistering ? 'Entrar' : 'Cadastre-se'}
             </button>
           </div>
         </div>

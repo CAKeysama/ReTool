@@ -162,7 +162,7 @@ export function HistoricoAcoesPanel() {
           </label>
           <div style={{ position: 'relative', alignSelf: 'end' }}>
             <Search size={16} color="#9ca3af" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-            <input type="text" className="input-field" aria-label="Buscar nesta página" placeholder="Buscar nesta página..."
+            <input type="text" className="input-field" aria-label="Buscar nesta página" placeholder="Buscar nesta página…"
               value={busca} onChange={e => setBusca(e.target.value)} style={{ paddingLeft: '36px' }} />
           </div>
         </div>
@@ -175,7 +175,7 @@ export function HistoricoAcoesPanel() {
           <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
             {h.total !== null
               ? `${h.total} ${h.total === 1 ? 'registro' : 'registros'}`
-              : h.totalIndisponivel ? 'Total indisponível' : 'Contando registros...'}
+              : h.totalIndisponivel ? 'Total indisponível' : 'Contando registros…'}
             {busca && h.estado === 'pronto' && <span style={{ color: '#6b7280', fontWeight: 500 }}> · {visiveis.length} nesta página após a busca</span>}
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -195,7 +195,7 @@ export function HistoricoAcoesPanel() {
         </div>
 
         {/* REGISTROS */}
-        {h.estado === 'carregando' && <EstadoCarregando mensagem="Carregando histórico de ações..." />}
+        {h.estado === 'carregando' && <EstadoCarregando mensagem="Carregando histórico de ações…" />}
         {h.estado === 'erro' && <EstadoErro mensagem={h.erro} onTentarNovamente={h.recarregar} />}
         {h.estado === 'pronto' && (
           <div style={{ overflowX: 'auto' }}>

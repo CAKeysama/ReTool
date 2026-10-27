@@ -55,7 +55,7 @@ export function Layout() {
           <li>
             <NavLink to="/categorias" className={({ isActive }) => `bottom-nav-item ${isActive ? 'active' : ''}`}>
               <Settings size={24} />
-              <span>Categorias</span>
+              <span>Classificações</span>
             </NavLink>
           </li>
         )}
@@ -105,9 +105,6 @@ export function Layout() {
             <span style={{ color: 'var(--color-gray-steel)' }}>Re</span>
             <span style={{ color: 'var(--color-primary)' }}>Tool</span>
           </h1>
-          <div style={{ color: '#6b7280', fontSize: '0.75rem', fontWeight: 500, marginTop: '2px' }}>
-            Gestão Industrial
-          </div>
         </div>
 
         {/* PERFIL DE ACESSO RBAC + NOTIFICAÇÕES */}
@@ -120,9 +117,6 @@ export function Layout() {
 
         {/* MENU */}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7280', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
-            MENU
-          </div>
           <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <li>
               <SidebarLink to="/" icon={<Home size={18} />} label="Home" shortcut="H" />
@@ -135,7 +129,7 @@ export function Layout() {
             </li>
             {(canCadastrar || canEditar) && (
               <li>
-                <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Categorias" shortcut="C" />
+                <SidebarLink to="/categorias" icon={<Settings size={18} />} label="Classificações" shortcut="C" />
               </li>
             )}
             {canGerenciarUsuarios && (
@@ -146,20 +140,16 @@ export function Layout() {
           </ul>
         </div>
 
-        {/* ATALHOS / FOOTER HELP */}
-        <div style={{ backgroundColor: '#f9fafb', padding: 'var(--spacing-md)', borderRadius: 'var(--radius)', marginTop: 'auto' }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, color: '#6b7280', marginBottom: 'var(--spacing-sm)', letterSpacing: '0.05em' }}>
-            ATALHOS
+        {/* ATALHOS: recolhidos por padrão, abertos sob demanda */}
+        <details className="sidebar-atalhos">
+          <summary>Atalhos de teclado</summary>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', fontSize: '0.75rem', color: '#6b7280', marginTop: 'var(--spacing-sm)' }}>
+            <div style={{ display: 'flex', gap: '6px' }}><kbd>/</kbd> Buscar</div>
+            {canEditar && <div style={{ display: 'flex', gap: '6px' }}><kbd>E</kbd> Editar</div>}
+            {canExcluir && <div style={{ display: 'flex', gap: '6px' }}><kbd>D</kbd> Excluir</div>}
+            <div style={{ display: 'flex', gap: '6px' }}><kbd>Esc</kbd> Fechar</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', fontSize: '0.75rem', color: '#6b7280' }}>
-            <div style={{ display: 'flex', gap: '6px' }}><span>/</span> Buscar</div>
-            {canCadastrar && <div style={{ display: 'flex', gap: '6px' }}><span>N</span> Novo</div>}
-            {canEditar && <div style={{ display: 'flex', gap: '6px' }}><span>E</span> Editar</div>}
-            {canExcluir && <div style={{ display: 'flex', gap: '6px' }}><span>D</span> Excluir</div>}
-            <div style={{ display: 'flex', gap: '6px' }}><span>Esc</span> Fechar</div>
-            <div style={{ display: 'flex', gap: '6px', gridColumn: 'span 2' }}><span>Tab</span> Navegar</div>
-          </div>
-        </div>
+        </details>
       </nav>
 
       {/* BOTTOM NAVIGATION (MOBILE ONLY) */}

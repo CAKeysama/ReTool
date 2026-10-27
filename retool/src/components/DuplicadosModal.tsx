@@ -214,7 +214,7 @@ export function DuplicadosModal({ isOpen, onClose }: DuplicadosModalProps) {
                     Revisei a lista
                   </label>
                   <button className="btn btn-primary" onClick={handleRemover} disabled={!confirmado || isProcessing}>
-                    {isProcessing ? 'Removendo...' : `Remover ${fmt(plano.totalRemover)} duplicados`}
+                    {isProcessing ? 'Removendo…' : `Remover ${fmt(plano.totalRemover)} duplicados`}
                   </button>
                 </div>
               )}

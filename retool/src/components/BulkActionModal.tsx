@@ -237,7 +237,7 @@ export function BulkActionModal({
               </div>
               <div>
                 <h2 id="bulk-modal-title" style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>
-                  Ações em Massa
+                  Ações em massa
                 </h2>
                 <p style={{ margin: 0, fontSize: '0.8rem', color: '#6b7280' }}>
                   Selecione itens e aplique uma ação
@@ -261,7 +261,7 @@ export function BulkActionModal({
               <input
                 type="text"
                 className="input-field"
-                placeholder="Buscar item..."
+                placeholder="Buscar item…"
                 value={search}
                 onChange={e => onSearchChange(e.target.value)}
                 style={{ paddingLeft: '38px', height: '38px', fontSize: '0.9rem' }}

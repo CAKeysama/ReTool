@@ -36,7 +36,8 @@ export function normalizarStatusReutilizacao(status?: string): ReutilizacaoStatu
 
 /**
  * Transições permitidas por perfil (espelhadas em firestore.rules):
- * - Engenharia: inicia (1º filtro) e solicita dispositivo novo.
+ * - Engenharia: inicia (a solicitação já nasce no 1º filtro) e solicita dispositivo novo.
+ *   'Em análise (Engenharia)' só existe em rascunhos antigos, que ainda podem ser enviados.
  * - Projetista: análise técnica (1º filtro) e verificação de similares (2º filtro).
  * - Administração: todas as transições.
  * - Gerência: nenhuma (somente leitura).

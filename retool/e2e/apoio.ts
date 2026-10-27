@@ -16,7 +16,7 @@ export async function entrar(page: Page, email: string, senha: string) {
   await page.goto('/login');
   await page.getByPlaceholder('usuario@empresa.com').fill(email);
   await page.getByPlaceholder('••••••••').fill(senha);
-  await page.getByRole('button', { name: 'Entrar no ReTool' }).click();
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
 export async function entrarComoAdmin(page: Page) {

@@ -57,32 +57,19 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
         {/* Etapa 1 */}
         <div style={cartao}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <h3 style={tituloEtapa}>1. Solicitação</h3>
-            <Chip status="Em análise (Engenharia)" />
-          </div>
-          <p style={textoEtapa}>
-            A Engenharia cria a solicitação no formulário &quot;Nova Solicitação&quot; (peça, descrição da alteração, hard saving).
-            O registro nasce neste status e fica na <strong>Fila da Engenharia</strong>.
-          </p>
-        </div>
-        <Conector />
-
-        {/* Etapa 2 */}
-        <div style={cartao}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <h3 style={tituloEtapa}>2. Envio para análise (1º filtro)</h3>
+            <h3 style={tituloEtapa}>1. Solicitação (1º filtro)</h3>
             <Chip status="Em análise (Projetista)" />
           </div>
           <p style={textoEtapa}>
-            Ainda na Fila da Engenharia, a solicitação é enviada com o botão <strong>&quot;Solicitar Análise&quot;</strong>.
-            Ela passa para a <strong>Fila do Projetista</strong>, e o Projetista e o Admin são notificados.
+            A Engenharia cria a solicitação no formulário &quot;Nova Solicitação&quot; (peça e descrição da alteração).
+            Ao enviar, ela vai direto para a <strong>Fila do Projetista</strong>, e o Projetista e o Admin são notificados.
           </p>
         </div>
         <Conector />
 
-        {/* Etapa 3: decisão do 1º filtro */}
+        {/* Etapa 2: decisão do 1º filtro */}
         <div style={cartao}>
-          <h3 style={tituloEtapa}>3. Decisão do Projetista</h3>
+          <h3 style={tituloEtapa}>2. Decisão do Projetista</h3>
           <p style={textoEtapa}>
             Na Fila do Projetista, a solicitação é avaliada e o resultado segue por um dos caminhos:
           </p>
@@ -115,7 +102,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
         {/* Etapa 4: 2º filtro */}
         <div style={cartao}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <h3 style={tituloEtapa}>4. Novo dispositivo (2º filtro)</h3>
+            <h3 style={tituloEtapa}>3. Novo dispositivo (2º filtro)</h3>
             <Chip status="Aguardando novo filtro (Projetista)" />
           </div>
           <p style={textoEtapa}>
@@ -124,7 +111,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px', fontSize: '0.8rem', color: '#4b5563' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
               <CornerDownRight size={14} style={{ color: '#6b7280' }} />
-              <strong>Similar encontrado:</strong> retorna à análise do Projetista (etapa 3) e o solicitante é avisado.
+              <strong>Similar encontrado:</strong> retorna à análise do Projetista (etapa 2) e o solicitante é avisado.
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
               <CornerDownRight size={14} style={{ color: '#6b7280' }} />
@@ -150,7 +137,7 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
           </thead>
           <tbody>
             {[
-              { st: 'Em análise (Engenharia)' as ReutilizacaoStatus, desc: 'Rascunho criado pela Engenharia, aguardando envio ao 1º filtro.', quem: 'Engenharia / Admin' },
+              { st: 'Em análise (Engenharia)' as ReutilizacaoStatus, desc: 'Somente solicitações antigas: rascunho aguardando envio ao 1º filtro.', quem: 'Engenharia / Admin' },
               { st: 'Em análise (Projetista)' as ReutilizacaoStatus, desc: 'Em avaliação pelo Projetista (1º filtro).', quem: 'Projetista / Admin' },
               { st: 'Reutilização aprovada' as ReutilizacaoStatus, desc: 'Aprovada no 1º filtro — estado final.', quem: '—' },
               { st: 'Reutilização não aprovada' as ReutilizacaoStatus, desc: 'Reprovada com motivo; pode ser enviado para solicitação de dispositivo novo.', quem: 'Engenharia / Admin' },
@@ -172,8 +159,8 @@ export function FluxoReutilizacaoModal({ isOpen, onClose }: FluxoReutilizacaoMod
       <div style={secao}>
         <h3 style={tituloSecao}>Permissões por perfil</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: '8px', fontSize: '0.8rem', color: '#4b5563' }}>
-          <div style={cartao}><strong>Engenharia:</strong> solicita, envia ao 1º filtro e solicita dispositivo novo.</div>
-          <div style={cartao}><strong>Projetista:</strong> aprova/reprova no 1º filtro e decide similar/liberação no 2º filtro.</div>
+          <div style={cartao}><strong>Engenharia:</strong> solicita (vai direto ao 1º filtro) e solicita dispositivo novo.</div>
+          <div style={cartao}><strong>Projetista:</strong> aprova/reprova no 1º filtro, decide similar/liberação no 2º filtro e define o Hard Saving.</div>
           <div style={cartao}><strong>Admin:</strong> todas as transições do fluxo.</div>
           <div style={cartao}><strong>Gerência:</strong> somente leitura (consulta o histórico).</div>
         </div>

@@ -404,15 +404,22 @@ service cloud.firestore {
         );
       }
 
+      // Projetista define o Hard Saving fora das transições (a Engenharia não o informa).
+      function apenasHardSaving() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hardSaving'])
+          && request.resource.data.hardSaving is number
+          && request.resource.data.hardSaving >= 0;
+      }
+
       allow get, list: if canConsultar();
 
       allow create: if isActiveUser(request.auth.uid)
         && request.resource.data.solicitanteId == request.auth.uid
         && (
-          // Engenharia inicia o processo (rascunho do 1º filtro).
+          // Engenharia inicia o processo já no 1º filtro (Fila do Projetista).
           (
             meuPerfil() == 'engenharia'
-            && request.resource.data.status == 'Em análise (Engenharia)'
+            && request.resource.data.status == 'Em análise (Projetista)'
           )
           // Administração/Ferramentaria registram histórico diretamente.
           || meuPerfil() in ['admin', 'projetista']
@@ -421,7 +428,7 @@ service cloud.firestore {
       allow update: if isActiveUser(request.auth.uid)
         && (
           isAdmin()
-          || (meuPerfil() == 'projetista' && transicaoProjetista())
+          || (meuPerfil() == 'projetista' && (transicaoProjetista() || apenasHardSaving()))
           || (meuPerfil() == 'engenharia' && transicaoEngenharia())
         );
 

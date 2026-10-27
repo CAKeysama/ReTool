@@ -33,7 +33,7 @@ export function SolicitacoesCargoPanel({ destacarId }: { destacarId?: string }) 
     [solicitacoesCargo, filtroStatus]
   );
 
-  if (estadoSolicitacoesCargo === 'carregando') return <EstadoCarregando mensagem="Carregando solicitações de cargo..." />;
+  if (estadoSolicitacoesCargo === 'carregando') return <EstadoCarregando mensagem="Carregando solicitações de cargo…" />;
   if (estadoSolicitacoesCargo === 'erro') {
     return <EstadoErro mensagem="Não foi possível carregar as solicitações de cargo. Verifique sua conexão e se as regras do Firestore foram publicadas." />;
   }
@@ -149,7 +149,7 @@ export function SolicitacoesCargoPanel({ destacarId }: { destacarId?: string }) 
                         onClick={() => confirmar(s, decidindo!.aprovar)}
                         style={estiloBotaoAcao(decidindo!.aprovar ? 'success' : 'danger')}
                       >
-                        {ocupado ? 'Salvando...' : decidindo!.aprovar ? 'Confirmar aprovação' : 'Confirmar rejeição'}
+                        {ocupado ? 'Salvando…' : decidindo!.aprovar ? 'Confirmar aprovação' : 'Confirmar rejeição'}
                       </button>
                     </div>
                   </div>

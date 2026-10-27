@@ -39,7 +39,7 @@ Para rodar sem tocar em dados reais, use os emuladores (`npm run emuladores` e `
 
 ```bash
 npm test               # domínio, casos de uso e repositórios (Firestore em memória)
-npm run test:rules     # regras do Firestore e consultas do histórico (emulador; requer Java)
+npm run test:rules     # regras do Firestore e do Storage e consultas do histórico (emulador; requer Java)
 ```
 
 Veja [Testes](https://github.com/CAKeysama/ReTool/wiki/Testes) e [Build e Deploy](https://github.com/CAKeysama/ReTool/wiki/Build-e-Deploy).

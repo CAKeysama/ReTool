@@ -167,19 +167,16 @@ export function Home() {
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-hover)'; e.currentTarget.style.borderColor = 'var(--color-border)' }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
         >
-          <Info size={16} /> Sobre o Projeto
+          <Info size={16} /> Sobre o projeto
         </button>
       </div>
 
       {/* Título */}
       <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-xl)' }}>
-        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-1px', marginBottom: '4px' }}>
+        <h1 style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '-1px', margin: 0 }}>
           <span style={{ color: 'var(--color-gray-steel)' }}>Re</span>
           <span style={{ color: 'var(--color-primary)' }}>Tool</span>
         </h1>
-        <p style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 500 }}>
-          Gestão de Dispositivos e Ferramentas Industriais
-        </p>
       </div>
 
       {/* Busca Principal */}
@@ -209,7 +206,7 @@ export function Home() {
               e.target.style.borderColor = 'var(--color-border)';
               setTimeout(() => setShowSuggestions(false), 200);
             }}
-            placeholder="Buscar dispositivos por nome, código, descrição..."
+            placeholder="Buscar por nome, código ou descrição…"
             aria-label="Buscar dispositivos"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -287,14 +284,11 @@ export function Home() {
         )}
       </div>
 
-      {/* Botões Centrais */}
+      {/* Ação principal (a busca vai para a lista com Enter) */}
       <div className="flex-wrap-container" style={{ marginBottom: 'var(--spacing-2xl)' }}>
-        <button className="btn" onClick={() => navigate(`/dispositivos?q=${encodeURIComponent(query)}`)} style={{ borderRadius: '20px', padding: '8px 20px' }}>
-          Buscar dispositivos
-        </button>
         {canCadastrar && (
-          <button className="btn btn-primary" aria-label="Cadastrar novo dispositivo" onClick={() => openDispForm()} style={{ width: '40px', height: '40px', padding: 0 }}>
-            <Plus size={20} />
+          <button className="btn btn-primary" onClick={() => openDispForm()} style={{ borderRadius: '20px', padding: '8px 20px' }}>
+            <Plus size={18} /> Novo dispositivo
           </button>
         )}
       </div>
@@ -321,7 +315,7 @@ export function Home() {
 
       {/* Texto de Atalho Footer */}
       <div className="hide-on-mobile" style={{ position: 'absolute', bottom: 'var(--spacing-xl)', color: '#6b7280', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
-        Pressione <span style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', color: '#6b7280', fontWeight: 600 }}>/</span> para focar a busca de qualquer tela
+        <kbd>/</kbd> busca em qualquer tela
       </div>
 
       {/* Botão de Bug Flutuante no Chão de Fábrica com Hover Tooltip & Efeitos de Explosão */}

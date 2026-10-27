@@ -206,7 +206,7 @@ export function Dispositivos() {
                 style={{ height: '40px', padding: '0 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
               >
                 <ListChecks size={18} />
-                <span className="hide-on-mobile">Ações em Massa</span>
+                <span className="hide-on-mobile">Ações em massa</span>
               </button>
             )}
 
@@ -214,7 +214,7 @@ export function Dispositivos() {
               <button
                 className="btn btn-primary btn-icon"
                 onClick={() => openDispForm()}
-                aria-label="Cadastrar novo dispositivo (Atalho: N)"
+                aria-label="Cadastrar novo dispositivo"
               >
                 <Plus size={20} />
               </button>
@@ -229,7 +229,7 @@ export function Dispositivos() {
               ref={searchInputRef}
               type="text" 
               className="input-field" 
-              placeholder="Buscar por nome ou código..." 
+              placeholder="Buscar por nome ou código…" 
               value={filterQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               onFocus={() => setBuscaFocada(true)}
@@ -303,7 +303,7 @@ export function Dispositivos() {
                   </select>
                 </div>
                 <div>
-                  <label className="input-label">Processo Industrial</label>
+                  <label className="input-label">Processo industrial</label>
                   <select className="input-field" value={filterProcesso} onChange={(e) => setFilterProcesso(e.target.value)}>
                     <option value="">Todos os Processos</option>
                     <option value="Shotblaster">Shotblaster</option>
@@ -406,7 +406,7 @@ export function Dispositivos() {
                     {catNome && <span className={getBadgeColor(catNome)}>{catNome}</span>}
                     {famNome && <span className={getBadgeColor(famNome)}>{famNome}</span>}
                     {prodNome && <span className="badge badge-blue">{prodNome}</span>}
-                    {disp.peso && <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 500 }}>{disp.peso}g</span>}
+                    {disp.peso && <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 500 }}>{disp.peso} g</span>}
                     {(disp.palavrasChave || []).map(tag => (
                       <span key={tag} className="badge badge-pink" style={{ fontSize: '0.75rem' }}>{tag}</span>
                     ))}

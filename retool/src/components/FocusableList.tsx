@@ -10,9 +10,12 @@ interface FocusableListProps<T> {
   ariaLabel?: string;
   /** Chave estável por item (evita remontar linhas ao paginar/filtrar). */
   getKey?: (item: T, index: number) => string;
+  /** "cartao" (padrão): itens com borda, para listas no nível da página. "linha": linhas com divisória, para listas dentro de um cartão. */
+  variante?: 'cartao' | 'linha';
 }
 
-export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem, onEditItem, ariaLabel, getKey }: FocusableListProps<T>) {
+export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem, onEditItem, ariaLabel, getKey, variante = 'cartao' }: FocusableListProps<T>) {
+  const emLinha = variante === 'linha';
   const { activeIndex, setActiveIndex, containerRef, handleKeyDown } = useKeyboardNavigation<HTMLUListElement>(items.length, 1);
 
   if (items.length === 0) {
@@ -31,7 +34,7 @@ export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem
         margin: 0, 
         display: 'flex', 
         flexDirection: 'column', 
-        gap: 'var(--spacing-sm)' 
+        gap: emLinha ? 0 : 'var(--spacing-sm)' 
       }}
     >
       {items.map((item, index) => {
@@ -65,7 +68,18 @@ export function FocusableList<T>({ items, renderItem, onItemAction, onDeleteItem
                 onEditItem && onEditItem(item);
               }
             }}
-            style={{
+            style={emLinha ? {
+              padding: '10px 8px',
+              borderBottom: index < items.length - 1 ? '1px solid var(--color-border)' : 'none',
+              borderRadius: 'var(--radius-sm)',
+              cursor: onItemAction ? 'pointer' : 'default',
+              backgroundColor: isFocused ? 'var(--color-hover)' : 'transparent',
+              transition: 'background-color 0.15s ease',
+              display: 'flex',
+              alignItems: 'center',
+              wordBreak: 'break-word',
+              minWidth: 0
+            } : {
               padding: 'var(--spacing-md) var(--spacing-lg)',
               border: isFocused ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
               borderRadius: 'var(--radius)',

@@ -474,3 +474,36 @@ describe('Catálogos de busca e classificações (indices)', () => {
     }
   });
 });
+
+describe('Reutilizações: solicitação da Engenharia vai direto ao 1º filtro', () => {
+  const solicitacao = (uid: string, status: string) => ({
+    dispositivoId: 'd1', codigoPeca: 'PC-1', descricaoAlteracao: 'Ajuste', solicitanteId: uid, status
+  });
+
+  test('Engenharia cria já em análise do Projetista, não mais como rascunho', async () => {
+    await assertSucceeds(setDoc(doc(db('eng'), 'reutilizacoes', 'r1'), solicitacao('eng', 'Em análise (Projetista)')));
+    await assertFails(setDoc(doc(db('eng'), 'reutilizacoes', 'r2'), solicitacao('eng', 'Em análise (Engenharia)')));
+    await assertFails(setDoc(doc(db('eng'), 'reutilizacoes', 'r3'), solicitacao('eng', 'Reutilização aprovada')));
+  });
+
+  test('Hard Saving: Projetista e Administração definem; Engenharia e Gerência não', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'reutilizacoes', 'hs'), { ...solicitacao('eng', 'Em análise (Projetista)'), hardSaving: 0 });
+    });
+    await assertSucceeds(updateDoc(doc(db('proj'), 'reutilizacoes', 'hs'), { hardSaving: 1500.5 }));
+    await assertSucceeds(updateDoc(doc(db('admin'), 'reutilizacoes', 'hs'), { hardSaving: 2000 }));
+    await assertFails(updateDoc(doc(db('eng'), 'reutilizacoes', 'hs'), { hardSaving: 10 }));
+    await assertFails(updateDoc(doc(db('ger'), 'reutilizacoes', 'hs'), { hardSaving: 10 }));
+    // O Projetista não usa a edição do Hard Saving para mudar outros campos nem gravar valor inválido.
+    await assertFails(updateDoc(doc(db('proj'), 'reutilizacoes', 'hs'), { hardSaving: 10, codigoPeca: 'OUTRA' }));
+    await assertFails(updateDoc(doc(db('proj'), 'reutilizacoes', 'hs'), { hardSaving: -1 }));
+    await assertFails(updateDoc(doc(db('proj'), 'reutilizacoes', 'hs'), { hardSaving: '10' }));
+  });
+
+  test('rascunhos antigos da Engenharia ainda podem ser enviados ao 1º filtro', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'reutilizacoes', 'antigo'), solicitacao('eng', 'Em análise (Engenharia)'));
+    });
+    await assertSucceeds(updateDoc(doc(db('eng'), 'reutilizacoes', 'antigo'), { status: 'Em análise (Projetista)' }));
+  });
+});

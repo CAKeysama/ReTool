@@ -2,7 +2,7 @@ import React, { useEffect, useId, useState } from 'react';
 import { useReTool } from '../context/ReToolContext';
 import { useAuth } from '../context/AuthContext';
 import { Dispositivo } from '../domain/entities/dispositivo';
-import { X, Send, Cpu, AlertCircle, LoaderCircle } from 'lucide-react';
+import { X, Send, AlertCircle, LoaderCircle } from 'lucide-react';
 import { useAsyncAction } from '../hooks/useAsyncAction';
 import { mensagemDeErro } from './feedback/EstadoDados';
 import { gravarComPrazo } from '../utils/tempo';
@@ -22,7 +22,6 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
   const [produtoId, setProdutoId] = useState(produtos[0]?.id || '');
   const [numeroOs, setNumeroOs] = useState('');
   const [pesoPeca, setPesoPeca] = useState<number | ''>('');
-  const [hardSaving, setHardSaving] = useState<number | ''>('');
   const [descricaoAlteracao, setDescricaoAlteracao] = useState('');
   const [erro, setErro] = useState('');
   const tituloId = useId();
@@ -39,7 +38,8 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
         descricaoPeca: descricaoPeca.trim(),
         produtoId: produtoId || produtos[0]?.id || 'padrao',
         pesoPeca: Number(pesoPeca) || 0,
-        hardSaving: Number(hardSaving) || 0,
+        // A Engenharia não informa o Hard Saving.
+        hardSaving: 0,
         responsavel: solicitante,
         numeroOs: numeroOs.trim(),
         descricaoAlteracao: descricaoAlteracao.trim()
@@ -112,29 +112,14 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
           borderBottom: '1px solid var(--color-border)',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: '#fff7ed'
+          justifyContent: 'space-between'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '8px',
-              backgroundColor: '#ea580c',
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Cpu size={20} />
-            </div>
-            <div>
-              <h2 id={tituloId} style={{ margin: 0, fontSize: '1.15rem', color: '#9a3412', fontWeight: 700 }}>
-                Solicitar Reutilização de Dispositivo
-              </h2>
-              <div style={{ fontSize: '0.8rem', color: '#c2410c' }}>
-                Dispositivo: <strong>{dispositivo.nome}</strong> (ID: {dispositivo.id.substring(0, 8)})
-              </div>
+          <div>
+            <h2 id={tituloId} style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>
+              Solicitar reutilização
+            </h2>
+            <div style={{ fontSize: '0.8rem', color: 'var(--gray01)' }}>
+              {[dispositivo.nome, dispositivo.codigo].filter(Boolean).join(' · ')}
             </div>
           </div>
 
@@ -168,14 +153,10 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
               </div>
             )}
 
-            <div style={{ padding: '10px 14px', backgroundColor: '#fef3c7', borderRadius: '6px', fontSize: '0.78rem', color: '#92400e', lineHeight: 1.4 }}>
-              <strong>Fluxo de Aprovação:</strong> A Engenharia formula a solicitação de reutilização. Ela entrará com status <strong>Pendente</strong> e será analisada e aprovada pelo <strong>Projetista</strong> da Ferramentaria.
-            </div>
-
             <div className="form-row-grid" style={{ gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
-                  Código da Nova Peça *
+                  Código da nova peça *
                 </label>
                 <input
                   type="text"
@@ -189,7 +170,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
-                  Número da O.S. (Ordem de Serviço)
+                  Nº da OS
                 </label>
                 <input
                   type="text"
@@ -204,7 +185,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
             <div className="form-row-grid" style={{ gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
-                  Descrição da Peça
+                  Descrição da peça
                 </label>
                 <input
                   type="text"
@@ -217,7 +198,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
-                  Produto / Projeto Destino
+                  Produto de destino
                 </label>
                 <select
                   value={produtoId}
@@ -237,7 +218,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
             <div className="form-row-grid" style={{ gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
-                  Peso Estimado (kg)
+                  Peso estimado (kg)
                 </label>
                 <input
                   type="number"
@@ -248,32 +229,18 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
                   style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
                 />
               </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
-                  Hard Saving Estimado (R$)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={hardSaving}
-                  onChange={e => setHardSaving(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="0.00"
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db' }}
-                />
-              </div>
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
-                Descrição da Alteração / Justificativa Técnica *
+                Descrição da alteração *
               </label>
               <textarea
                 required
                 rows={3}
                 value={descricaoAlteracao}
                 onChange={e => setDescricaoAlteracao(e.target.value)}
-                placeholder="Descreva as modificações mecânicas/elétricas necessárias para reaproveitar este dispositivo..."
+                placeholder="Descreva as modificações mecânicas/elétricas necessárias para reaproveitar este dispositivo…"
                 style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #d1d5db', fontFamily: 'inherit' }}
               />
             </div>
@@ -317,7 +284,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
                 padding: '8px 20px',
                 borderRadius: 'var(--radius-sm)',
                 border: 'none',
-                backgroundColor: '#ea580c',
+                backgroundColor: 'var(--color-primary)',
                 color: 'white',
                 fontWeight: 600,
                 fontSize: '0.85rem',
@@ -326,7 +293,7 @@ export function SolicitarReutilizacaoModal({ dispositivo, isOpen, onClose }: Sol
               }}
             >
               {loading ? <LoaderCircle size={16} className="estado-dados-girando" aria-hidden="true" /> : <Send size={16} aria-hidden="true" />}
-              <span>{loading ? 'Enviando…' : 'Enviar Solicitação'}</span>
+              <span>{loading ? 'Enviando…' : 'Enviar solicitação'}</span>
             </button>
           </div>
         </form>
