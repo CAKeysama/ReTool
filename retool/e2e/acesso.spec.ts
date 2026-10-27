@@ -38,7 +38,7 @@ test('autocadastro aguarda aprovação e é liberado em tempo real com o cargo e
   await admin.getByRole('button', { name: 'Aprovar' }).click();
 
   // A tela do convidado libera o sistema sem recarregar.
-  await expect(page.getByRole('heading', { name: 'Dispositivos', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dispositivos', level: 2, exact: true })).toBeVisible();
   await admin.context().close();
 });
 
@@ -55,7 +55,7 @@ test('conta criada pela Administração exige trocar a senha temporária no 1º 
   // A nova senha passa a valer num login seguinte.
   const outra = await novaSessao(browser);
   await entrar(outra, email, 'NovaSenha2026');
-  await expect(outra.getByRole('heading', { name: 'Dispositivos', level: 2 })).toBeVisible();
+  await expect(outra.getByRole('heading', { name: 'Dispositivos', level: 2, exact: true })).toBeVisible();
   await outra.context().close();
 });
 
@@ -80,7 +80,7 @@ test('bloquear um usuário derruba a sessão aberta dele', async ({ page, browse
 
 test('Engenharia não acessa a Administração', async ({ page }) => {
   await entrar(page, ENGENHARIA, SENHA_DEMO);
-  await expect(page.getByRole('heading', { name: 'Dispositivos', level: 2 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dispositivos', level: 2, exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: /Administração/ })).toHaveCount(0);
   await page.goto('/administracao');
   await expect(page).toHaveURL(/\/dispositivos$/);
