@@ -214,7 +214,7 @@ export function Dispositivos() {
               <button
                 className="btn btn-primary btn-icon"
                 onClick={() => openDispForm()}
-                aria-label="Cadastrar novo dispositivo (Atalho: N)"
+                aria-label="Cadastrar novo dispositivo"
               >
                 <Plus size={20} />
               </button>

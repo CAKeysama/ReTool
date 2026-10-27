@@ -145,7 +145,6 @@ export function Layout() {
           <summary>Atalhos de teclado</summary>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)', fontSize: '0.75rem', color: '#6b7280', marginTop: 'var(--spacing-sm)' }}>
             <div style={{ display: 'flex', gap: '6px' }}><kbd>/</kbd> Buscar</div>
-            {canCadastrar && <div style={{ display: 'flex', gap: '6px' }}><kbd>N</kbd> Novo</div>}
             {canEditar && <div style={{ display: 'flex', gap: '6px' }}><kbd>E</kbd> Editar</div>}
             {canExcluir && <div style={{ display: 'flex', gap: '6px' }}><kbd>D</kbd> Excluir</div>}
             <div style={{ display: 'flex', gap: '6px' }}><kbd>Esc</kbd> Fechar</div>
