@@ -1,4 +1,4 @@
-import { Dispositivo } from '../entities/dispositivo';
+import { Dispositivo, normalizarNumeroDispositivo } from '../entities/dispositivo';
 
 /**
  * Índice de busca de dispositivos (catálogo compacto).
@@ -82,13 +82,15 @@ export function normalizarBusca(str: string | undefined | null): string {
 }
 
 /**
- * Quantidade de "Nº dispositivo" (campo `nome`) distintos no catálogo.
- * Não diferencia caixa nem espaços nas pontas; Nº vazio não conta.
+ * Quantidade de "Nº dispositivo" (campo `nome`) distintos no catálogo, com
+ * o mesmo critério da linha de imagens e da chave Código + Dispositivo
+ * (`normalizarNumeroDispositivo`): caixa, espaços e caracteres invisíveis de
+ * planilha não diferenciam. Nº vazio não conta.
  */
 export function contarNumerosDispositivoUnicos(entradas: EntradaIndice[]): number {
   const vistos = new Set<string>();
   for (const e of entradas) {
-    const n = e.nome.trim().toLowerCase();
+    const n = normalizarNumeroDispositivo(e.nome);
     if (n) vistos.add(n);
   }
   return vistos.size;
@@ -112,6 +114,10 @@ export interface EntradaPreparada {
   processo: string;
   /** Texto pesquisável do autocomplete da Home (inclui o peso). */
   textoHome: string;
+  /** Código normalizado (filtro dedicado de Código). */
+  codigo: string;
+  /** Descrição normalizada (filtro dedicado de Descrição). */
+  descricao: string;
 }
 
 const J = '\u0001';
@@ -123,9 +129,10 @@ export function prepararEntradas(entradas: EntradaIndice[], nomes: NomesClassifi
     const tags = e.palavrasChave.map(normalizarBusca);
     const nome = normalizarBusca(e.nome);
     const descricao = normalizarBusca(e.descricao);
+    const codigo = normalizarBusca(e.codigo);
     const base = [
       nome,
-      normalizarBusca(e.codigo),
+      codigo,
       descricao,
       normalizarBusca(nomes.familias.get(e.familiaId)),
       normalizarBusca(nomes.produtos.get(e.produtoId)),
@@ -137,6 +144,9 @@ export function prepararEntradas(entradas: EntradaIndice[], nomes: NomesClassifi
       texto: base,
       processo: [descricao, nome, ...tags].join(J),
       textoHome: base + J + normalizarBusca(e.peso),
+      codigo,
+      // Espaços repetidos da planilha contam como um só (a consulta também é colapsada).
+      descricao: descricao.replace(/\s+/g, ' '),
     };
   }
   return out;
@@ -150,6 +160,10 @@ export interface FiltroBusca {
   produtoId?: string;
   /** Processo industrial (trecho em descrição, nome ou palavras-chave). */
   processo?: string;
+  /** Trecho só no Código da peça. */
+  codigo?: string;
+  /** Trecho só na Descrição da peça. */
+  descricao?: string;
   /** Autocomplete da Home: também procura no peso. */
   incluirPeso?: boolean;
 }
@@ -168,6 +182,8 @@ export function filtrarEntradas(
   // Espaços repetidos ("barra  porta") contam como um só.
   const q = normalizarBusca(filtro.texto).replace(/\s+/g, ' ').trim();
   const proc = normalizarBusca(filtro.processo).trim();
+  const cod = normalizarBusca(filtro.codigo).trim();
+  const desc = normalizarBusca(filtro.descricao).replace(/\s+/g, ' ').trim();
   const cat = filtro.categoriaId || '';
   const fam = filtro.familiaId || '';
   const prod = filtro.produtoId || '';
@@ -179,6 +195,8 @@ export function filtrarEntradas(
     if (prod && p.entrada.produtoId !== prod) continue;
     if (q && (filtro.incluirPeso ? p.textoHome : p.texto).indexOf(q) < 0) continue;
     if (proc && p.processo.indexOf(proc) < 0) continue;
+    if (cod && p.codigo.indexOf(cod) < 0) continue;
+    if (desc && p.descricao.indexOf(desc) < 0) continue;
     out.push(p.entrada);
     if (out.length >= limite) break;
   }

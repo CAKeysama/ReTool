@@ -116,6 +116,30 @@ describe('buscaDispositivos', () => {
     expect(filtrarEntradas(prep, { familiaId: 'f1' }).length).toBeLessThan(lista.length);
   });
 
+  it('filtra só pelo Código e só pela Descrição, combinando com os demais filtros', () => {
+    const entradas = [
+      { codigo: '00041', nome: 'MAT01', descricao: 'Barra de solda', familiaId: 'f1' },
+      { codigo: '41', nome: 'MAT02', descricao: 'Gabarito 00041', familiaId: 'f2' },
+      { codigo: 'ABC-9', nome: '00041', descricao: 'Barra  dobrada', familiaId: 'f1' },
+    ].map((d, i) => desserializarEntrada(`id${i}`, serializarEntrada(d)));
+    const prep = prepararEntradas(entradas, nomes);
+    const ids = (f: Parameters<typeof filtrarEntradas>[1]) => filtrarEntradas(prep, f).map(e => e.id);
+
+    // Código: só o campo código (o 00041 do nome e da descrição não conta).
+    expect(ids({ codigo: '0004' })).toEqual(['id0']);
+    expect(ids({ codigo: '41' })).toEqual(['id0', 'id1']);
+    expect(ids({ codigo: 'abc' })).toEqual(['id2']);
+    // Descrição: sem acento/caixa e com espaços repetidos tratados como um só.
+    expect(ids({ descricao: 'BARRA' })).toEqual(['id0', 'id2']);
+    expect(ids({ descricao: 'barra dobrada' })).toEqual(['id2']);
+    expect(ids({ descricao: '00041' })).toEqual(['id1']);
+    // Combinação (E): descrição + família + código.
+    expect(ids({ descricao: 'barra', familiaId: 'f1', codigo: '41' })).toEqual(['id0']);
+    expect(ids({ descricao: 'barra', codigo: '41', texto: 'mat02' })).toEqual([]);
+    // Vazio ou só espaços não filtra.
+    expect(ids({ codigo: '  ', descricao: '' })).toHaveLength(3);
+  });
+
   it('para no limite pedido', () => {
     const prep = prepararEntradas(gerar(500), nomes);
     expect(filtrarEntradas(prep, { texto: 'daf' }, 8)).toHaveLength(8);
@@ -143,5 +167,12 @@ describe('buscaDispositivos', () => {
     const entradas = nomes.map((nome, i) => desserializarEntrada(String(i), serializarEntrada({ codigo: 'ABC', nome })));
     expect(contarNumerosDispositivoUnicos(entradas)).toBe(3);
     expect(contarNumerosDispositivoUnicos([])).toBe(0);
+  });
+
+  it('conta o Nº como a linha de imagens: invisíveis e espaços repetidos não criam outro Nº', () => {
+    const nomes = ['MAT04670', 'MAT04670​', ' mat04670 ', 'MAT  04670', 'MAT 04670', '﻿'];
+    const entradas = nomes.map((nome, i) => desserializarEntrada(String(i), serializarEntrada({ codigo: 'X', nome })));
+    // "MAT04670" (3 grafias) e "MAT 04670" (espaço interno conta, repetido ou não).
+    expect(contarNumerosDispositivoUnicos(entradas)).toBe(2);
   });
 });

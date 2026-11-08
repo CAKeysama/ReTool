@@ -449,7 +449,8 @@ export function Reutilizacoes() {
     );
   };
 
-  const colunaCount = 9 + (canExcluir ? 1 : 0);
+  // Expandir, Data, Status, Dispositivo, Peça, Solicitante, Hard Saving, OS + seleção opcional.
+  const colunaCount = 8 + (canExcluir ? 1 : 0);
 
   return (
     <div>

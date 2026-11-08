@@ -45,6 +45,10 @@ export function Dispositivos() {
     setFilterFamilia,
     filterProduto,
     setFilterProduto,
+    filterCodigo,
+    setFilterCodigo,
+    filterDescricao,
+    setFilterDescricao,
     showFilters,
     setShowFilters,
 
@@ -130,7 +134,8 @@ export function Dispositivos() {
   }, []);
 
   const botaoFiltrosRef = React.useRef<HTMLButtonElement>(null);
-  const filtrando = !!(filterQuery.trim() || filterCategoria || filterProcesso || filterFamilia || filterProduto);
+  const filtrando = !!(filterQuery.trim() || filterCategoria || filterProcesso || filterFamilia || filterProduto
+    || filterCodigo.trim() || filterDescricao.trim());
   const carregandoPrimeira = lista.estado === 'carregando' || lista.estado === 'preparando-busca';
   const subtitulo = buscaPendente ? 'Buscando…' : lista.total === null
     ? (carregandoPrimeira ? 'Carregando dispositivos…' : '')
@@ -229,7 +234,7 @@ export function Dispositivos() {
               ref={searchInputRef}
               type="text" 
               className="input-field" 
-              placeholder="Buscar por nome ou código…" 
+              placeholder="Buscar por nome, código ou descrição…"
               value={filterQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
               onFocus={() => setBuscaFocada(true)}
@@ -301,6 +306,16 @@ export function Dispositivos() {
                         </option>
                       ))}
                   </select>
+                </div>
+                <div>
+                  <label htmlFor="filtro-codigo" className="input-label">Código da peça</label>
+                  <input id="filtro-codigo" type="text" className="input-field" value={filterCodigo}
+                    onChange={(e) => setFilterCodigo(e.target.value)} placeholder="Contém…" autoComplete="off" />
+                </div>
+                <div>
+                  <label htmlFor="filtro-descricao" className="input-label">Descrição da peça</label>
+                  <input id="filtro-descricao" type="text" className="input-field" value={filterDescricao}
+                    onChange={(e) => setFilterDescricao(e.target.value)} placeholder="Contém…" autoComplete="off" />
                 </div>
                 <div>
                   <label className="input-label">Processo industrial</label>
