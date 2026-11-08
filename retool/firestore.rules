@@ -420,6 +420,8 @@ service cloud.firestore {
           (
             meuPerfil() == 'engenharia'
             && request.resource.data.status == 'Em análise (Projetista)'
+            // A Engenharia não informa o Hard Saving: só zero (ou ausente).
+            && request.resource.data.get('hardSaving', 0) == 0
           )
           // Administração/Ferramentaria registram histórico diretamente.
           || meuPerfil() in ['admin', 'projetista']

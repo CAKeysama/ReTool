@@ -38,10 +38,14 @@ export function useDispositivosController() {
   const [filterProcesso, setFilterProcesso] = useState(searchParams.get('proc') || '');
   const [filterFamilia, setFilterFamilia] = useState(searchParams.get('fam') || '');
   const [filterProduto, setFilterProduto] = useState(searchParams.get('prod') || '');
+  const [filterCodigo, setFilterCodigo] = useState(searchParams.get('cod') || '');
+  const [filterDescricao, setFilterDescricao] = useState(searchParams.get('desc') || '');
   const [showFilters, setShowFilters] = useState(false);
   const [buscaFocada, setBuscaFocada] = useState(false);
   const textoBusca = useDebouncedValue(filterQuery, ATRASO_BUSCA_MS);
-  const buscaPendente = filterQuery !== textoBusca;
+  const codigoBusca = useDebouncedValue(filterCodigo, ATRASO_BUSCA_MS);
+  const descricaoBusca = useDebouncedValue(filterDescricao, ATRASO_BUSCA_MS);
+  const buscaPendente = filterQuery !== textoBusca || filterCodigo !== codigoBusca || filterDescricao !== descricaoBusca;
 
   // Paginação (servidor com cursor ou fatias da busca no índice)
   const [itemsPerPage, setItemsPerPage] = useState<number>(() => {
@@ -57,14 +61,19 @@ export function useDispositivosController() {
     if (filterProcesso) novo.proc = filterProcesso;
     if (filterFamilia) novo.fam = filterFamilia;
     if (filterProduto) novo.prod = filterProduto;
+    if (codigoBusca) novo.cod = codigoBusca;
+    if (descricaoBusca) novo.desc = descricaoBusca;
     if (itemsPerPage !== 25) novo.n = String(itemsPerPage);
     const atual = new URLSearchParams(searchParams);
-    const igual = ['q', 'cat', 'proc', 'fam', 'prod', 'n'].every(k => (atual.get(k) || '') === (novo[k] || ''));
+    const igual = ['q', 'cat', 'proc', 'fam', 'prod', 'cod', 'desc', 'n'].every(k => (atual.get(k) || '') === (novo[k] || ''));
     if (!igual) setSearchParams(novo, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [textoBusca, filterCategoria, filterProcesso, filterFamilia, filterProduto, itemsPerPage]);
+  }, [textoBusca, filterCategoria, filterProcesso, filterFamilia, filterProduto, codigoBusca, descricaoBusca, itemsPerPage]);
   const lista = useListaDispositivos(
-    { texto: textoBusca, categoriaId: filterCategoria, familiaId: filterFamilia, produtoId: filterProduto, processo: filterProcesso },
+    {
+      texto: textoBusca, categoriaId: filterCategoria, familiaId: filterFamilia, produtoId: filterProduto, processo: filterProcesso,
+      codigo: codigoBusca, descricao: descricaoBusca,
+    },
     itemsPerPage,
     buscaFocada || showFilters
   );
@@ -215,7 +224,10 @@ export function useDispositivosController() {
     // Filtros
     filterQuery,
     handleSearchChange,
-    limparBusca: () => { setFilterQuery(''); setFilterCategoria(''); setFilterProcesso(''); setFilterFamilia(''); setFilterProduto(''); },
+    limparBusca: () => {
+      setFilterQuery(''); setFilterCategoria(''); setFilterProcesso(''); setFilterFamilia(''); setFilterProduto('');
+      setFilterCodigo(''); setFilterDescricao('');
+    },
     setBuscaFocada,
     buscaPendente,
     filterCategoria,
@@ -226,6 +238,10 @@ export function useDispositivosController() {
     setFilterFamilia,
     filterProduto,
     setFilterProduto,
+    filterCodigo,
+    setFilterCodigo,
+    filterDescricao,
+    setFilterDescricao,
     showFilters,
     setShowFilters,
 

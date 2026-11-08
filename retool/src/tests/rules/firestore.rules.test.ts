@@ -486,6 +486,14 @@ describe('Reutilizações: solicitação da Engenharia vai direto ao 1º filtro'
     await assertFails(setDoc(doc(db('eng'), 'reutilizacoes', 'r3'), solicitacao('eng', 'Reutilização aprovada')));
   });
 
+  test('Engenharia não informa o Hard Saving na solicitação (só zero ou ausente)', async () => {
+    await assertSucceeds(setDoc(doc(db('eng'), 'reutilizacoes', 'hs0'), { ...solicitacao('eng', 'Em análise (Projetista)'), hardSaving: 0 }));
+    await assertFails(setDoc(doc(db('eng'), 'reutilizacoes', 'hs1'), { ...solicitacao('eng', 'Em análise (Projetista)'), hardSaving: 1500 }));
+    await assertFails(setDoc(doc(db('eng'), 'reutilizacoes', 'hs2'), { ...solicitacao('eng', 'Em análise (Projetista)'), hardSaving: '1500' }));
+    // Projetista e Administração continuam registrando com valor.
+    await assertSucceeds(setDoc(doc(db('proj'), 'reutilizacoes', 'hs3'), { ...solicitacao('proj', 'Reutilização aprovada'), hardSaving: 1500 }));
+  });
+
   test('Hard Saving: Projetista e Administração definem; Engenharia e Gerência não', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'reutilizacoes', 'hs'), { ...solicitacao('eng', 'Em análise (Projetista)'), hardSaving: 0 });

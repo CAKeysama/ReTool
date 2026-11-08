@@ -35,3 +35,30 @@ test('importa planilha mantendo combinações Código + Dispositivo distintas', 
   await expect(page.getByRole('main')).toContainText('Dispositivo A');
   await expect(page.getByRole('main')).toContainText('Dispositivo B');
 });
+
+test('filtra por Código e por Descrição da peça, combinando os dois', async ({ page }) => {
+  await entrarComoAdmin(page);
+  const marca = Date.now();
+  const codigo = `FIL${marca}`;
+  const csv = `Código,Dispositivo,Descrição\n${codigo},Disp Filtro A,Alfa${marca} chapa\n${codigo},Disp Filtro B,Beta${marca} chapa\n`;
+
+  await page.getByRole('button', { name: 'Importar planilha de dispositivos' }).click();
+  await page.getByLabel('Buscar arquivo da planilha (.csv ou .xlsx)').setInputFiles({
+    name: 'filtros-e2e.csv', mimeType: 'text/csv', buffer: Buffer.from(csv, 'utf8'),
+  });
+  await page.getByRole('button', { name: 'Processar planilha' }).click();
+  await page.getByRole('button', { name: /Salvar importação \(2\)/ }).click();
+  await page.getByRole('button', { name: 'Fechar', exact: true }).click();
+
+  const main = page.getByRole('main');
+  await page.getByRole('button', { name: /Filtros/ }).click();
+  await page.getByLabel('Código da peça').fill(codigo);
+  await expect(main).toContainText('Disp Filtro A');
+  await expect(main).toContainText('Disp Filtro B');
+
+  await page.getByLabel('Descrição da peça').fill(`ALFA${marca}`);
+  await expect(main).toContainText('Disp Filtro A');
+  await expect(main).not.toContainText('Disp Filtro B');
+  // Os filtros ficam na URL (voltar dos detalhes restaura a lista).
+  await expect(page).toHaveURL(new RegExp(`cod=${codigo}`));
+});

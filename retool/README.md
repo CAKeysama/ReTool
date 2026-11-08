@@ -14,8 +14,8 @@ Em indústrias pesadas, o conhecimento sobre uma ferramenta costuma ficar com os
 
 Uma plataforma única, que aceita dados incompletos: a falta de um campo não impede o cadastro.
 
-- **Dispositivos:** cadastro flexível, imagens e PDFs, busca multidimensional, importação de planilhas (CSV/XLSX) sem duplicar classificações, em que cada combinação **Código + Dispositivo** vira um único registro (detalhes em [docs/IMPORTACAO_DISPOSITIVOS.md](./docs/IMPORTACAO_DISPOSITIVOS.md)), e ações em massa.
-- **Reutilizações:** fluxo entre Engenharia e Projetista com filas por perfil, histórico e *hard saving*.
+- **Dispositivos:** cadastro flexível, imagens e PDFs, busca multidimensional (texto livre e filtros combináveis por categoria, família, produto, processo, código e descrição da peça), importação de planilhas (CSV/XLSX) sem duplicar classificações, em que cada combinação **Código + Dispositivo** vira um único registro (detalhes em [docs/IMPORTACAO_DISPOSITIVOS.md](./docs/IMPORTACAO_DISPOSITIVOS.md)), e ações em massa.
+- **Reutilizações:** fluxo entre Engenharia e Projetista com filas por perfil, histórico e *hard saving* (definido pelo Projetista ou pela Administração; a Engenharia vê o valor, mas não o informa ao solicitar).
 - **Controle de acesso:** cargos com permissões validadas no servidor (regras do Firestore); cadastro público como Convidado, sujeito a aprovação; solicitações de alteração de cargo; contas com senha temporária e troca obrigatória no primeiro acesso; "Esqueci minha senha" pelo e-mail de redefinição do Firebase.
 - **Notificações e auditoria:** avisos em tempo real e Histórico de Ações imutável, com filtros, exclusivo da Administração.
 - **Teclado e acessibilidade:** atalhos globais e navegação por setas nas listas.
@@ -40,6 +40,7 @@ Para rodar sem tocar em dados reais, use os emuladores (`npm run emuladores` e `
 ```bash
 npm test               # domínio, casos de uso e repositórios (Firestore em memória)
 npm run test:rules     # regras do Firestore e do Storage e consultas do histórico (emulador; requer Java)
+npm run test:e2e       # fluxos no navegador contra os emuladores (Playwright)
 ```
 
 Veja [Testes](https://github.com/CAKeysama/ReTool/wiki/Testes) e [Build e Deploy](https://github.com/CAKeysama/ReTool/wiki/Build-e-Deploy).

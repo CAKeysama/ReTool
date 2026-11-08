@@ -77,7 +77,8 @@ jobs:
 
   e2e:
     name: e2e
-    runs-on: ubuntu-latest
+    # shortcut: o Playwright 1.56 não instala o Chromium no ubuntu-latest (26.04); fixo no 24.04 até atualizar o Playwright.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
